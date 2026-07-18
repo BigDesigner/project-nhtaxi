@@ -16,8 +16,7 @@ routes = [
 [[d1_databases]]
 binding = "DB"
 database_name = "gnncab"
-# TODO(Faz 0 setup): run `wrangler d1 create gnncab`, paste the returned id here.
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "ace418c0-d37b-4260-ac15-04aff2b8dda3"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
