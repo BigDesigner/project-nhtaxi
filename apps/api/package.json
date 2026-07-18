@@ -1,0 +1,29 @@
+{
+  "name": "@gnncab/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply gnncab --local",
+    "db:migrate:remote": "wrangler d1 migrations apply gnncab --remote",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@gnncab/contract": "workspace:*",
+    "@gnncab/db": "workspace:*",
+    "@hono/zod-openapi": "^1.5.1",
+    "hono": "^4.12.30",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260718.1",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.112.0"
+  }
+}

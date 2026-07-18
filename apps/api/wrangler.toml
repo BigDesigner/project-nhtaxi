@@ -1,0 +1,39 @@
+name = "gnncab-api"
+main = "src/index.ts"
+compatibility_date = "2026-07-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Keep the workers.dev subdomain alongside the custom domain below — CI PR
+# previews (`wrangler versions upload`) need it to hand back a preview URL.
+workers_dev = true
+
+# nhtaxi.com is already on this Cloudflare account (L27/L29) — no DNS
+# migration needed, wrangler manages the custom domain + DNS record.
+routes = [
+  { pattern = "api.nhtaxi.com", custom_domain = true }
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "gnncab"
+# TODO(Faz 0 setup): run `wrangler d1 create gnncab`, paste the returned id here.
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "DOCS"
+bucket_name = "gnncab-driver-documents"
+
+[[durable_objects.bindings]]
+name = "DISPATCH_COORDINATOR"
+class_name = "DispatchCoordinator"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["DispatchCoordinator"]
+
+[vars]
+ENVIRONMENT = "production"
+
+# Secrets (JWT_SECRET, STRIPE_*, FCM_*) are never set here — they are pushed
+# with `wrangler secret put <NAME>` and injected by CI from GitHub Secrets (L25).

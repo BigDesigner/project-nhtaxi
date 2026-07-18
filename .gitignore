@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.wrangler/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# Flutter
+apps/mobile/**/.dart_tool/
+apps/mobile/**/.flutter-plugins
+apps/mobile/**/.flutter-plugins-dependencies
+apps/mobile/**/build/
+apps/mobile/**/.pub-cache/
+apps/mobile/**/*.iml
+apps/mobile/**/android/.gradle/
+apps/mobile/**/android/local.properties
+apps/mobile/**/ios/Pods/
+apps/mobile/**/ios/.symlinks/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# D1 local sqlite state
+apps/api/.wrangler/

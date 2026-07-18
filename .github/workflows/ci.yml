@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run test
+
+  # Uploads a new Worker version without shipping it to production traffic —
+  # wrangler hands back a unique <version>-gnncab-api.<subdomain>.workers.dev
+  # preview URL for this PR. Skips silently until CLOUDFLARE_API_TOKEN exists
+  # (see README.md "GitHub Secrets").
+  preview-api:
+    needs: test
+    runs-on: ubuntu-latest
+    if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Upload preview version
+        working-directory: apps/api
+        run: npx wrangler versions upload --preview-alias "pr-${{ github.event.number }}"
+
+  # TODO(Faz 8): add a preview-admin job once apps/admin (ported React admin)
+  # exists — `wrangler pages deploy` already creates a preview URL per branch
+  # automatically for any non-production branch, no extra flags needed.

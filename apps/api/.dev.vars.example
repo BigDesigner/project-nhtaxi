@@ -1,0 +1,6 @@
+# Local dev secrets for `wrangler dev`. Copy to .dev.vars (gitignored) and fill in.
+# Production/staging secrets are never stored in a file — see README.md
+# "Cloudflare secrets" section (wrangler secret put, from GitHub Secrets in CI).
+
+JWT_SECRET=change-me-local-dev-only
+ENVIRONMENT=development
