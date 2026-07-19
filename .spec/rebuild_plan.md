@@ -22,7 +22,7 @@
 | L1 | Ölçek | 10-20 sürücü; küçük, tek şirket. Ağır ölçek altyapısı YOK. |
 | L2 | Altyapı maliyeti | Cloudflare **always-free** (Workers + D1 + Durable Objects + Pages + **R2** dosya depolama). |
 | L3 | Yüzeyler | Mobil (tek app, rol bazlı) **+ web admin**. Giriş: **birleşik/yolcu-odaklı login**, role göre yönlendirme; sürücü/admin için ayrı buton YOK (aşağı L15). |
-| L4 | Para | Çekirdek = ücret/yol **kaydı + admin raporu** (vergi/güvenlik). App-içi tahsilat sağlayıcı = **Stripe** (L14). Komisyon işletme gideri; infra bedava kalır. |
+| L4 | Para | Çekirdek = ücret/yol **kaydı + admin raporu** (vergi/güvenlik). App-içi tahsilat sağlayıcı = **Stripe** (L14). Komisyon işletme gideri; infra bedava kalır. **[2026-07-19 itibariyle ertelendi, bkz L33 — sistem şimdilik tamamen nakit.]** |
 | L5 | Mantık | Orijinal iş kuralları (durum makinesi, dispatch) korunur; yalınlaştırılır. |
 | L6 | Backend runtime | Cloudflare Workers (Node sunucusu YOK → aylık hosting maliyeti YOK). |
 | L7 | Mobil paketleme | **Tek Flutter app, rol bazlı** (giriş sonrası yolcu/sürücü/admin ekranları). Bakımı en kolay. |
@@ -32,7 +32,7 @@
 | L11 | Auth token | Access 15 dk (web: HttpOnly cookie + CSRF · mobil: güvenli depolama); refresh 30 gün rotasyonlu; `refresh_tokens` ile cihaz bazlı iptal; logout = refresh iptali. |
 | L12 | Harita | Mobil: `flutter_map` + OSM karo (attribution). Web admin: mevcut Leaflet. Hacim artarsa MapTiler free tier'a geçilebilir. |
 | L13 | Arayüz dili | **Tek dil: İngilizce.** i18n gerekmez. Eski admin zaten İngilizce. |
-| L14 | Ödeme sağlayıcı | **Stripe** (GNN LLC ABD şirketi mevcut → Stripe kusursuz oturur; Connect ile sürücü payout). App-içi tahsilat = Faz 9; çekirdek önce kayıt/rapor. |
+| L14 | Ödeme sağlayıcı | **Stripe** (GNN LLC ABD şirketi mevcut → Stripe kusursuz oturur; Connect ile sürücü payout). App-içi tahsilat = Faz 9; çekirdek önce kayıt/rapor. **[2026-07-19: Faz 9 süresiz ertelendi, taahhüt edilmiş tarih yok — bkz L33.]** |
 | L15 | Giriş & kayıt | Giriş ekranında **yolcu girişi belirgin**; **admin + sürücü girişi footer'da iki minik ikon**. **Sign up → rol seçimi** (I'm a passenger / I'm a driver). Passenger: telefon+e-posta+şifre (minimum veri). Driver: sözleşmeler + form + **belge yükleme**. Sürücüler kendileri üye olabilir. |
 | L16 | Admin yetkileri | Admin panelinden **her şey**: manuel sürücü/yolcu ekleme, rol atama/değiştirme (üyeyi sürücü↔yolcu yapma), sürücü/yolcu iptal-pasifleştirme, yolculuk iptali, sürücü onayı, fiyat ayarı, raporlama. |
 | L17 | Sürücü belgeleri | Kayıtta ehliyet + sabıka kaydı + fotoğraf yüklenir → **R2**'de saklanır. Onaydan sonra sürücü **silemez** (write-once, güvenlik/kayıt). Erişim sıkı (yalnız admin), hassas veri olarak korunur (L19). |
@@ -51,6 +51,7 @@
 | L28 | Cross-subdomain auth | Web admin farklı origin'den API çağırır → auth cookie domain **`.nhtaxi.com`**, CORS allowlist'te `https://admin.nhtaxi.com`. Mobil Bearer token kullanır (CORS dışı). DNS Cloudflare'de; Universal SSL ücretsiz. |
 | L26 | Mobil test & yayın hattı | Flutter Cloudflare'e deploy **edilmez** (native build). **Önce:** CI'da **Android APK** derlenir → GitHub **artifact** olarak indirilir → **emülatörde test**. Tetikleyici: `main` push + manuel (`workflow_dispatch`). Başlangıçta **debug/imzasız** APK; emülatör için **x86_64 ABI dahil**. **Sonra:** imzalı release + mağaza (Play/App Store), sürücü/admin için dahili dağıtım. **iOS ertelenir** (macOS runner ücretsiz kotayı 10x tüketir + imzalama zorunlu). |
 | L32 | Flutter Web önizleme | **Faz 7'de** (Flutter adımında) ele alınır. `flutter build web` → statik çıktı → **Cloudflare Pages**'e deploy → `preview.nhtaxi.com` (Trackcar `app.`/`tracker.`'ı kullandığı için geçici isim; cutover sonrası `app.nhtaxi.com`'a taşınabilir). Android Chrome / iOS Safari'den kurulumsuz canlı test imkânı — yolcu+admin akışları (harita, WebSocket, dispatch) tam test edilebilir. **Sınır:** arka planda sürücü GPS takibi ve push bildirim (FCM) web'de native kadar güvenilir değil (özellikle iOS Safari) → bunlar için L26'daki native APK/TestFlight hattı şart, web önizleme onun **yerine değil, ek**idir. Maliyet $0 (Pages zaten bedava; ayrıca macOS/Android SDK gerektirmez). |
+| L33 | **İş modeli pivotu (2026-07-19)** | Stripe/Faz 9 **süresiz ertelendi** (L4/L14 güncellendi) — sistem şimdilik **tamamen nakit** (yolcu↔sürücü zaten nakitti, değişmedi). Yerine **GNN LLC'nin kendi gelir modeli** eklendi, iki ayrı sürücü→admin nakit borcu akışı: **(1) Kullanım ücreti** — sürücü sistemde aktif (OFFLINE olmayan) kaldığı her dakika için öder (varsayılan $0.25/dk, admin panelden değiştirilebilir), yolculuk yapıp yapmadığından bağımsız; oturumlar sürücünün OFFLINE↔non-OFFLINE toggle'ıyla açılır/kapanır, terk edilmiş oturumlar (uygulama çökmesi) bir Cloudflare Cron ile otomatik kapanır (son bilinen aktiviteye kadar ücretlendirilir, belirsiz boşluk asla faturalanmaz). **(2) Komisyon** — admin bir sürücüye elle görev atadığında (otomatik dispatch'i atlayan, örn. telefonla gelen görev), SADECE bu tür görevlerde sürücü ücretin admin-ayarlanabilir bir yüzdesini (varsayılan %20) borçlanır; sürücüye kabul etmeden önce gösterilir, atama anında snapshot'lanır (global oran sonradan değişse bile o görev için sabit kalır). Admin panelde: sürücü ayak izi (hangi gün/saat aktifti), bekleyen bakiye raporu (tür bazında kırılım), tahsil edilmiş nakit raporu (CSV) — admin 10-20 günde bir elden tahsilat yapıp kaydediyor (tek toplam bakiyeden düşer, tür ayrımı yapılmaz). Sürücüler de kendi bakiye+ayak izlerini görebiliyor. Detaylı teknik plan: `C:\Users\bigde\.claude\plans\bright-cuddling-ocean.md`. |
 
 ---
 
@@ -187,11 +188,13 @@ Orijinal varlıklar korunur; PostgreSQL-özel tipler SQLite karşılıklarına �
 - **Faz 2:** Şehir/sürücü/yolcu profilleri + admin yönetimi.
 - **Faz 3:** Trip yaşam döngüsü + dispatch (DO Alarms) + durum makinesi.
 - **Faz 4:** Canlı takip (DO WebSocket).
-- **Faz 5:** Ücret & yol logları + admin raporlama (vergi/güvenlik).
+- **Faz 5:** Ücret & yol logları + admin raporlama (vergi/güvenlik). ✅ Tamamlandı.
+- **Faz 5b:** (L33, plan sonrası eklendi) Sürücü kullanım ücreti — dakikalık bedava/aktif-süre faturalama, oturum ayak izi, terk edilmiş oturum güvenlik freni (Cron), nakit tahsilat + bakiye raporları. ✅ Tamamlandı.
+- **Faz 5c:** (L33) Admin'in elle görev ataması (guest/kayıtlı yolcu, gecikmeli inilecek yer) + bu görevlerde sürücü komisyonu. ✅ Tamamlandı.
 - **Faz 6:** FCM bildirimleri.
 - **Faz 7:** Mobil app (Flutter, tek app): yolcu → sürücü → admin. CI'da APK artifact + **emülatör testi** döngüsü (L26 Aşama 1). Aynı fazda **Flutter Web önizleme** de kurulur (L32) — `preview.nhtaxi.com` üzerinden telefon tarayıcısından (Android Chrome/iOS Safari) kurulumsuz canlı test.
 - **Faz 8:** Web admin (Pages) + sertleştirme (test, gözlemlenebilirlik, deploy).
-- **Faz 9 (ops.):** Stripe ödeme + Connect payout modülü.
+- **Faz 9 (ops., süresiz ertelendi — L33):** Stripe ödeme + Connect payout modülü. Taahhüt edilmiş tarih yok; sistem nakit ile çalışmaya devam ediyor.
 - **Faz 10 — Go-live & Cutover (L31):** sürücü onboarding (hesap açma, app kurulumu, kısa eğitim) → GNNcab ile Trackcar **paralel** çalıştırılıp doğrulama → Trackcar emekli → **DigitalOcean VPS iptal** → `app.`/`tracker.` subdomain temizliği. Geri dönüş planı: doğrulama bitene kadar Trackcar açık kalır.
 
 ---
