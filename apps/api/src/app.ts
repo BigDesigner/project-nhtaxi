@@ -7,6 +7,7 @@ import authRoutes from "./routes/auth";
 import customerProfileRoutes from "./routes/customer_profile";
 import driverProfileRoutes from "./routes/driver_profile";
 import health from "./routes/health";
+import tripRoutes from "./routes/trips";
 
 const app = new OpenAPIHono<AppBindings>();
 
@@ -33,6 +34,7 @@ app.route("/api/auth", authRoutes);
 app.route("/api/driver", driverProfileRoutes);
 app.route("/api/customer", customerProfileRoutes);
 app.route("/api/admin", adminRoutes);
+app.route("/api/trips", tripRoutes);
 
 // Code-first contract (L: contract strategy) — the OpenAPI doc below is
 // generated from the zod schemas in packages/contract + the routes

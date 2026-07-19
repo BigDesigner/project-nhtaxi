@@ -9,3 +9,4 @@ export * from "./schemas/customer";
 export * from "./schemas/cities";
 export * from "./schemas/pricing";
 export * from "./schemas/admin";
+export * from "./schemas/trips";
