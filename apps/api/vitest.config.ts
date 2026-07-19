@@ -12,8 +12,15 @@ export default defineConfig(async () => {
       cloudflareTest({
         wrangler: { configPath: "./wrangler.toml" },
         miniflare: {
-          // Test-only binding so test/apply-migrations.ts can seed the schema.
-          bindings: { TEST_MIGRATIONS: migrations },
+          bindings: {
+            // Lets test/apply-migrations.ts seed the schema.
+            TEST_MIGRATIONS: migrations,
+            // JWT_SECRET is a secret (never in wrangler.toml [vars]) normally
+            // supplied via `.dev.vars`, which is gitignored and doesn't
+            // exist in CI — tests need their own deterministic value so
+            // they don't depend on a developer's local dotfile existing.
+            JWT_SECRET: "test-only-secret-do-not-use-in-production",
+          },
         },
       }),
     ],
