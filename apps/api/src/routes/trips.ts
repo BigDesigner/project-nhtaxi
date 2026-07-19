@@ -25,11 +25,9 @@ import { authenticate } from "../middlewares/auth";
 const trips = new OpenAPIHono<AppBindings>();
 trips.use("*", authenticate);
 
-const MAX_DISPATCH_RADIUS_MILES = 10;
-
-// Faz 3a: immediate best-effort assignment, no timer/redispatch resilience
-// yet. Faz 3b replaces this with a Durable Object (Alarm-backed 60s
-// acceptance window + automatic redispatch on reject/timeout).
+// Faz 3b: dispatch (find-nearest, 60s accept window, redispatch on
+// reject/timeout, max 3 attempts) lives in DispatchCoordinator — one
+// instance per trip, keyed by tripId via idFromName.
 const VALID_TRANSITIONS: Record<string, string[]> = {
   REQUESTED: ["DRIVER_ASSIGNED", "TRIP_CANCELLED"],
   DRIVER_ASSIGNED: ["DRIVER_ACCEPTED", "DRIVER_REJECTED", "DRIVER_NO_RESPONSE"],
@@ -87,18 +85,6 @@ function toTripResponse(t: typeof tripsTable.$inferSelect) {
     startedAt: t.startedAt?.toISOString() ?? null,
     completedAt: t.completedAt?.toISOString() ?? null,
   };
-}
-
-async function findNearestAvailableDriver(db: ReturnType<typeof createDb>, pickupLat: number, pickupLng: number) {
-  const candidates = await db.select().from(driverProfilesTable).where(eq(driverProfilesTable.status, "AVAILABLE"));
-  let nearest: { driverId: string; distanceMiles: number } | null = null;
-  for (const d of candidates) {
-    if (d.currentLat == null || d.currentLng == null) continue;
-    const dist = haversineMiles(pickupLat, pickupLng, d.currentLat, d.currentLng);
-    if (dist > MAX_DISPATCH_RADIUS_MILES) continue;
-    if (!nearest || dist < nearest.distanceMiles) nearest = { driverId: d.id, distanceMiles: dist };
-  }
-  return nearest;
 }
 
 async function assertOwnsTrip(
@@ -201,47 +187,25 @@ trips.openapi(createTripRoute, async (c) => {
     })
   );
 
-  const nearest = await findNearestAvailableDriver(db, body.pickupLat, body.pickupLng);
-  const now = new Date();
-  let finalTrip = trip;
+  const doId = c.env.DISPATCH_COORDINATOR.idFromName(trip.id);
+  const coordinator = c.env.DISPATCH_COORDINATOR.get(doId);
+  await coordinator.fetch("http://dispatch-coordinator/dispatch", {
+    method: "POST",
+    body: JSON.stringify({ tripId: trip.id }),
+  });
 
-  if (nearest) {
-    await db
-      .update(driverProfilesTable)
-      .set({ status: "BUSY", updatedAt: now })
-      .where(eq(driverProfilesTable.id, nearest.driverId));
-    const [updated] = await db
-      .update(tripsTable)
-      .set({ driverId: nearest.driverId, status: "DRIVER_ASSIGNED", assignedAt: now, updatedAt: now })
-      .where(eq(tripsTable.id, trip.id))
-      .returning();
-    finalTrip = updated!;
-    await db.insert(tripEventsTable).values({
-      tripId: trip.id,
-      status: "DRIVER_ASSIGNED",
-      actorRole: "system",
-      metadata: { driverId: nearest.driverId, distanceMiles: nearest.distanceMiles },
-    });
-    c.executionCtx.waitUntil(
-      logAudit(db, { entity: "trip", entityId: trip.id, action: AuditAction.TRIP_DRIVER_ASSIGNED, metadata: { driverId: nearest.driverId } })
-    );
-  } else {
-    const [updated] = await db
-      .update(tripsTable)
-      .set({ status: "TIMEOUT", updatedAt: now })
-      .where(eq(tripsTable.id, trip.id))
-      .returning();
-    finalTrip = updated!;
-    await db.insert(tripEventsTable).values({
-      tripId: trip.id,
-      status: "TIMEOUT",
-      actorRole: "system",
-      metadata: { reason: "No available drivers within range" },
-    });
-    c.executionCtx.waitUntil(logAudit(db, { entity: "trip", entityId: trip.id, action: AuditAction.TRIP_NO_DRIVER_AVAILABLE }));
-  }
+  const [finalTrip] = await db.select().from(tripsTable).where(eq(tripsTable.id, trip.id)).limit(1);
+  c.executionCtx.waitUntil(
+    logAudit(db, {
+      entity: "trip",
+      entityId: trip.id,
+      action:
+        finalTrip!.status === "DRIVER_ASSIGNED" ? AuditAction.TRIP_DRIVER_ASSIGNED : AuditAction.TRIP_NO_DRIVER_AVAILABLE,
+      metadata: { driverId: finalTrip!.driverId },
+    })
+  );
 
-  return c.json(toTripResponse(finalTrip), 201);
+  return c.json(toTripResponse(finalTrip!), 201);
 });
 
 // ─── GET / — list, role-scoped ──────────────────────────────────────────────
@@ -433,6 +397,17 @@ trips.openapi(updateStatusRoute, async (c) => {
       ipAddress: clientIp(c),
     })
   );
+
+  // Tell the coordinator: accepted cancels its 60s Alarm; rejected makes it
+  // immediately try the next nearest driver (see durable-objects/dispatch-coordinator.ts).
+  if (status === "DRIVER_ACCEPTED" || status === "DRIVER_REJECTED") {
+    const doId = c.env.DISPATCH_COORDINATOR.idFromName(tripId);
+    const coordinator = c.env.DISPATCH_COORDINATOR.get(doId);
+    const path = status === "DRIVER_ACCEPTED" ? "accepted" : "rejected";
+    c.executionCtx.waitUntil(
+      coordinator.fetch(`http://dispatch-coordinator/${path}`, { method: "POST", body: JSON.stringify({ tripId }) })
+    );
+  }
 
   return c.json(toTripResponse(updated!), 200);
 });
