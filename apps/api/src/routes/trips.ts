@@ -22,6 +22,7 @@ import {
 } from "@gnncab/db";
 import type { AppBindings } from "../env";
 import { AuditAction, logAudit } from "../lib/audit";
+import { MAX_SEARCH_ROUNDS } from "../lib/dispatch";
 import { estimateFare, haversineMiles } from "../lib/fare";
 import { sendPushToUser } from "../lib/fcm";
 import { clientIp } from "../lib/request";
@@ -63,8 +64,14 @@ const ACTIVE_TRIP_STATUSES = [
   "DRIVER_ARRIVED",
   "TRIP_STARTED",
 ];
-const CUSTOMER_NON_CANCELLABLE = new Set(["TRIP_STARTED", "TRIP_COMPLETED", "TRIP_CANCELLED", "TIMEOUT"]);
-const TERMINAL_STATUSES = new Set(["TRIP_COMPLETED", "TRIP_CANCELLED", "TIMEOUT"]);
+// A passenger can't cancel a ride that's already under way — at that point
+// the driver is mid-job and cancellation is a phone call, not a button.
+// TIMEOUT is deliberately NOT here: a search that gave up is exactly the
+// state a passenger most wants to close out (and re-open, see /retry).
+const CUSTOMER_NON_CANCELLABLE = new Set(["TRIP_STARTED", "TRIP_COMPLETED", "TRIP_CANCELLED"]);
+// Genuinely finished — nothing left to cancel. TIMEOUT stays cancellable so
+// the trip can be closed rather than lingering in the passenger's list.
+const TERMINAL_STATUSES = new Set(["TRIP_COMPLETED", "TRIP_CANCELLED"]);
 
 function toTripResponse(t: typeof tripsTable.$inferSelect) {
   return {
@@ -83,6 +90,9 @@ function toTripResponse(t: typeof tripsTable.$inferSelect) {
     status: t.status,
     origin: t.origin,
     commissionPercent: t.commissionPercent,
+    searchAttempts: t.searchAttempts,
+    nextSearchAt: t.nextSearchAt?.toISOString() ?? null,
+    maxSearchAttempts: MAX_SEARCH_ROUNDS,
     distanceMiles: t.distanceMiles,
     estimatedFare: t.estimatedFareCents != null ? t.estimatedFareCents / 100 : null,
     finalFare: t.finalFareCents != null ? t.finalFareCents / 100 : null,
@@ -589,6 +599,14 @@ trips.openapi(cancelTripRoute, async (c) => {
   await db.insert(tripEventsTable).values({ tripId, status: "TRIP_CANCELLED", actorId: authUser.userId, actorRole: authUser.role, metadata: { reason } });
   await db.update(paymentsTable).set({ status: "FAILED", updatedAt: now }).where(eq(paymentsTable.tripId, tripId));
 
+  // Stop the coordinator's search loop — otherwise its Alarm keeps sweeping
+  // for a driver for a trip the passenger has already called off.
+  const cancelDoId = c.env.DISPATCH_COORDINATOR.idFromName(tripId);
+  c.executionCtx.waitUntil(
+    c.env.DISPATCH_COORDINATOR.get(cancelDoId)
+      .fetch("http://dispatch-coordinator/cancelled", { method: "POST", body: JSON.stringify({ tripId }) })
+  );
+
   c.executionCtx.waitUntil(
     logAudit(db, {
       entity: "trip",
@@ -601,6 +619,65 @@ trips.openapi(cancelTripRoute, async (c) => {
     })
   );
 
+  return c.json(toTripResponse(updated!), 200);
+});
+
+// ─── POST /{tripId}/retry — search again after the search gave up ─────────
+// The coordinator stops after MAX_SEARCH_ROUNDS so a passenger who walked
+// away isn't searched for forever. This is how they opt back in.
+const retryTripRoute = createRoute({
+  method: "post",
+  path: "/{tripId}/retry",
+  tags: ["trips"],
+  summary: "Restart the driver search for a trip that timed out",
+  request: { params: z.object({ tripId: z.string().uuid() }) },
+  responses: {
+    200: { description: "Searching again", content: { "application/json": { schema: TripResponseSchema } } },
+    400: { description: "Not in a retryable state", content: { "application/json": { schema: ErrorResponseSchema } } },
+    403: { description: "Forbidden", content: { "application/json": { schema: ErrorResponseSchema } } },
+    404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+trips.openapi(retryTripRoute, async (c) => {
+  const authUser = c.get("user")!;
+  const { tripId } = c.req.valid("param");
+  const db = createDb(c.env.DB);
+
+  const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId)).limit(1);
+  if (!trip) return c.json({ error: "NotFound", message: "Trip not found" }, 404);
+  if (!(await assertOwnsTrip(db, trip, authUser))) {
+    return c.json({ error: "Forbidden", message: "You do not have access to this trip" }, 403);
+  }
+  if (trip.status !== "TIMEOUT") {
+    return c.json({ error: "InvalidState", message: `Only a timed-out trip can be retried (this one is ${trip.status})` }, 400);
+  }
+
+  const now = new Date();
+  await db
+    .update(tripsTable)
+    .set({ status: "REQUESTED", searchAttempts: 0, nextSearchAt: null, updatedAt: now })
+    .where(eq(tripsTable.id, tripId));
+  await db
+    .insert(tripEventsTable)
+    .values({ tripId, status: "REQUESTED", actorId: authUser.userId, actorRole: authUser.role, metadata: { retried: true } });
+
+  const doId = c.env.DISPATCH_COORDINATOR.idFromName(tripId);
+  await c.env.DISPATCH_COORDINATOR.get(doId)
+    .fetch("http://dispatch-coordinator/restart", { method: "POST", body: JSON.stringify({ tripId }) });
+
+  c.executionCtx.waitUntil(
+    logAudit(db, {
+      entity: "trip",
+      entityId: tripId,
+      action: AuditAction.TRIP_SEARCH_RESTARTED,
+      actorId: authUser.userId,
+      actorRole: authUser.role,
+      ipAddress: clientIp(c),
+    })
+  );
+
+  const [updated] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId)).limit(1);
   return c.json(toTripResponse(updated!), 200);
 });
 

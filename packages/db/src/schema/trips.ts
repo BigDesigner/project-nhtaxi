@@ -55,6 +55,13 @@ export const tripsTable = sqliteTable(
     dropoffAddress: text("dropoff_address"),
     status: text("status", { enum: TRIP_STATUSES }).notNull().default("REQUESTED"),
     origin: text("origin", { enum: TRIP_ORIGINS }).notNull().default("CUSTOMER_APP"),
+    // Faz 7 — how many times dispatch has swept for a driver, and when the
+    // next sweep is due. Driven by DispatchCoordinator's Alarm so the search
+    // continues even with the app closed; the passenger UI renders a
+    // countdown straight off nextSearchAt, which keeps every screen showing
+    // the same number without any client-side clock of its own.
+    searchAttempts: integer("search_attempts").notNull().default(0),
+    nextSearchAt: integer("next_search_at", { mode: "timestamp" }),
     // Snapshotted from pricing_config at admin-assignment time (ADMIN_ASSIGNED
     // trips only) so a later change to the global rate never retroactively
     // changes what was disclosed to/accepted by the driver for this trip.

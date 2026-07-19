@@ -104,6 +104,12 @@ export const TripResponseSchema = z
     dropoffAddress: z.string().nullable(),
     status: z.enum(TRIP_STATUSES),
     origin: z.enum(TRIP_ORIGINS),
+    // Driver-search progress. The client renders its countdown from
+    // nextSearchAt rather than its own timer, so every screen showing this
+    // trip counts down to the same instant.
+    searchAttempts: z.number().int(),
+    nextSearchAt: z.string().nullable(),
+    maxSearchAttempts: z.number().int(),
     // Disclosed to the driver before they accept an ADMIN_ASSIGNED trip —
     // null for ordinary CUSTOMER_APP trips.
     commissionPercent: z.number().nullable(),

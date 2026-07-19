@@ -50,6 +50,41 @@ void main() {
       }
     });
 
+    test('isSearching covers the states where dispatch is still hunting', () {
+      for (final status in ['REQUESTED', 'DRIVER_REJECTED', 'DRIVER_NO_RESPONSE']) {
+        expect(Trip.fromJson(tripJson(status: status)).isSearching, isTrue, reason: status);
+      }
+      // A driver is on it, or it's over — either way, no more searching.
+      for (final status in ['DRIVER_ASSIGNED', 'DRIVER_ACCEPTED', 'TRIP_STARTED', 'TIMEOUT', 'TRIP_COMPLETED']) {
+        expect(Trip.fromJson(tripJson(status: status)).isSearching, isFalse, reason: status);
+      }
+    });
+
+    test('a timed-out trip can be retried and closed, but not a finished one', () {
+      final timedOut = Trip.fromJson(tripJson(status: 'TIMEOUT'));
+      expect(timedOut.canRetrySearch, isTrue);
+      // The bug this guards: TIMEOUT used to be uncancellable, leaving the
+      // trip stuck in the passenger's list with no way out.
+      expect(timedOut.canCancel, isTrue);
+
+      for (final status in ['TRIP_STARTED', 'TRIP_COMPLETED', 'TRIP_CANCELLED']) {
+        expect(Trip.fromJson(tripJson(status: status)).canCancel, isFalse, reason: status);
+      }
+      expect(Trip.fromJson(tripJson(status: 'REQUESTED')).canCancel, isTrue);
+    });
+
+    test('parses the search-progress fields the countdown renders from', () {
+      final trip = Trip.fromJson({
+        ...tripJson(),
+        'searchAttempts': 3,
+        'nextSearchAt': '2026-07-19T12:01:00.000Z',
+        'maxSearchAttempts': 15,
+      });
+      expect(trip.searchAttempts, 3);
+      expect(trip.maxSearchAttempts, 15);
+      expect(trip.nextSearchAt, DateTime.parse('2026-07-19T12:01:00.000Z'));
+    });
+
     test('every backend status maps to a human label', () {
       const allStatuses = [
         'REQUESTED', 'DRIVER_ASSIGNED', 'DRIVER_ACCEPTED', 'DRIVER_REJECTED',

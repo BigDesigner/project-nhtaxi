@@ -8,6 +8,8 @@ import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../models/trip.dart';
 import '../../widgets/error_banner.dart';
+import '../../widgets/help_card.dart';
+import '../../widgets/search_countdown.dart';
 
 /// Polls one trip.
 ///
@@ -21,10 +23,15 @@ class TripController extends AsyncNotifier<Trip> {
   final String tripId;
   Timer? _timer;
 
+  /// Refreshes often enough that the countdown lines up with the server's
+  /// 60-second sweep without the client hammering the API — the server does
+  /// the actual searching, this just keeps the display honest.
+  static const _pollInterval = Duration(seconds: 10);
+
   @override
   Future<Trip> build() async {
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 10), (_) => _poll());
+    _timer = Timer.periodic(_pollInterval, (_) => _poll());
     ref.onDispose(() => _timer?.cancel());
     return _fetch();
   }
@@ -51,6 +58,14 @@ class TripController extends AsyncNotifier<Trip> {
   Future<void> cancel(String reason) async {
     await ref.read(apiClientProvider).post('/api/trips/$tripId/cancel', body: {'reason': reason});
     state = AsyncData(await _fetch());
+  }
+
+  /// Re-arms the server's search loop after it gave up.
+  Future<void> retrySearch() async {
+    final json = await ref.read(apiClientProvider).post('/api/trips/$tripId/retry');
+    state = AsyncData(Trip.fromJson(json));
+    _timer?.cancel();
+    _timer = Timer.periodic(_pollInterval, (_) => _poll());
   }
 }
 
@@ -122,30 +137,41 @@ class _TripDetail extends ConsumerWidget {
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    if (trip.isActive)
-                      const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    else
-                      const Icon(Icons.check_circle, color: Colors.green, size: 20),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(trip.statusLabel, style: Theme.of(context).textTheme.titleMedium),
-                    ),
-                  ],
-                ),
-                if (trip.status == 'TIMEOUT') ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'No driver was available nearby. Try again in a few minutes.',
-                    style: Theme.of(context).textTheme.bodySmall,
+            child: trip.isSearching
+                ? SearchCountdown(trip: trip)
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          if (trip.isActive)
+                            const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          else if (trip.status == 'TIMEOUT')
+                            const Icon(Icons.search_off, size: 20)
+                          else
+                            const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(trip.statusLabel, style: Theme.of(context).textTheme.titleMedium),
+                          ),
+                        ],
+                      ),
+                      if (trip.canRetrySearch) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'We checked for ${trip.maxSearchAttempts} minutes and no driver came free. '
+                          'You can start the search again, or call us.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                          onPressed: () => _retry(context, ref),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Search again'),
+                        ),
+                      ],
+                    ],
                   ),
-                ],
-              ],
-            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -183,17 +209,30 @@ class _TripDetail extends ConsumerWidget {
             ),
           ),
         ),
-        const SizedBox(height: 24),
-        // The API enforces the real rule (a started trip can no longer be
-        // cancelled by the passenger); this just avoids offering a button
+        const SizedBox(height: 16),
+        // Shown wherever a passenger might be stuck: a search that came up
+        // empty is exactly when they want a human.
+        if (trip.isSearching || trip.canRetrySearch) const HelpCard(),
+        const SizedBox(height: 8),
+        // The API enforces the real rule; this just avoids offering a button
         // that would always fail.
-        if (trip.isActive && trip.status != 'TRIP_STARTED')
+        if (trip.canCancel)
           OutlinedButton(
             onPressed: () => _confirmCancel(context, ref),
-            child: const Text('Cancel trip'),
+            child: Text(trip.canRetrySearch ? 'Close this request' : 'Cancel trip'),
           ),
       ],
     );
+  }
+
+  Future<void> _retry(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(tripControllerProvider(tripId).notifier).retrySearch();
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    }
   }
 }
 

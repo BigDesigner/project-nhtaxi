@@ -15,6 +15,9 @@ class Trip {
     this.finalFare,
     required this.currency,
     this.completedAt,
+    this.searchAttempts = 0,
+    this.nextSearchAt,
+    this.maxSearchAttempts = 0,
   });
 
   final String id;
@@ -30,6 +33,24 @@ class Trip {
   final String currency;
   final DateTime requestedAt;
   final DateTime? completedAt;
+
+  /// Driver-search progress, driven entirely by the server's Alarm loop. The
+  /// UI counts down to [nextSearchAt] rather than running its own timer, so
+  /// every screen showing this trip agrees on the number.
+  final int searchAttempts;
+  final DateTime? nextSearchAt;
+  final int maxSearchAttempts;
+
+  /// Still looking for a driver — no one has taken it yet.
+  bool get isSearching => status == 'REQUESTED' || status == 'DRIVER_NO_RESPONSE' || status == 'DRIVER_REJECTED';
+
+  /// The search budget ran out; the passenger can restart it.
+  bool get canRetrySearch => status == 'TIMEOUT';
+
+  /// Mirrors the API's rule: once the ride is under way or finished, calling
+  /// it off is a phone call, not a button. A timed-out trip stays cancellable
+  /// so it can be cleared out instead of lingering.
+  bool get canCancel => !const {'TRIP_STARTED', 'TRIP_COMPLETED', 'TRIP_CANCELLED'}.contains(status);
 
   /// What the passenger was actually charged, falling back to the quote
   /// while the trip is still in flight.
@@ -68,5 +89,8 @@ class Trip {
         currency: json['currency'] as String? ?? 'USD',
         requestedAt: DateTime.parse(json['requestedAt'] as String),
         completedAt: json['completedAt'] == null ? null : DateTime.parse(json['completedAt'] as String),
+        searchAttempts: (json['searchAttempts'] as num?)?.toInt() ?? 0,
+        nextSearchAt: json['nextSearchAt'] == null ? null : DateTime.parse(json['nextSearchAt'] as String),
+        maxSearchAttempts: (json['maxSearchAttempts'] as num?)?.toInt() ?? 0,
       );
 }

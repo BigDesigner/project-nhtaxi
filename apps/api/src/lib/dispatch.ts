@@ -6,6 +6,32 @@ export const MAX_DISPATCH_RADIUS_MILES = 10;
 export const MAX_DISPATCH_ATTEMPTS = 3;
 export const DISPATCH_TIMEOUT_MS = 60_000;
 
+// Faz 7 — if nobody is around, keep looking rather than giving up instantly.
+// One sweep a minute for 15 minutes, then park the trip so a passenger who
+// walked away isn't searched for forever. Server-side (DO Alarm) rather than
+// client polling: it survives the app being closed, costs nothing on the free
+// tier, and the cap can't be bypassed by a client that keeps asking.
+export const SEARCH_RETRY_INTERVAL_MS = 60_000;
+export const MAX_SEARCH_ROUNDS = 15;
+
+/** Records that a sweep found nothing and schedules the next one. */
+export async function scheduleNextSearch(
+  db: Database,
+  tripId: string,
+  attempt: number,
+  nextSearchAt: Date
+): Promise<void> {
+  await db
+    .update(tripsTable)
+    .set({ searchAttempts: attempt, nextSearchAt, status: "REQUESTED", updatedAt: new Date() })
+    .where(eq(tripsTable.id, tripId));
+}
+
+/** Clears search bookkeeping once a driver is found or the search ends. */
+export async function clearSearchSchedule(db: Database, tripId: string): Promise<void> {
+  await db.update(tripsTable).set({ nextSearchAt: null, updatedAt: new Date() }).where(eq(tripsTable.id, tripId));
+}
+
 export async function findNearestAvailableDriver(
   db: Database,
   pickupLat: number,

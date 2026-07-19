@@ -60,6 +60,9 @@ class ApiClient {
 
   Future<Map<String, dynamic>> post(String path, {Object? body, bool skipAuth = false}) => _send(
         () => _dio.post<dynamic>(path, data: body, options: Options(extra: {'skipAuth': skipAuth})),
+        // An unauthenticated call can't have an expired session, so a 401
+        // from it is a real answer ("wrong password"), not a stale token.
+        allowRefresh: !skipAuth,
       );
 
   Future<List<dynamic>> getList(String path, {Map<String, dynamic>? query}) async {
@@ -69,14 +72,20 @@ class ApiClient {
     throw ApiException('Expected a list from $path');
   }
 
-  Future<Map<String, dynamic>> _send(Future<Response<dynamic>> Function() request) async {
-    final response = await _raw(request);
+  Future<Map<String, dynamic>> _send(
+    Future<Response<dynamic>> Function() request, {
+    bool allowRefresh = true,
+  }) async {
+    final response = await _raw(request, allowRefresh: allowRefresh);
     final data = response.data;
     if (data is Map<String, dynamic>) return data;
     return <String, dynamic>{};
   }
 
-  Future<Response<dynamic>> _raw(Future<Response<dynamic>> Function() request) async {
+  Future<Response<dynamic>> _raw(
+    Future<Response<dynamic>> Function() request, {
+    bool allowRefresh = true,
+  }) async {
     Response<dynamic> response;
     try {
       response = await request();
@@ -84,7 +93,7 @@ class ApiClient {
       throw ApiException(_networkMessage(e));
     }
 
-    if (response.statusCode == 401 && await _refreshSession()) {
+    if (allowRefresh && response.statusCode == 401 && await _refreshSession()) {
       try {
         response = await request();
       } on DioException catch (e) {
@@ -133,8 +142,12 @@ class ApiClient {
   }
 
   Future<void> _endSession() async {
+    // Only signal expiry if there was actually a session to lose. Firing this
+    // otherwise would reset the auth controller mid-login and wipe the error
+    // the user needs to see.
+    final hadSession = await _tokenStore.hasSession();
     await _tokenStore.clear();
-    onSessionExpired?.call();
+    if (hadSession) onSessionExpired?.call();
   }
 
   String _errorMessage(Response<dynamic> response) {

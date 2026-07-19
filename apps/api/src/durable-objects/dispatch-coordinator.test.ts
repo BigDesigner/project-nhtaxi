@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { createDb, driverProfilesTable, usersTable } from "@gnncab/db";
+import { MAX_SEARCH_ROUNDS } from "../lib/dispatch";
 import { CookieJar, readJson, req, uniqueEmail } from "../test-utils/http";
 
 // D1 storage is shared across `it()`s in one file (isolated per *file*, not
@@ -121,7 +122,7 @@ describe("DispatchCoordinator — redispatch & timeout", () => {
     expect(nearDp!.status).toBe("AVAILABLE"); // freed after no-response
   });
 
-  it("times out after 3 rejected attempts", async () => {
+  it("schedules another sweep once everyone nearby has declined", async () => {
     const { pickup, dropoff } = region(46.0);
     const d1 = await registerRankedDriver(uniqueEmail("do-max1"), pickup.pickupLat, pickup.pickupLng, 0);
     const d2 = await registerRankedDriver(uniqueEmail("do-max2"), pickup.pickupLat, pickup.pickupLng, 0.02);
@@ -140,7 +141,63 @@ describe("DispatchCoordinator — redispatch & timeout", () => {
       expect(res.status).toBe(200);
     }
 
+    // Exhausting one sweep no longer kills the trip — a driver who declined
+    // now may well be free in a minute, so we back off and look again.
     const afterRes = await req(`/api/trips/${trip.id}`, { headers: { Cookie: passengerJar.header() } });
-    expect((await readJson(afterRes)).status).toBe("TIMEOUT");
+    const after = await readJson(afterRes);
+    expect(after.status).toBe("REQUESTED");
+    expect(after.searchAttempts).toBeGreaterThanOrEqual(1);
+    expect(after.nextSearchAt).not.toBeNull();
+  });
+
+  it("gives up only after the whole search budget is spent, and can then be retried", async () => {
+    const { pickup, dropoff } = region(47.0);
+    const passengerJar = await registerPassenger(uniqueEmail("do-budget-passenger"));
+
+    // No drivers exist in this region at all, so every sweep comes up empty.
+    const trip = await createTrip(passengerJar, pickup, dropoff);
+    expect(trip.status).toBe("REQUESTED");
+
+    // Burn the remaining rounds by firing the Alarm directly instead of
+    // waiting 15 real minutes.
+    const stub = env.DISPATCH_COORDINATOR.get(env.DISPATCH_COORDINATOR.idFromName(trip.id));
+    for (let i = 0; i < MAX_SEARCH_ROUNDS; i++) {
+      await runDurableObjectAlarm(stub);
+    }
+
+    const timedOut = await readJson(await req(`/api/trips/${trip.id}`, { headers: { Cookie: passengerJar.header() } }));
+    expect(timedOut.status).toBe("TIMEOUT");
+
+    // The passenger opts back in.
+    const retryRes = await req(`/api/trips/${trip.id}/retry`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...passengerJar.csrfHeaders() },
+    });
+    expect(retryRes.status).toBe(200);
+    const retried = await readJson(retryRes);
+    expect(retried.status).toBe("REQUESTED");
+    expect(retried.searchAttempts).toBeLessThanOrEqual(1);
+  });
+
+  it("stops searching once the passenger cancels", async () => {
+    const { pickup, dropoff } = region(48.0);
+    const passengerJar = await registerPassenger(uniqueEmail("do-cancel-passenger"));
+
+    const trip = await createTrip(passengerJar, pickup, dropoff);
+    expect(trip.status).toBe("REQUESTED");
+
+    const cancelRes = await req(`/api/trips/${trip.id}/cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...passengerJar.csrfHeaders() },
+      body: JSON.stringify({ reason: "Changed my mind" }),
+    });
+    expect(cancelRes.status).toBe(200);
+
+    // Even if a stale Alarm fires, a cancelled trip must not be revived.
+    const stub = env.DISPATCH_COORDINATOR.get(env.DISPATCH_COORDINATOR.idFromName(trip.id));
+    await runDurableObjectAlarm(stub);
+
+    const after = await readJson(await req(`/api/trips/${trip.id}`, { headers: { Cookie: passengerJar.header() } }));
+    expect(after.status).toBe("TRIP_CANCELLED");
   });
 });

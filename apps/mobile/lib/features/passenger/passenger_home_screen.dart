@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../models/trip.dart';
 import '../../widgets/error_banner.dart';
+import '../../widgets/search_countdown.dart';
 import '../auth/auth_controller.dart';
 import 'trips_controller.dart';
 
@@ -104,12 +105,34 @@ class _TripTile extends StatelessWidget {
     final fare = trip.displayFare;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: Icon(trip.isActive ? Icons.directions_car : Icons.check_circle_outline),
-        title: Text(trip.dropoffAddress ?? trip.pickupAddress),
-        subtitle: Text('${trip.statusLabel} · ${_formatDate(trip.requestedAt)}'),
-        trailing: fare == null ? null : Text('\$${fare.toStringAsFixed(2)}'),
-        onTap: () => context.go('/trip/${trip.id}'),
+      child: Column(
+        children: [
+          ListTile(
+            leading: Icon(
+              trip.isSearching
+                  ? Icons.search
+                  : trip.canRetrySearch
+                      ? Icons.search_off
+                      : trip.isActive
+                          ? Icons.directions_car
+                          : Icons.check_circle_outline,
+            ),
+            title: Text(trip.dropoffAddress ?? trip.pickupAddress),
+            subtitle: Text('${trip.statusLabel} · ${_formatDate(trip.requestedAt)}'),
+            trailing: fare == null ? null : Text('\$${fare.toStringAsFixed(2)}'),
+            onTap: () => context.go('/trip/${trip.id}'),
+          ),
+          // The same countdown as the trip screen, so a passenger watching
+          // the list can see the search is still running without opening it.
+          if (trip.isSearching)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SearchCountdown(trip: trip, compact: true),
+              ),
+            ),
+        ],
       ),
     );
   }

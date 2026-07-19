@@ -58,7 +58,7 @@ describe("trips — request & dispatch", () => {
     void driverJar; // driver session unused directly here — assignment is verified via the trip response
   });
 
-  it("times out when no driver is available nearby", async () => {
+  it("keeps searching (rather than giving up) when no driver is available nearby", async () => {
     const passengerJar = await registerPassenger(uniqueEmail("trip-passenger-notimeout"));
     const res = await req("/api/trips", {
       method: "POST",
@@ -66,7 +66,15 @@ describe("trips — request & dispatch", () => {
       body: JSON.stringify({ ...PICKUP, ...DROPOFF, paymentMethod: "cash" }),
     });
     expect(res.status).toBe(201);
-    expect((await readJson(res)).status).toBe("TIMEOUT");
+
+    // An empty sweep schedules the next one instead of failing the trip —
+    // drivers come online all the time, so instant TIMEOUT threw away a
+    // booking that would often succeed a minute later.
+    const trip = await readJson(res);
+    expect(trip.status).toBe("REQUESTED");
+    expect(trip.searchAttempts).toBe(1);
+    expect(trip.nextSearchAt).not.toBeNull();
+    expect(new Date(trip.nextSearchAt).getTime()).toBeGreaterThan(Date.now());
   });
 
   it("rejects a second active trip request from the same passenger", async () => {
