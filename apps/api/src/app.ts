@@ -36,6 +36,15 @@ app.route("/api/customer", customerProfileRoutes);
 app.route("/api/admin", adminRoutes);
 app.route("/api/trips", tripRoutes);
 
+// Faz 4: live tracking — single global LocationHub DO, every driver/
+// customer/admin WebSocket connects here (auth happens inside the DO
+// since Upgrade requests can't carry the CSRF/cookie middleware chain).
+app.get("/api/ws", (c) => {
+  const id = c.env.LOCATION_HUB.idFromName("global");
+  const stub = c.env.LOCATION_HUB.get(id);
+  return stub.fetch(c.req.raw);
+});
+
 // Code-first contract (L: contract strategy) — the OpenAPI doc below is
 // generated from the zod schemas in packages/contract + the routes
 // registered above, and is what the web (TS) and Flutter (Dart) clients get
@@ -45,8 +54,6 @@ app.doc("/api/openapi.json", {
   info: { title: "GNNcab API", version: "0.0.0" },
   servers: [{ url: "/api" }],
 });
-
-// Faz 3 adds: trips + dispatch. Faz 4 adds: realtime (Durable Object WebSocket).
 
 app.onError((err, c) => {
   console.error("[Error]", err);

@@ -27,9 +27,17 @@ bucket_name = "gnncab-driver-documents"
 name = "DISPATCH_COORDINATOR"
 class_name = "DispatchCoordinator"
 
+[[durable_objects.bindings]]
+name = "LOCATION_HUB"
+class_name = "LocationHub"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["DispatchCoordinator"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["LocationHub"]
 
 [vars]
 ENVIRONMENT = "production"
