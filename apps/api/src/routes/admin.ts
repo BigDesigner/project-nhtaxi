@@ -13,9 +13,15 @@ import {
   AuthResponseSchema,
   CitySchema,
   CreateCityRequestSchema,
+  DriverBalanceReportRowSchema,
+  DriverCashCollectionSchema,
+  DriverCollectionQuerySchema,
   DriverDocumentSchema,
+  DriverSessionQuerySchema,
+  DriverSessionSchema,
   ErrorResponseSchema,
   PricingConfigSchema,
+  RecordCashCollectionRequestSchema,
   TripReportQuerySchema,
   TripReportRowSchema,
   UpdatePricingConfigRequestSchema,
@@ -26,8 +32,10 @@ import {
   citiesTable,
   createDb,
   customerProfilesTable,
+  driverCashCollectionsTable,
   driverDocumentsTable,
   driverProfilesTable,
+  driverSessionsTable,
   pricingConfigTable,
   tripsTable,
   usersTable,
@@ -37,6 +45,7 @@ import { AuditAction, logAudit } from "../lib/audit";
 import { toCsv } from "../lib/csv";
 import { decryptDocument } from "../lib/document-encryption";
 import { driverProfileWithUserColumns } from "../lib/driver-queries";
+import { closeOpenSession, computeDriverBalance, getDriverUsageRates, toSessionResponse } from "../lib/driver-sessions";
 import { hashPassword } from "../lib/password";
 import { clientIp } from "../lib/request";
 import { issueSession, toPublicUser } from "../lib/session";
@@ -642,7 +651,16 @@ admin.openapi(getPricingRoute, async (c) => {
 
   if (!row) {
     return c.json(
-      { id: "unset", cityId: null, baseFare: 2.5, perMile: 1.2, currency: "USD", updatedAt: new Date(0).toISOString() },
+      {
+        id: "unset",
+        cityId: null,
+        baseFare: 2.5,
+        perMile: 1.2,
+        driverUsagePerMinute: 0.25,
+        driverCommissionPercent: 20,
+        currency: "USD",
+        updatedAt: new Date(0).toISOString(),
+      },
       200
     );
   }
@@ -653,6 +671,8 @@ admin.openapi(getPricingRoute, async (c) => {
       cityId: row.cityId,
       baseFare: row.baseFareCents / 100,
       perMile: row.perMileCents / 100,
+      driverUsagePerMinute: row.driverUsagePerMinuteCents / 100,
+      driverCommissionPercent: row.driverCommissionPercent,
       currency: row.currency,
       updatedAt: row.updatedAt.toISOString(),
     },
@@ -679,19 +699,30 @@ admin.openapi(updatePricingRoute, async (c) => {
   const baseFareCents = Math.round(body.baseFare * 100);
   const perMileCents = Math.round(body.perMile * 100);
 
-  const [existing] = await db
-    .select({ id: pricingConfigTable.id })
-    .from(pricingConfigTable)
-    .where(isNull(pricingConfigTable.cityId))
-    .limit(1);
+  const [existing] = await db.select().from(pricingConfigTable).where(isNull(pricingConfigTable.cityId)).limit(1);
+
+  // Faz 5b fields are optional (independent admin-UI editing) — fall back to
+  // the current row's value, or the schema default if this is the first write.
+  const driverUsagePerMinuteCents =
+    body.driverUsagePerMinute != null ? Math.round(body.driverUsagePerMinute * 100) : (existing?.driverUsagePerMinuteCents ?? 25);
+  const driverCommissionPercent = body.driverCommissionPercent ?? existing?.driverCommissionPercent ?? 20;
 
   if (existing) {
     await db
       .update(pricingConfigTable)
-      .set({ baseFareCents, perMileCents, updatedAt: new Date(), updatedBy: authUser.userId })
+      .set({
+        baseFareCents,
+        perMileCents,
+        driverUsagePerMinuteCents,
+        driverCommissionPercent,
+        updatedAt: new Date(),
+        updatedBy: authUser.userId,
+      })
       .where(eq(pricingConfigTable.id, existing.id));
   } else {
-    await db.insert(pricingConfigTable).values({ baseFareCents, perMileCents, updatedBy: authUser.userId });
+    await db
+      .insert(pricingConfigTable)
+      .values({ baseFareCents, perMileCents, driverUsagePerMinuteCents, driverCommissionPercent, updatedBy: authUser.userId });
   }
 
   c.executionCtx.waitUntil(
@@ -700,7 +731,7 @@ admin.openapi(updatePricingRoute, async (c) => {
       action: AuditAction.PRICING_UPDATED,
       actorId: authUser.userId,
       actorRole: "admin",
-      metadata: { baseFareCents, perMileCents },
+      metadata: { baseFareCents, perMileCents, driverUsagePerMinuteCents, driverCommissionPercent },
       ipAddress: clientIp(c),
     })
   );
@@ -712,6 +743,8 @@ admin.openapi(updatePricingRoute, async (c) => {
       cityId: row!.cityId,
       baseFare: row!.baseFareCents / 100,
       perMile: row!.perMileCents / 100,
+      driverUsagePerMinute: row!.driverUsagePerMinuteCents / 100,
+      driverCommissionPercent: row!.driverCommissionPercent,
       currency: row!.currency,
       updatedAt: row!.updatedAt.toISOString(),
     },
@@ -853,6 +886,293 @@ admin.openapi(listAuditLogsRoute, async (c) => {
     })),
     200
   );
+});
+
+// ─── POST /drivers/{driverId}/collections — record a cash payment (Faz 5b) ─
+// A single lump-sum handover against the driver's combined balance (usage
+// fee + commission together — a real cash handover isn't naturally split).
+const recordCollectionRoute = createRoute({
+  method: "post",
+  path: "/drivers/{driverId}/collections",
+  tags: ["admin"],
+  summary: "Record a cash collection from a driver against their combined balance",
+  request: {
+    params: z.object({ driverId: z.string().uuid() }),
+    body: { required: true, content: { "application/json": { schema: RecordCashCollectionRequestSchema } } },
+  },
+  responses: {
+    201: { description: "Recorded", content: { "application/json": { schema: DriverCashCollectionSchema } } },
+    404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+admin.openapi(recordCollectionRoute, async (c) => {
+  const { driverId } = c.req.valid("param");
+  const body = c.req.valid("json");
+  const db = createDb(c.env.DB);
+  const authUser = c.get("user")!;
+
+  const [driver] = await db
+    .select(driverProfileWithUserColumns())
+    .from(driverProfilesTable)
+    .innerJoin(usersTable, eq(driverProfilesTable.userId, usersTable.id))
+    .where(eq(driverProfilesTable.id, driverId))
+    .limit(1);
+  if (!driver) {
+    return c.json({ error: "NotFound", message: "Driver not found" }, 404);
+  }
+
+  const [adminUser] = await db
+    .select({ firstName: usersTable.firstName, lastName: usersTable.lastName })
+    .from(usersTable)
+    .where(eq(usersTable.id, authUser.userId))
+    .limit(1);
+
+  const amountCents = Math.round(body.amount * 100);
+  const [collection] = await db
+    .insert(driverCashCollectionsTable)
+    .values({
+      driverId,
+      amountCents,
+      collectedAt: body.collectedAt ?? new Date(),
+      collectedBy: authUser.userId,
+      notes: body.notes,
+    })
+    .returning();
+  if (!collection) throw new Error("Insert into driver_cash_collections returned no row");
+
+  c.executionCtx.waitUntil(
+    logAudit(db, {
+      entity: "driver_cash_collection",
+      entityId: collection.id,
+      action: AuditAction.DRIVER_CASH_COLLECTED,
+      actorId: authUser.userId,
+      actorRole: "admin",
+      metadata: { driverId, amountCents },
+      ipAddress: clientIp(c),
+    })
+  );
+
+  return c.json(
+    {
+      id: collection.id,
+      driverId: collection.driverId,
+      driverName: `${driver.firstName} ${driver.lastName}`,
+      amount: collection.amountCents / 100,
+      collectedAt: collection.collectedAt.toISOString(),
+      collectedByName: adminUser ? `${adminUser.firstName} ${adminUser.lastName}` : authUser.email,
+      notes: collection.notes,
+      createdAt: collection.createdAt.toISOString(),
+    },
+    201
+  );
+});
+
+// ─── POST /drivers/{driverId}/close-session — manual override (Faz 5b) ────
+// The stale-session cron sweep handles abandoned sessions automatically;
+// this is for an admin to resolve a stuck one immediately (e.g. a dispute).
+const closeSessionRoute = createRoute({
+  method: "post",
+  path: "/drivers/{driverId}/close-session",
+  tags: ["admin"],
+  summary: "Force-close a driver's open session right now",
+  request: { params: z.object({ driverId: z.string().uuid() }) },
+  responses: {
+    200: { description: "Closed", content: { "application/json": { schema: DriverSessionSchema } } },
+    404: { description: "This driver has no open session", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+admin.openapi(closeSessionRoute, async (c) => {
+  const { driverId } = c.req.valid("param");
+  const db = createDb(c.env.DB);
+  const authUser = c.get("user")!;
+
+  const [driver] = await db
+    .select({ id: driverProfilesTable.id })
+    .from(driverProfilesTable)
+    .where(eq(driverProfilesTable.id, driverId))
+    .limit(1);
+  if (!driver) {
+    return c.json({ error: "NotFound", message: "Driver not found" }, 404);
+  }
+
+  const { perMinuteCents } = await getDriverUsageRates(db);
+  const now = new Date();
+  const closed = await closeOpenSession(db, driverId, now, perMinuteCents, "ADMIN_FORCE_CLOSE");
+  if (!closed) {
+    return c.json({ error: "NotFound", message: "This driver has no open session" }, 404);
+  }
+
+  await db.update(driverProfilesTable).set({ status: "OFFLINE", updatedAt: now }).where(eq(driverProfilesTable.id, driverId));
+
+  c.executionCtx.waitUntil(
+    logAudit(db, {
+      entity: "driver_session",
+      entityId: closed.id,
+      action: AuditAction.DRIVER_SESSION_FORCE_CLOSED,
+      actorId: authUser.userId,
+      actorRole: "admin",
+      metadata: { driverId, durationMinutes: closed.durationMinutes, chargeCents: closed.chargeCents },
+      ipAddress: clientIp(c),
+    })
+  );
+
+  return c.json(toSessionResponse(closed), 200);
+});
+
+// ─── GET /drivers/{driverId}/sessions — footprint (day/hour ranges, Faz 5b) ─
+const driverSessionsRoute = createRoute({
+  method: "get",
+  path: "/drivers/{driverId}/sessions",
+  tags: ["admin"],
+  summary: "A driver's online-session footprint (when they were active in the app), newest first",
+  request: { params: z.object({ driverId: z.string().uuid() }), query: DriverSessionQuerySchema },
+  responses: {
+    200: { description: "Sessions", content: { "application/json": { schema: z.array(DriverSessionSchema) } } },
+    404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+admin.openapi(driverSessionsRoute, async (c) => {
+  const { driverId } = c.req.valid("param");
+  const query = c.req.valid("query");
+  const db = createDb(c.env.DB);
+
+  const [driver] = await db
+    .select({ id: driverProfilesTable.id })
+    .from(driverProfilesTable)
+    .where(eq(driverProfilesTable.id, driverId))
+    .limit(1);
+  if (!driver) {
+    return c.json({ error: "NotFound", message: "Driver not found" }, 404);
+  }
+
+  const conditions = [eq(driverSessionsTable.driverId, driverId)];
+  if (query.from) conditions.push(gte(driverSessionsTable.startedAt, query.from));
+  if (query.to) conditions.push(lte(driverSessionsTable.startedAt, query.to));
+
+  const rows = await db
+    .select()
+    .from(driverSessionsTable)
+    .where(and(...conditions))
+    .orderBy(desc(driverSessionsTable.startedAt))
+    .limit(query.limit)
+    .offset(query.offset);
+
+  return c.json(rows.map(toSessionResponse), 200);
+});
+
+// ─── GET /reports/driver-balances — pending debt per driver (Faz 5b) ──────
+const driverBalancesRoute = createRoute({
+  method: "get",
+  path: "/reports/driver-balances",
+  tags: ["admin"],
+  summary: "Pending balance owed per driver — usage fee + commission, minus cash already collected",
+  responses: {
+    200: { description: "Balances", content: { "application/json": { schema: z.array(DriverBalanceReportRowSchema) } } },
+  },
+});
+
+admin.openapi(driverBalancesRoute, async (c) => {
+  const db = createDb(c.env.DB);
+
+  const drivers = await db
+    .select(driverProfileWithUserColumns())
+    .from(driverProfilesTable)
+    .innerJoin(usersTable, eq(driverProfilesTable.userId, usersTable.id));
+
+  const rows = [];
+  for (const driver of drivers) {
+    const balance = await computeDriverBalance(db, driver.id);
+    rows.push({
+      driverId: driver.id,
+      driverName: `${driver.firstName} ${driver.lastName}`,
+      usageFeeCharged: balance.usageFeeChargedCents / 100,
+      commissionCharged: balance.commissionChargedCents / 100,
+      totalCharged: balance.totalChargedCents / 100,
+      totalCollected: balance.totalCollectedCents / 100,
+      pendingBalance: balance.pendingBalanceCents / 100,
+      hasOpenSession: balance.hasOpenSession,
+    });
+  }
+
+  return c.json(rows, 200);
+});
+
+// ─── GET /reports/driver-collections — cash already collected (Faz 5b) ────
+const collectionDriverUser = alias(usersTable, "collection_driver_user");
+const collectionAdminUser = alias(usersTable, "collection_admin_user");
+
+const driverCollectionsReportRoute = createRoute({
+  method: "get",
+  path: "/reports/driver-collections",
+  tags: ["admin"],
+  summary: "Cash collections recorded from drivers — filterable, JSON or CSV",
+  request: { query: DriverCollectionQuerySchema },
+  responses: {
+    200: {
+      description: "Collections (JSON by default) or a CSV file with ?format=csv",
+      content: {
+        "application/json": { schema: z.array(DriverCashCollectionSchema) },
+        "text/csv": { schema: z.string() },
+      },
+    },
+  },
+});
+
+admin.openapi(driverCollectionsReportRoute, async (c) => {
+  const query = c.req.valid("query");
+  const db = createDb(c.env.DB);
+
+  const conditions = [];
+  if (query.driverId) conditions.push(eq(driverCashCollectionsTable.driverId, query.driverId));
+  if (query.from) conditions.push(gte(driverCashCollectionsTable.collectedAt, query.from));
+  if (query.to) conditions.push(lte(driverCashCollectionsTable.collectedAt, query.to));
+
+  const rows = await db
+    .select({
+      id: driverCashCollectionsTable.id,
+      driverId: driverCashCollectionsTable.driverId,
+      driverFirstName: collectionDriverUser.firstName,
+      driverLastName: collectionDriverUser.lastName,
+      amountCents: driverCashCollectionsTable.amountCents,
+      collectedAt: driverCashCollectionsTable.collectedAt,
+      adminFirstName: collectionAdminUser.firstName,
+      adminLastName: collectionAdminUser.lastName,
+      notes: driverCashCollectionsTable.notes,
+      createdAt: driverCashCollectionsTable.createdAt,
+    })
+    .from(driverCashCollectionsTable)
+    .innerJoin(driverProfilesTable, eq(driverCashCollectionsTable.driverId, driverProfilesTable.id))
+    .innerJoin(collectionDriverUser, eq(driverProfilesTable.userId, collectionDriverUser.id))
+    .innerJoin(collectionAdminUser, eq(driverCashCollectionsTable.collectedBy, collectionAdminUser.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(driverCashCollectionsTable.collectedAt))
+    .limit(query.limit)
+    .offset(query.offset);
+
+  const reportRows = rows.map((r) => ({
+    id: r.id,
+    driverId: r.driverId,
+    driverName: `${r.driverFirstName} ${r.driverLastName}`,
+    amount: r.amountCents / 100,
+    collectedAt: r.collectedAt.toISOString(),
+    collectedByName: `${r.adminFirstName} ${r.adminLastName}`,
+    notes: r.notes,
+    createdAt: r.createdAt.toISOString(),
+  }));
+
+  if (query.format === "csv") {
+    return new Response(toCsv(reportRows), {
+      status: 200,
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="driver-collections-${new Date().toISOString().slice(0, 10)}.csv"`,
+      },
+    });
+  }
+  return c.json(reportRows, 200);
 });
 
 export default admin;

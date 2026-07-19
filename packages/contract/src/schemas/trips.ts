@@ -26,7 +26,11 @@ export const CLIENT_SETTABLE_TRIP_STATUSES = [
   "TRIP_COMPLETED",
 ] as const;
 
-export const PAYMENT_METHODS = ["cash", "card", "online"] as const;
+// Faz 5b — cash-only for now; Stripe/in-app collection (card/online) is
+// deferred indefinitely, no committed phase. Contract-layer restriction
+// only (the DB's CHECK constraint stays as-is — zero risk, trivially
+// reversible by widening this array again when Stripe returns).
+export const PAYMENT_METHODS = ["cash"] as const;
 
 export const CreateTripRequestSchema = z
   .object({

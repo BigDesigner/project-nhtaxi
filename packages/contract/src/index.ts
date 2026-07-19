@@ -11,3 +11,4 @@ export * from "./schemas/pricing";
 export * from "./schemas/admin";
 export * from "./schemas/trips";
 export * from "./schemas/reports";
+export * from "./schemas/driver-billing";

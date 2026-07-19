@@ -39,6 +39,11 @@ new_sqlite_classes = ["DispatchCoordinator"]
 tag = "v2"
 new_sqlite_classes = ["LocationHub"]
 
+[triggers]
+# Faz 5b — stale-session sweep (closes abandoned driver sessions so an app
+# crash/connectivity loss never bills forever). Free tier, no cost.
+crons = ["*/15 * * * *"]
+
 [vars]
 ENVIRONMENT = "production"
 

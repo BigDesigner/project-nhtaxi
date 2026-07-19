@@ -5,16 +5,20 @@ import {
   DriverDocumentSchema,
   DriverEarningsQuerySchema,
   DriverEarningsSummarySchema,
+  DriverOwnBalanceSchema,
   DriverProfileResponseSchema,
   DriverProfileUpdateRequestSchema,
   DriverRegisterRequestSchema,
+  DriverSessionQuerySchema,
+  DriverSessionSchema,
   DRIVER_DOCUMENT_TYPES,
   ErrorResponseSchema,
 } from "@gnncab/contract";
-import { createDb, driverDocumentsTable, driverProfilesTable, tripsTable, usersTable } from "@gnncab/db";
+import { createDb, driverDocumentsTable, driverProfilesTable, driverSessionsTable, tripsTable, usersTable } from "@gnncab/db";
 import type { AppBindings } from "../env";
 import { AuditAction, logAudit } from "../lib/audit";
 import { encryptDocument } from "../lib/document-encryption";
+import { closeOpenSession, computeDriverBalance, getDriverUsageRates, openSession, toSessionResponse } from "../lib/driver-sessions";
 import { driverProfileWithUserColumns } from "../lib/driver-queries";
 import { hashPassword } from "../lib/password";
 import { clientIp } from "../lib/request";
@@ -116,6 +120,8 @@ driverProfile.use("/profile", authenticate, requireRole("driver"));
 driverProfile.use("/documents", authenticate, requireRole("driver"));
 driverProfile.use("/documents/:type", authenticate, requireRole("driver"));
 driverProfile.use("/earnings", authenticate, requireRole("driver"));
+driverProfile.use("/balance", authenticate, requireRole("driver"));
+driverProfile.use("/sessions", authenticate, requireRole("driver"));
 
 // ─── GET /profile — own driver profile ─────────────────────────────────────
 const getProfileRoute = createRoute({
@@ -171,7 +177,7 @@ driverProfile.openapi(updateProfileRoute, async (c) => {
   const db = createDb(c.env.DB);
 
   const [existing] = await db
-    .select({ id: driverProfilesTable.id, isVerified: driverProfilesTable.isVerified })
+    .select({ id: driverProfilesTable.id, isVerified: driverProfilesTable.isVerified, status: driverProfilesTable.status })
     .from(driverProfilesTable)
     .where(eq(driverProfilesTable.userId, authUser.userId))
     .limit(1);
@@ -190,6 +196,39 @@ driverProfile.openapi(updateProfileRoute, async (c) => {
     .update(driverProfilesTable)
     .set({ ...body, updatedAt: new Date() })
     .where(eq(driverProfilesTable.id, existing.id));
+
+  // Faz 5b — a "session" (billable active time) opens/closes only on this
+  // OFFLINE<->non-OFFLINE toggle, never on trip activity.
+  if (body.status && body.status !== existing.status) {
+    const now = new Date();
+    if (existing.status === "OFFLINE" && body.status !== "OFFLINE") {
+      await openSession(db, existing.id, now);
+      c.executionCtx.waitUntil(
+        logAudit(db, {
+          entity: "driver_session",
+          entityId: existing.id,
+          action: AuditAction.DRIVER_SESSION_OPENED,
+          actorId: authUser.userId,
+          actorRole: "driver",
+          ipAddress: clientIp(c),
+        })
+      );
+    } else if (existing.status !== "OFFLINE" && body.status === "OFFLINE") {
+      const { perMinuteCents } = await getDriverUsageRates(db);
+      const closed = await closeOpenSession(db, existing.id, now, perMinuteCents, "OFFLINE_TOGGLE");
+      c.executionCtx.waitUntil(
+        logAudit(db, {
+          entity: "driver_session",
+          entityId: existing.id,
+          action: AuditAction.DRIVER_SESSION_CLOSED,
+          actorId: authUser.userId,
+          actorRole: "driver",
+          metadata: closed ? { durationMinutes: closed.durationMinutes, chargeCents: closed.chargeCents } : undefined,
+          ipAddress: clientIp(c),
+        })
+      );
+    }
+  }
 
   const [updated] = await db
     .select(driverProfileWithUserColumns())
@@ -364,6 +403,86 @@ driverProfile.openapi(earningsRoute, async (c) => {
     },
     200
   );
+});
+
+// ─── GET /balance — own usage-fee + commission debt owed to GNN LLC ───────
+const balanceRoute = createRoute({
+  method: "get",
+  path: "/balance",
+  tags: ["driver"],
+  summary: "My own balance owed to GNN LLC (usage fee + commission debt, minus cash already collected)",
+  responses: {
+    200: { description: "Balance", content: { "application/json": { schema: DriverOwnBalanceSchema } } },
+  },
+});
+
+driverProfile.openapi(balanceRoute, async (c) => {
+  const authUser = c.get("user")!;
+  const db = createDb(c.env.DB);
+
+  const [profile] = await db
+    .select({ id: driverProfilesTable.id })
+    .from(driverProfilesTable)
+    .where(eq(driverProfilesTable.userId, authUser.userId))
+    .limit(1);
+  if (!profile) {
+    return c.json(
+      { usageFeeCharged: 0, commissionCharged: 0, totalCharged: 0, totalCollected: 0, pendingBalance: 0, hasOpenSession: false },
+      200
+    );
+  }
+
+  const balance = await computeDriverBalance(db, profile.id);
+  return c.json(
+    {
+      usageFeeCharged: balance.usageFeeChargedCents / 100,
+      commissionCharged: balance.commissionChargedCents / 100,
+      totalCharged: balance.totalChargedCents / 100,
+      totalCollected: balance.totalCollectedCents / 100,
+      pendingBalance: balance.pendingBalanceCents / 100,
+      hasOpenSession: balance.hasOpenSession,
+    },
+    200
+  );
+});
+
+// ─── GET /sessions — own online-session footprint (day/hour ranges) ───────
+const listOwnSessionsRoute = createRoute({
+  method: "get",
+  path: "/sessions",
+  tags: ["driver"],
+  summary: "My own online-session footprint (when I was active in the app), newest first",
+  request: { query: DriverSessionQuerySchema },
+  responses: {
+    200: { description: "Sessions", content: { "application/json": { schema: z.array(DriverSessionSchema) } } },
+  },
+});
+
+driverProfile.openapi(listOwnSessionsRoute, async (c) => {
+  const authUser = c.get("user")!;
+  const query = c.req.valid("query");
+  const db = createDb(c.env.DB);
+
+  const [profile] = await db
+    .select({ id: driverProfilesTable.id })
+    .from(driverProfilesTable)
+    .where(eq(driverProfilesTable.userId, authUser.userId))
+    .limit(1);
+  if (!profile) return c.json([], 200);
+
+  const conditions = [eq(driverSessionsTable.driverId, profile.id)];
+  if (query.from) conditions.push(gte(driverSessionsTable.startedAt, query.from));
+  if (query.to) conditions.push(lte(driverSessionsTable.startedAt, query.to));
+
+  const rows = await db
+    .select()
+    .from(driverSessionsTable)
+    .where(and(...conditions))
+    .orderBy(desc(driverSessionsTable.startedAt))
+    .limit(query.limit)
+    .offset(query.offset);
+
+  return c.json(rows.map(toSessionResponse), 200);
 });
 
 export default driverProfile;

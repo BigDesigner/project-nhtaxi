@@ -8,6 +8,13 @@
       "when": 1784415210824,
       "tag": "0000_keen_groot",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1784435709239,
+      "tag": "0001_damp_night_thrasher",
+      "breakpoints": true
     }
   ]
 }

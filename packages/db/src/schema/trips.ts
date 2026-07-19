@@ -19,7 +19,11 @@ export const TRIP_STATUSES = [
 ] as const;
 export type TripStatus = (typeof TRIP_STATUSES)[number];
 
-export const PAYMENT_METHODS = ["cash", "card", "online"] as const;
+// Faz 5b — cash-only for now (TS-level type only; the CHECK constraints
+// below stay as the wider 'cash','card','online' literal SQL so no
+// migration is needed — trivially reversible when Stripe returns by
+// widening this array again).
+export const PAYMENT_METHODS = ["cash"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const tripsTable = sqliteTable(
