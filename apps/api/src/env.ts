@@ -8,4 +8,14 @@ export type Env = {
   ENVIRONMENT: string;
 };
 
-export type AppBindings = { Bindings: Env };
+export interface AuthUser {
+  userId: string;
+  email: string;
+  role: string;
+}
+
+export type Variables = {
+  user?: AuthUser;
+};
+
+export type AppBindings = { Bindings: Env; Variables: Variables };

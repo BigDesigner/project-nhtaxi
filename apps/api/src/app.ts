@@ -1,6 +1,8 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import type { AppBindings } from "./env";
+import { requireCsrfForCookieAuth } from "./middlewares/csrf";
+import authRoutes from "./routes/auth";
 import health from "./routes/health";
 
 const app = new OpenAPIHono<AppBindings>();
@@ -21,7 +23,10 @@ app.use(
   })
 );
 
+app.use("*", requireCsrfForCookieAuth);
+
 app.route("/api", health);
+app.route("/api/auth", authRoutes);
 
 // Code-first contract (L: contract strategy) — the OpenAPI doc below is
 // generated from the zod schemas in packages/contract + the routes
@@ -33,8 +38,7 @@ app.doc("/api/openapi.json", {
   servers: [{ url: "/api" }],
 });
 
-// Faz 1 adds: authenticate/requireRole middleware, CSRF middleware, the rest
-// of the route tree (auth, trips, drivers, admin, ...).
+// Faz 2 adds: the rest of the route tree (trips, drivers, admin, ...).
 
 app.onError((err, c) => {
   console.error("[Error]", err);

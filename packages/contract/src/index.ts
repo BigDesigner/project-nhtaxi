@@ -3,3 +3,4 @@
 // Dart (Flutter) API clients. Business-entity schemas (auth, trips, drivers,
 // ...) are added alongside their routes starting Faz 1.
 export * from "./schemas/common";
+export * from "./schemas/auth";
