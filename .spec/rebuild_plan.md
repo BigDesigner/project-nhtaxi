@@ -49,7 +49,8 @@
 | L30 | Kota paylaşımı | Cloudflare ücretsiz kotaları hesap genelindedir. **Mevcut Trackcar Cloudflare'de DEĞİL** (DigitalOcean VPS) → kotalarımızı tüketmiyor. Hesapta başka iş varsa izlenir. |
 | L31 | Geçiş (cutover) | Mevcut **Trackcar** (ücretsiz 3. parti, sürücüler şu an kullanıyor) **geçicidir** — GNNcab canlı takip modülü onun yerini alır. Sıra: GNNcab devreye al → sürücüleri taşı → paralel doğrula → Trackcar emekli → **DO VPS iptal** (aylık maliyet biter) → `app.`/`tracker.` subdomain'leri serbest kalır. **VPS, GNNcab sahada kanıtlanmadan iptal edilmez.** |
 | L28 | Cross-subdomain auth | Web admin farklı origin'den API çağırır → auth cookie domain **`.nhtaxi.com`**, CORS allowlist'te `https://admin.nhtaxi.com`. Mobil Bearer token kullanır (CORS dışı). DNS Cloudflare'de; Universal SSL ücretsiz. |
-| L26 | Mobil test & yayın hattı | Flutter Cloudflare'e deploy **edilmez**. **Önce:** CI'da **Android APK** derlenir → GitHub **artifact** olarak indirilir → **emülatörde test**. Tetikleyici: `main` push + manuel (`workflow_dispatch`). Başlangıçta **debug/imzasız** APK; emülatör için **x86_64 ABI dahil**. **Sonra:** imzalı release + mağaza (Play/App Store), sürücü/admin için dahili dağıtım. **iOS ertelenir** (macOS runner ücretsiz kotayı 10x tüketir + imzalama zorunlu). |
+| L26 | Mobil test & yayın hattı | Flutter Cloudflare'e deploy **edilmez** (native build). **Önce:** CI'da **Android APK** derlenir → GitHub **artifact** olarak indirilir → **emülatörde test**. Tetikleyici: `main` push + manuel (`workflow_dispatch`). Başlangıçta **debug/imzasız** APK; emülatör için **x86_64 ABI dahil**. **Sonra:** imzalı release + mağaza (Play/App Store), sürücü/admin için dahili dağıtım. **iOS ertelenir** (macOS runner ücretsiz kotayı 10x tüketir + imzalama zorunlu). |
+| L32 | Flutter Web önizleme | **Faz 7'de** (Flutter adımında) ele alınır. `flutter build web` → statik çıktı → **Cloudflare Pages**'e deploy → `preview.nhtaxi.com` (Trackcar `app.`/`tracker.`'ı kullandığı için geçici isim; cutover sonrası `app.nhtaxi.com`'a taşınabilir). Android Chrome / iOS Safari'den kurulumsuz canlı test imkânı — yolcu+admin akışları (harita, WebSocket, dispatch) tam test edilebilir. **Sınır:** arka planda sürücü GPS takibi ve push bildirim (FCM) web'de native kadar güvenilir değil (özellikle iOS Safari) → bunlar için L26'daki native APK/TestFlight hattı şart, web önizleme onun **yerine değil, ek**idir. Maliyet $0 (Pages zaten bedava; ayrıca macOS/Android SDK gerektirmez). |
 
 ---
 
@@ -188,7 +189,7 @@ Orijinal varlıklar korunur; PostgreSQL-özel tipler SQLite karşılıklarına �
 - **Faz 4:** Canlı takip (DO WebSocket).
 - **Faz 5:** Ücret & yol logları + admin raporlama (vergi/güvenlik).
 - **Faz 6:** FCM bildirimleri.
-- **Faz 7:** Mobil app (Flutter, tek app): yolcu → sürücü → admin. CI'da APK artifact + **emülatör testi** döngüsü (L26 Aşama 1).
+- **Faz 7:** Mobil app (Flutter, tek app): yolcu → sürücü → admin. CI'da APK artifact + **emülatör testi** döngüsü (L26 Aşama 1). Aynı fazda **Flutter Web önizleme** de kurulur (L32) — `preview.nhtaxi.com` üzerinden telefon tarayıcısından (Android Chrome/iOS Safari) kurulumsuz canlı test.
 - **Faz 8:** Web admin (Pages) + sertleştirme (test, gözlemlenebilirlik, deploy).
 - **Faz 9 (ops.):** Stripe ödeme + Connect payout modülü.
 - **Faz 10 — Go-live & Cutover (L31):** sürücü onboarding (hesap açma, app kurulumu, kısa eğitim) → GNNcab ile Trackcar **paralel** çalıştırılıp doğrulama → Trackcar emekli → **DigitalOcean VPS iptal** → `app.`/`tracker.` subdomain temizliği. Geri dönüş planı: doğrulama bitene kadar Trackcar açık kalır.
@@ -309,6 +310,13 @@ Planı uçtan uca taradım; eklenen/teyit edilen noktalar:
 
 **iOS:** Ertelendi. macOS runner ücretsiz kotadan **10x** tüketir (2.000 dk ≈ 200 dk macOS) + sertifika/imzalama zorunlu. Android akışı oturduktan sonra ele alınır.
 
+**Aşama 3 (Faz 7'de, L32): Flutter Web önizleme — Pages'e deploy**
+- Workflow: `flutter build web` → `wrangler pages deploy build/web --project-name=gnncab-preview`.
+- Hedef: `preview.nhtaxi.com` (Trackcar `app.`/`tracker.`'ı kullandığından geçici isim — cutover sonrası `app.nhtaxi.com`'a taşınabilir, bkz 13.6).
+- Amaç: telefonda kurulum olmadan (Android Chrome / iOS Safari) hızlı görsel/UX testi — yolcu ve admin akışları (harita, WebSocket, dispatch, canlı takip) tam çalışır.
+- **Native'in yerine değil, eki:** sürücünün arka planda GPS takibi ve FCM push bildirimi web'de native kadar güvenilir değildir (iOS Safari'de push yalnız "Ana Ekrana Ekle" ile çalışır, arka plan konumu çok kısıtlı) → bu ikisi için L26'daki APK/TestFlight hattı zorunlu kalır.
+- Maliyet: $0 — Pages zaten bedava, ek olarak macOS/Android SDK runner'ı gerektirmez (APK/iOS build'inden bile ucuz).
+
 ### 13.6. Alan Adı & Ortam Topolojisi (L27, L28)
 
 > `nhtaxi.com` zaten Cloudflare'de yönetiliyor → DNS geçişi gerekmez, yalnız subdomain eklenir.
@@ -318,16 +326,18 @@ Planı uçtan uca taradım; eklenen/teyit edilen noktalar:
 | API (REST + **WebSocket**) | `api.nhtaxi.com` | `<hash>.workers.dev` | Workers custom domain |
 | Web admin | `admin.nhtaxi.com` | `<hash>.pages.dev` | Pages custom domain |
 | Sürücü belgeleri | **public host yok** | — | R2 private → Worker proxy + imzalı URL |
+| Flutter Web önizleme (Faz 7, L32) | `preview.nhtaxi.com` | `<hash>.pages.dev` | Pages custom domain |
 | ~~Landing~~ | **Kapsam dışı** — WordPress sitesi yayında, dokunulmaz | — | — |
 
 **Mevcut kullanım (çakışma haritası):**
 | Subdomain | Durum |
 |---|---|
 | `nhtaxi.com` / `www` | WordPress landing — **dokunulmaz** |
-| `app.nhtaxi.com` | Mevcut **Tracker** uygulaması — dolu |
+| `app.nhtaxi.com` | Mevcut **Tracker** uygulaması — dolu (cutover sonrası, Faz 10, GNNcab Flutter Web'e devredilebilir) |
 | `tracker.nhtaxi.com` | Mevcut **Tracker** uygulaması — dolu |
 | `api.nhtaxi.com` | ✅ GNNcab API (yeni) |
 | `admin.nhtaxi.com` | ✅ GNNcab web admin (yeni) |
+| `preview.nhtaxi.com` | ✅ GNNcab Flutter Web önizleme (Faz 7, L32) |
 
 **Kota notu (L30):** Cloudflare ücretsiz kotaları hesap genelindedir; aynı hesaptaki mevcut uygulamalarla paylaşılır. 20 sürücü ölçeğinde sorun beklenmez, yine de kullanım izlenir.
 
