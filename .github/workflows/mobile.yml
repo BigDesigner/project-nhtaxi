@@ -104,6 +104,15 @@ jobs:
         if: steps.creds.outputs.configured == 'true'
         run: flutter build web --release
 
+      # `pages deploy` does not create the project, and `project create` errors
+      # if it already exists — so swallow that specific case to stay idempotent
+      # across runs.
+      - name: Ensure Pages project exists
+        if: steps.creds.outputs.configured == 'true'
+        run: |
+          npx wrangler@4 pages project create gnncab-preview --production-branch=main \
+            || echo "Project already exists — continuing."
+
       - name: Deploy to Cloudflare Pages
         if: steps.creds.outputs.configured == 'true'
         run: npx wrangler@4 pages deploy build/web --project-name=gnncab-preview --branch=main
