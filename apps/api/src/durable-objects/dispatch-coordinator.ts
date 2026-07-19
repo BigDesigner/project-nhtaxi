@@ -12,6 +12,8 @@ import {
   markTripTimeout,
   MAX_DISPATCH_ATTEMPTS,
 } from "../lib/dispatch";
+import { sendPushToDriver, sendPushToUser } from "../lib/fcm";
+import { customerTripNotification, NEW_TRIP_ASSIGNED_NOTIFICATION } from "../lib/trip-notifications";
 
 interface DispatchState {
   tripId: string;
@@ -65,6 +67,15 @@ export class DispatchCoordinator extends DurableObject<Env> {
     await this.ctx.storage.put("dispatch", state);
     await assignTripToDriver(db, state.tripId, nearest.driverId, nearest.distanceMiles);
     await this.ctx.storage.setAlarm(Date.now() + DISPATCH_TIMEOUT_MS);
+
+    // Best-effort push, off the critical path (never throws either way, but
+    // waitUntil also keeps the extra OAuth2+FCM round trip from delaying the
+    // customer's trip-creation response, which awaits this DO's /dispatch call).
+    this.ctx.waitUntil(sendPushToDriver(db, this.env.FCM_SERVICE_ACCOUNT_KEY, nearest.driverId, NEW_TRIP_ASSIGNED_NOTIFICATION));
+    if (trip.customerId) {
+      const notification = customerTripNotification("DRIVER_ASSIGNED");
+      if (notification) this.ctx.waitUntil(sendPushToUser(db, this.env.FCM_SERVICE_ACCOUNT_KEY, trip.customerId, notification));
+    }
   }
 
   async fetch(request: Request): Promise<Response> {

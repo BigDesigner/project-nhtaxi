@@ -13,3 +13,4 @@ export * from "./schemas/trips";
 export * from "./schemas/reports";
 export * from "./schemas/driver-billing";
 export * from "./schemas/admin-trips";
+export * from "./schemas/push-tokens";

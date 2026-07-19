@@ -20,7 +20,9 @@ import {
 import type { AppBindings } from "../env";
 import { AuditAction, logAudit } from "../lib/audit";
 import { estimateFare, haversineMiles } from "../lib/fare";
+import { sendPushToUser } from "../lib/fcm";
 import { clientIp } from "../lib/request";
+import { customerTripNotification } from "../lib/trip-notifications";
 import { authenticate } from "../middlewares/auth";
 
 const trips = new OpenAPIHono<AppBindings>();
@@ -465,6 +467,15 @@ trips.openapi(updateStatusRoute, async (c) => {
     c.executionCtx.waitUntil(
       coordinator.fetch(`http://dispatch-coordinator/${path}`, { method: "POST", body: JSON.stringify({ tripId }) })
     );
+  }
+
+  // Faz 6 — DRIVER_ASSIGNED is sent from wherever it's actually set (dispatch
+  // or admin.ts) since it's never a client-settable status here; this covers
+  // the remaining customer-facing transitions (EN_ROUTE/ARRIVED/STARTED/
+  // COMPLETED). ACCEPTED/REJECTED intentionally have no customer push.
+  if (trip.customerId) {
+    const notification = customerTripNotification(status);
+    if (notification) c.executionCtx.waitUntil(sendPushToUser(db, c.env.FCM_SERVICE_ACCOUNT_KEY, trip.customerId, notification));
   }
 
   return c.json(toTripResponse(updated!), 200);

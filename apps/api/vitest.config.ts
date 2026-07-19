@@ -24,6 +24,10 @@ export default defineConfig(async () => {
             // unlike JWT_SECRET which accepts any string as HMAC key material.
             DOCUMENT_ENCRYPTION_KEY: "AZSkIRAQ3dpCaeg6lN0SqcBwvcU6ry/fvOmVv7v0L4U=",
             ADMIN_BOOTSTRAP_TOKEN: "test-only-bootstrap-token",
+            // Faz 6 — deliberately empty: lib/fcm.ts treats this as "not
+            // configured" and no-ops rather than throwing, so tests can
+            // exercise notification call sites without real Firebase creds.
+            FCM_SERVICE_ACCOUNT_KEY: "",
           },
         },
       }),

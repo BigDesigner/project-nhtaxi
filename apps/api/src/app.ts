@@ -7,6 +7,7 @@ import authRoutes from "./routes/auth";
 import customerProfileRoutes from "./routes/customer_profile";
 import driverProfileRoutes from "./routes/driver_profile";
 import health from "./routes/health";
+import pushTokenRoutes from "./routes/push_tokens";
 import tripRoutes from "./routes/trips";
 
 const app = new OpenAPIHono<AppBindings>();
@@ -35,6 +36,7 @@ app.route("/api/driver", driverProfileRoutes);
 app.route("/api/customer", customerProfileRoutes);
 app.route("/api/admin", adminRoutes);
 app.route("/api/trips", tripRoutes);
+app.route("/api/push-tokens", pushTokenRoutes);
 
 // Faz 4: live tracking — single global LocationHub DO, every driver/
 // customer/admin WebSocket connects here (auth happens inside the DO

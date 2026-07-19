@@ -9,6 +9,11 @@ export type Env = {
   JWT_SECRET: string;
   DOCUMENT_ENCRYPTION_KEY: string;
   ADMIN_BOOTSTRAP_TOKEN: string;
+  // Faz 6 — Firebase service-account JSON (contents, not a file path) for
+  // signing FCM HTTP v1 requests. Empty/unset is treated as "not configured
+  // yet" (lib/fcm.ts no-ops) rather than throwing, since it's provisioned
+  // late in this phase's rollout.
+  FCM_SERVICE_ACCOUNT_KEY: string;
   ENVIRONMENT: string;
 };
 

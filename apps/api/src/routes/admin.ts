@@ -55,9 +55,11 @@ import { decryptDocument } from "../lib/document-encryption";
 import { driverProfileWithUserColumns } from "../lib/driver-queries";
 import { closeOpenSession, computeDriverBalance, getDriverUsageRates, toSessionResponse } from "../lib/driver-sessions";
 import { estimateFare, haversineMiles } from "../lib/fare";
+import { sendPushToDriver, sendPushToUser } from "../lib/fcm";
 import { hashPassword } from "../lib/password";
 import { clientIp } from "../lib/request";
 import { issueSession, toPublicUser } from "../lib/session";
+import { customerTripNotification, NEW_TRIP_ASSIGNED_NOTIFICATION } from "../lib/trip-notifications";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { toDocumentResponse } from "./driver_profile";
 import { toTripResponse } from "./trips";
@@ -1356,6 +1358,12 @@ admin.openapi(adminCreateTripRoute, async (c) => {
     })
   );
 
+  c.executionCtx.waitUntil(sendPushToDriver(db, c.env.FCM_SERVICE_ACCOUNT_KEY, body.driverId, NEW_TRIP_ASSIGNED_NOTIFICATION));
+  if (trip.customerId) {
+    const notification = customerTripNotification("DRIVER_ASSIGNED");
+    if (notification) c.executionCtx.waitUntil(sendPushToUser(db, c.env.FCM_SERVICE_ACCOUNT_KEY, trip.customerId, notification));
+  }
+
   return c.json(toTripResponse(trip), 201);
 });
 
@@ -1442,6 +1450,12 @@ admin.openapi(adminReassignTripRoute, async (c) => {
       ipAddress: clientIp(c),
     })
   );
+
+  c.executionCtx.waitUntil(sendPushToDriver(db, c.env.FCM_SERVICE_ACCOUNT_KEY, body.driverId, NEW_TRIP_ASSIGNED_NOTIFICATION));
+  if (updated?.customerId) {
+    const notification = customerTripNotification("DRIVER_ASSIGNED");
+    if (notification) c.executionCtx.waitUntil(sendPushToUser(db, c.env.FCM_SERVICE_ACCOUNT_KEY, updated.customerId, notification));
+  }
 
   return c.json(toTripResponse(updated!), 200);
 });
