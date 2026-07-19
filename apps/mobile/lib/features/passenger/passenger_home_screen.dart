@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../models/trip.dart';
 import '../../widgets/error_banner.dart';
@@ -58,9 +59,6 @@ class PassengerHomeScreen extends ConsumerWidget {
   }
 }
 
-/// Booking lands in Wave 2 (map + address search + fare preview). Shown as a
-/// visibly disabled affordance rather than hidden, so the shape of the app is
-/// already clear.
 class _RequestTripCard extends StatelessWidget {
   const _RequestTripCard();
 
@@ -70,10 +68,9 @@ class _RequestTripCard extends StatelessWidget {
       child: ListTile(
         leading: const Icon(Icons.local_taxi),
         title: const Text('Request a trip'),
-        subtitle: const Text('Map and booking arrive in the next update'),
+        subtitle: const Text('Pick your pickup and destination'),
         trailing: const Icon(Icons.chevron_right),
-        enabled: false,
-        onTap: null,
+        onTap: () => context.go('/book'),
       ),
     );
   }
@@ -112,6 +109,7 @@ class _TripTile extends StatelessWidget {
         title: Text(trip.dropoffAddress ?? trip.pickupAddress),
         subtitle: Text('${trip.statusLabel} · ${_formatDate(trip.requestedAt)}'),
         trailing: fare == null ? null : Text('\$${fare.toStringAsFixed(2)}'),
+        onTap: () => context.go('/trip/${trip.id}'),
       ),
     );
   }

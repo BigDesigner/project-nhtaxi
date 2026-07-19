@@ -59,3 +59,51 @@ jobs:
           path: apps/mobile/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+  # L32 — Flutter Web preview on Cloudflare Pages, so the app can be opened
+  # on a real phone browser with no install. Complements the APK above; it
+  # does NOT replace it, since background GPS and FCM push are unreliable on
+  # mobile web (especially iOS Safari).
+  deploy-web:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same pattern as deploy.yml: the `secrets` context isn't allowed in a
+      # job-level `if:`, so the gate lives in a shell step.
+      - name: Check Cloudflare credentials are configured
+        id: creds
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Cloudflare secrets missing — skipping web preview deploy."
+          fi
+
+      - uses: subosito/flutter-action@v2
+        if: steps.creds.outputs.configured == 'true'
+        with:
+          flutter-version: "3.44.6"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        if: steps.creds.outputs.configured == 'true'
+        run: flutter pub get
+
+      # No --dart-define: the default in core/config.dart is production, which
+      # is what the preview must talk to. preview.nhtaxi.com is already in the
+      # API's production CORS allowlist (apps/api/src/app.ts).
+      - name: Build web
+        if: steps.creds.outputs.configured == 'true'
+        run: flutter build web --release
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.creds.outputs.configured == 'true'
+        run: npx wrangler@4 pages deploy build/web --project-name=gnncab-preview --branch=main

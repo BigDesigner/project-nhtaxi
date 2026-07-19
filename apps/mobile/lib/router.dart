@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'features/auth/auth_controller.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/signup_screen.dart';
+import 'features/passenger/active_trip_screen.dart';
+import 'features/passenger/booking/booking_screen.dart';
 import 'features/passenger/passenger_home_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -39,6 +41,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/signup', builder: (_, _) => const SignupScreen()),
       GoRoute(path: '/home', builder: (_, _) => const _RoleHome()),
+      GoRoute(path: '/book', builder: (_, _) => const BookingScreen()),
+      GoRoute(
+        path: '/trip/:tripId',
+        builder: (_, state) => ActiveTripScreen(tripId: state.pathParameters['tripId']!),
+      ),
     ],
   );
 });

@@ -2,9 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/auth/auth_controller.dart';
 import 'api_client.dart';
+import 'geocoding.dart';
 import 'token_store.dart';
 
 final tokenStoreProvider = Provider<TokenStore>((ref) => TokenStore());
+
+final geocodingProvider = Provider<GeocodingService>((ref) => GeocodingService());
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(
