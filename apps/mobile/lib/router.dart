@@ -7,7 +7,7 @@ import 'features/auth/login_screen.dart';
 import 'features/auth/signup_screen.dart';
 import 'features/passenger/active_trip_screen.dart';
 import 'features/passenger/booking/booking_screen.dart';
-import 'features/passenger/passenger_home_screen.dart';
+import 'features/passenger/passenger_shell.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   // go_router needs a plain Listenable to re-run redirects; this bridges
@@ -60,7 +60,7 @@ class _RoleHome extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authControllerProvider).value;
     if (user == null) return const _SplashScreen();
-    if (user.isCustomer) return const PassengerHomeScreen();
+    if (user.isCustomer) return const PassengerShell();
     return _ComingSoonScreen(role: user.role);
   }
 }
@@ -88,7 +88,7 @@ class _ComingSoonScreen extends ConsumerWidget {
           IconButton(
             tooltip: 'Sign out',
             icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(authControllerProvider.notifier).logout(),
+            onPressed: () => confirmSignOut(context, ref),
           ),
         ],
       ),

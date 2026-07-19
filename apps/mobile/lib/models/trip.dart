@@ -52,6 +52,17 @@ class Trip {
   /// so it can be cleared out instead of lingering.
   bool get canCancel => !const {'TRIP_STARTED', 'TRIP_COMPLETED', 'TRIP_CANCELLED'}.contains(status);
 
+  /// A driver is on this trip.
+  bool get isMatched => const {
+        'DRIVER_ASSIGNED',
+        'DRIVER_ACCEPTED',
+        'DRIVER_EN_ROUTE',
+        'DRIVER_ARRIVED',
+        'TRIP_STARTED',
+      }.contains(status);
+
+  bool get isCancelled => status == 'TRIP_CANCELLED';
+
   /// What the passenger was actually charged, falling back to the quote
   /// while the trip is still in flight.
   double? get displayFare => finalFare ?? estimatedFare;

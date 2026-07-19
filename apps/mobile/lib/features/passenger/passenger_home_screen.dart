@@ -8,54 +8,53 @@ import '../../widgets/search_countdown.dart';
 import '../auth/auth_controller.dart';
 import 'trips_controller.dart';
 
-class PassengerHomeScreen extends ConsumerWidget {
-  const PassengerHomeScreen({super.key});
+class PassengerHomeTab extends ConsumerWidget {
+  const PassengerHomeTab({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authControllerProvider).value;
     final trips = ref.watch(tripsControllerProvider);
+    final refreshing = ref.watch(tripsRefreshingProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('GNNcab'),
-        actions: [
-          IconButton(
-            tooltip: 'Sign out',
-            icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(authControllerProvider.notifier).logout(),
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () => ref.read(tripsControllerProvider.notifier).refresh(),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            if (user != null) ...[
-              Text('Hi ${user.firstName}', style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 4),
-              Text(user.email, style: Theme.of(context).textTheme.bodySmall),
+    return Stack(
+      children: [
+        RefreshIndicator(
+          onRefresh: () => ref.read(tripsControllerProvider.notifier).refresh(),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              if (user != null) ...[
+                Text('Hi ${user.firstName}', style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 4),
+                Text(user.email, style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: 24),
+              ],
+              const _RequestTripCard(),
               const SizedBox(height: 24),
+              Text('Your trips', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              switch (trips) {
+                // Only a cold load blanks the list; a refresh keeps the old
+                // rows and shows the bar below instead.
+                AsyncLoading() when !trips.hasValue => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                AsyncError(:final error) when !trips.hasValue => ErrorBanner(message: error.toString()),
+                AsyncValue(:final value?) when value.isEmpty => const _EmptyTrips(),
+                AsyncValue(:final value?) => Column(
+                    children: [for (final trip in value) _TripTile(trip: trip)],
+                  ),
+                _ => const SizedBox.shrink(),
+              },
             ],
-            const _RequestTripCard(),
-            const SizedBox(height: 24),
-            Text('Your trips', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            switch (trips) {
-              AsyncLoading() => const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              AsyncError(:final error) => ErrorBanner(message: error.toString()),
-              AsyncValue(:final value?) when value.isEmpty => const _EmptyTrips(),
-              AsyncValue(:final value?) => Column(
-                  children: [for (final trip in value) _TripTile(trip: trip)],
-                ),
-            },
-          ],
+          ),
         ),
-      ),
+        // Refresh-in-progress hint that doesn't take the content away.
+        if (refreshing && trips.hasValue)
+          const Positioned(top: 0, left: 0, right: 0, child: LinearProgressIndicator(minHeight: 2)),
+      ],
     );
   }
 }
@@ -108,15 +107,10 @@ class _TripTile extends StatelessWidget {
       child: Column(
         children: [
           ListTile(
-            leading: Icon(
-              trip.isSearching
-                  ? Icons.search
-                  : trip.canRetrySearch
-                      ? Icons.search_off
-                      : trip.isActive
-                          ? Icons.directions_car
-                          : Icons.check_circle_outline,
-            ),
+            // Colour carries the state at a glance: blue = we're working on
+            // it, green = a driver is on it or it's done, red = it isn't
+            // happening.
+            leading: Icon(_statusIcon(trip), color: _statusColor(trip)),
             title: Text(trip.dropoffAddress ?? trip.pickupAddress),
             subtitle: Text('${trip.statusLabel} · ${_formatDate(trip.requestedAt)}'),
             trailing: fare == null ? null : Text('\$${fare.toStringAsFixed(2)}'),
@@ -135,6 +129,20 @@ class _TripTile extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  IconData _statusIcon(Trip trip) {
+    if (trip.isSearching) return Icons.search;
+    if (trip.isCancelled) return Icons.cancel;
+    if (trip.canRetrySearch) return Icons.search_off;
+    if (trip.status == 'TRIP_COMPLETED') return Icons.check_circle;
+    return Icons.directions_car;
+  }
+
+  Color _statusColor(Trip trip) {
+    if (trip.isSearching) return Colors.blue;
+    if (trip.isCancelled || trip.canRetrySearch) return Colors.red;
+    return Colors.green;
   }
 
   String _formatDate(DateTime dt) {

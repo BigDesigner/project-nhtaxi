@@ -51,12 +51,22 @@ class _SearchCountdownState extends State<SearchCountdown> {
         ? 'Attempt ${trip.searchAttempts} of ${trip.maxSearchAttempts}'
         : 'Searching';
 
-    final label = seconds > 0
-        ? 'Checking again in ${seconds}s · $attempts'
-        : 'Checking for a driver now · $attempts';
+    // The bare "Checking again in 45s · Attempt 2 of 15" read like a system
+    // log. Lead with what's actually happening for the passenger, then the
+    // mechanics — the numbers only reassure once you know what they count.
+    final timing = seconds > 0 ? 'Checking again in ${seconds}s' : 'Checking right now';
 
     if (widget.compact) {
-      return Text(label, style: Theme.of(context).textTheme.bodySmall);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Finding you a driver…',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          Text('$timing · $attempts', style: Theme.of(context).textTheme.bodySmall),
+        ],
+      );
     }
 
     return Column(
@@ -66,11 +76,19 @@ class _SearchCountdownState extends State<SearchCountdown> {
           children: [
             const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
             const SizedBox(width: 12),
-            Expanded(child: Text('Looking for a nearby driver', style: Theme.of(context).textTheme.titleMedium)),
+            Expanded(
+              child: Text(
+                "We're finding you a driver",
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 8),
-        Text(label, style: Theme.of(context).textTheme.bodyMedium),
+        Text(
+          'No one is free right now, so we keep checking for you. $timing · $attempts',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
         const SizedBox(height: 8),
         if (trip.maxSearchAttempts > 0)
           LinearProgressIndicator(value: trip.searchAttempts / trip.maxSearchAttempts),

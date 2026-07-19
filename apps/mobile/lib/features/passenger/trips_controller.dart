@@ -6,6 +6,18 @@ import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../models/trip.dart';
 
+/// True while a background refresh is in flight, so the list can stay on
+/// screen instead of being replaced by a spinner.
+class TripsRefreshing extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  // ignore: use_setters_to_change_properties
+  void set(bool value) => state = value;
+}
+
+final tripsRefreshingProvider = NotifierProvider<TripsRefreshing, bool>(TripsRefreshing.new);
+
 /// The signed-in passenger's own trips, newest first (the API already orders
 /// them that way — see routes/trips.ts).
 class TripsController extends AsyncNotifier<List<Trip>> {
@@ -48,13 +60,25 @@ class TripsController extends AsyncNotifier<List<Trip>> {
     }
   }
 
+  /// Re-reads the list, keeping the current one on screen while it loads.
+  ///
+  /// Deliberately does not push an AsyncLoading state: blanking the list to a
+  /// spinner on every return from the trip screen made the app feel like it
+  /// was losing data. The "busy" flag lives in [tripsRefreshingProvider] so
+  /// the UI can show a thin progress bar over the still-visible rows.
   Future<void> refresh() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(() async {
+    ref.read(tripsRefreshingProvider.notifier).set(true);
+    try {
       final trips = await _fetch();
+      state = AsyncData(trips);
       _syncPolling(trips);
-      return trips;
-    });
+    } on ApiException catch (e) {
+      // Only surface the error if we have nothing to show; otherwise the
+      // stale-but-real list beats an error page.
+      if (!state.hasValue) state = AsyncError(e, StackTrace.current);
+    } finally {
+      ref.read(tripsRefreshingProvider.notifier).set(false);
+    }
   }
 }
 
