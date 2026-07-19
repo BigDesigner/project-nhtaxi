@@ -1,59 +1,9 @@
-import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { createDb, usersTable } from "@gnncab/db";
-import app from "../app";
 import { CSRF_COOKIE_NAME } from "../lib/auth-cookie";
-
-/** Minimal cookie jar so tests can act like a real browser across requests. */
-class CookieJar {
-  private cookies = new Map<string, string>();
-
-  applySetCookie(res: Response): void {
-    for (const header of res.headers.getSetCookie()) {
-      const first = header.split(";")[0] ?? "";
-      const eqIdx = first.indexOf("=");
-      if (eqIdx === -1) continue;
-      this.cookies.set(first.slice(0, eqIdx), first.slice(eqIdx + 1));
-    }
-  }
-
-  header(): string {
-    return Array.from(this.cookies.entries())
-      .map(([k, v]) => `${k}=${v}`)
-      .join("; ");
-  }
-
-  get(name: string): string | undefined {
-    return this.cookies.get(name);
-  }
-}
-
-function uniqueEmail(): string {
-  return `test-${crypto.randomUUID()}@example.com`;
-}
-
-// Response.json() types as `unknown` here — these tests intentionally poke
-// at loosely-typed response bodies, so read them through `any`.
-async function readJson(res: Response): Promise<any> {
-  return res.json();
-}
-
-/**
- * Route handlers use `c.executionCtx.waitUntil()` for non-blocking audit
- * writes — that getter throws unless a real ExecutionContext is supplied,
- * which `app.request(path, init, env)` (3-arg form) doesn't provide. This
- * wraps every call with one from `cloudflare:test` and waits for its
- * waitUntil'ed promises before returning, so audit writes are done by the
- * time a test's assertions run.
- */
-async function req(path: string, init?: RequestInit): Promise<Response> {
-  const ctx = createExecutionContext();
-  const res = await app.request(path, init, env, ctx);
-  await waitOnExecutionContext(ctx);
-  return res;
-}
+import { CookieJar, readJson, req, uniqueEmail } from "../test-utils/http";
 
 const BASE_REGISTER_BODY = {
   firstName: "Test",

@@ -72,6 +72,10 @@ push to `main` deploys itself via CI.
 4. **Push app secrets** (never stored in a file or in wrangler.toml — L25):
    ```bash
    npx wrangler secret put JWT_SECRET
+   # 32 random bytes, base64-encoded — wraps per-file data keys for driver
+   # document envelope encryption (L19):
+   node -e "console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'))"
+   npx wrangler secret put DOCUMENT_ENCRYPTION_KEY
    # Stripe/FCM secrets get added here the same way once Faz 6/9 land.
    ```
 

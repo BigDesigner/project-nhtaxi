@@ -2,7 +2,10 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import type { AppBindings } from "./env";
 import { requireCsrfForCookieAuth } from "./middlewares/csrf";
+import adminRoutes from "./routes/admin";
 import authRoutes from "./routes/auth";
+import customerProfileRoutes from "./routes/customer_profile";
+import driverProfileRoutes from "./routes/driver_profile";
 import health from "./routes/health";
 
 const app = new OpenAPIHono<AppBindings>();
@@ -27,6 +30,9 @@ app.use("*", requireCsrfForCookieAuth);
 
 app.route("/api", health);
 app.route("/api/auth", authRoutes);
+app.route("/api/driver", driverProfileRoutes);
+app.route("/api/customer", customerProfileRoutes);
+app.route("/api/admin", adminRoutes);
 
 // Code-first contract (L: contract strategy) — the OpenAPI doc below is
 // generated from the zod schemas in packages/contract + the routes
@@ -38,7 +44,7 @@ app.doc("/api/openapi.json", {
   servers: [{ url: "/api" }],
 });
 
-// Faz 2 adds: the rest of the route tree (trips, drivers, admin, ...).
+// Faz 3 adds: trips + dispatch. Faz 4 adds: realtime (Durable Object WebSocket).
 
 app.onError((err, c) => {
   console.error("[Error]", err);

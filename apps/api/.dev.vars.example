@@ -4,3 +4,7 @@
 
 JWT_SECRET=change-me-local-dev-only
 ENVIRONMENT=development
+# Base64-encoded 256-bit AES-GCM key wrapping driver document data keys (L19).
+# Generate a real one with:
+#   node -e "console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'))"
+DOCUMENT_ENCRYPTION_KEY=UsctM0ECivyhbOIrSbW87y+ARKw6OsyJIAlphgbfq4c=

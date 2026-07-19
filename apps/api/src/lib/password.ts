@@ -1,3 +1,5 @@
+import { base64ToBuffer, bufferToBase64 } from "./base64";
+
 // Edge-native password hashing (Web Crypto PBKDF2) — no bcrypt/argon2
 // dependency, since Workers has no native binding for either. Iteration
 // count is embedded in the stored string so it can be raised later without
@@ -13,23 +15,6 @@
 const PBKDF2_ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const HASH_BITS = 256;
-
-function bufferToBase64(buffer: ArrayBuffer): string {
-  let binary = "";
-  for (const byte of new Uint8Array(buffer)) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
-}
-
-function base64ToBuffer(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
 
 function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;

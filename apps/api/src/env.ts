@@ -5,6 +5,7 @@ export type Env = {
   DOCS: R2Bucket;
   DISPATCH_COORDINATOR: DurableObjectNamespace<DispatchCoordinator>;
   JWT_SECRET: string;
+  DOCUMENT_ENCRYPTION_KEY: string;
   ENVIRONMENT: string;
 };
 

@@ -1,6 +1,5 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
-import type { Context } from "hono";
 import {
   AuthResponseSchema,
   AuthUserSchema,
@@ -9,71 +8,18 @@ import {
   RefreshRequestSchema,
   RegisterRequestSchema,
 } from "@gnncab/contract";
-import { createDb, customerProfilesTable, usersTable, type Database } from "@gnncab/db";
+import { createDb, customerProfilesTable, usersTable } from "@gnncab/db";
 import type { AppBindings } from "../env";
 import { AuditAction, logAudit } from "../lib/audit";
 import { clearAuthCookies, getRefreshTokenCookie, setAuthCookies } from "../lib/auth-cookie";
 import { signAccessToken } from "../lib/jwt";
 import { hashPassword, verifyPassword } from "../lib/password";
-import { issueRefreshToken, revokeRefreshToken, rotateRefreshToken } from "../lib/refresh-tokens";
+import { clientIp } from "../lib/request";
+import { revokeRefreshToken, rotateRefreshToken } from "../lib/refresh-tokens";
+import { issueSession, toPublicUser } from "../lib/session";
 import { authenticate } from "../middlewares/auth";
 
 const auth = new OpenAPIHono<AppBindings>();
-
-interface PublicUser {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  phone: string | null;
-  role: "admin" | "driver" | "customer";
-}
-
-function toPublicUser(user: {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  phone: string | null;
-  role: string;
-}): PublicUser {
-  return {
-    id: user.id,
-    email: user.email,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    phone: user.phone,
-    role: user.role as PublicUser["role"],
-  };
-}
-
-function clientIp(c: Context<AppBindings>): string | undefined {
-  return c.req.header("CF-Connecting-IP") ?? undefined;
-}
-
-/** Issues an access+refresh pair and shapes the response. Cookies are only
- * set for "web" (mobile uses Bearer tokens exclusively and never carries
- * cookies — see contract/schemas/auth.ts), and tokens are only echoed in
- * the body for non-web platforms. */
-async function issueSession(
-  c: Context<AppBindings>,
-  db: Database,
-  user: PublicUser,
-  platform: "web" | "ios" | "android",
-  deviceInfo?: string
-) {
-  const accessToken = await signAccessToken({ id: user.id, email: user.email, role: user.role }, c.env.JWT_SECRET);
-  const { rawToken: refreshToken, expiresAt } = await issueRefreshToken(db, user.id, deviceInfo);
-  if (platform === "web") {
-    setAuthCookies(c, { accessToken, refreshToken, refreshExpiresAt: expiresAt });
-  }
-
-  return {
-    user,
-    accessToken: platform === "web" ? null : accessToken,
-    refreshToken: platform === "web" ? null : refreshToken,
-  };
-}
 
 // body.required: true matters beyond documentation here — @hono/zod-openapi
 // only runs the zod validator (so schema .default()s actually apply) when
