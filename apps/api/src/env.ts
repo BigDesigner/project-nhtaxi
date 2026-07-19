@@ -6,6 +6,7 @@ export type Env = {
   DISPATCH_COORDINATOR: DurableObjectNamespace<DispatchCoordinator>;
   JWT_SECRET: string;
   DOCUMENT_ENCRYPTION_KEY: string;
+  ADMIN_BOOTSTRAP_TOKEN: string;
   ENVIRONMENT: string;
 };
 

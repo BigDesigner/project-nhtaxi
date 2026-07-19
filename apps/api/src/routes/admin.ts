@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import {
   AdminCreateUserRequestSchema,
   AdminDocumentReviewRequestSchema,
@@ -7,6 +7,7 @@ import {
   AdminUpdateUserRequestSchema,
   AdminUserSchema,
   AdminVerifyDriverRequestSchema,
+  AuthResponseSchema,
   CitySchema,
   CreateCityRequestSchema,
   DriverDocumentSchema,
@@ -30,13 +31,99 @@ import { decryptDocument } from "../lib/document-encryption";
 import { driverProfileWithUserColumns } from "../lib/driver-queries";
 import { hashPassword } from "../lib/password";
 import { clientIp } from "../lib/request";
+import { issueSession, toPublicUser } from "../lib/session";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { toDocumentResponse } from "./driver_profile";
 
 const admin = new OpenAPIHono<AppBindings>();
 
-// Every route in this file is admin-only (L16) — safe to gate with a single
-// wildcard, unlike driver_profile.ts which also has a public register route.
+// ─── POST /bootstrap — create the first admin, self-locking ───────────────
+// There's no self-service admin sign-up (L15/L16) and no CLI/SQL should be
+// needed to get the very first one either. This works exactly once: it
+// 401s without a matching ADMIN_BOOTSTRAP_TOKEN header, and 409s the moment
+// any admin already exists — after that it's permanently inert.
+const BootstrapAdminRequestSchema = z.object({
+  firstName: z.string().min(1).max(100),
+  lastName: z.string().min(1).max(100),
+  email: z.string().email(),
+  password: z.string().min(8).max(200),
+  platform: z.enum(["web", "ios", "android"]).default("web"),
+});
+
+const bootstrapRoute = createRoute({
+  method: "post",
+  path: "/bootstrap",
+  tags: ["admin"],
+  summary: "Create the first admin account (only while none exist yet)",
+  request: {
+    body: { required: true, content: { "application/json": { schema: BootstrapAdminRequestSchema } } },
+  },
+  responses: {
+    201: { description: "Created", content: { "application/json": { schema: AuthResponseSchema } } },
+    401: {
+      description: "Missing or invalid bootstrap token",
+      content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: "An admin already exists",
+      content: { "application/json": { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+admin.openapi(bootstrapRoute, async (c) => {
+  const token = c.req.header("X-Bootstrap-Token");
+  if (!token || token !== c.env.ADMIN_BOOTSTRAP_TOKEN) {
+    return c.json({ error: "Unauthorized", message: "Missing or invalid bootstrap token" }, 401);
+  }
+
+  const db = createDb(c.env.DB);
+  // count(*) always returns exactly one row, even over zero matches.
+  const [row] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(usersTable)
+    .where(eq(usersTable.role, "admin"));
+  if (Number(row!.count) > 0) {
+    return c.json({ error: "Conflict", message: "An admin account already exists" }, 409);
+  }
+
+  const body = c.req.valid("json");
+  const [existing] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.email, body.email))
+    .limit(1);
+  if (existing) {
+    return c.json({ error: "Conflict", message: "An account with this email already exists" }, 409);
+  }
+
+  const passwordHash = await hashPassword(body.password);
+  const [user] = await db
+    .insert(usersTable)
+    .values({ email: body.email, passwordHash, firstName: body.firstName, lastName: body.lastName, role: "admin" })
+    .returning();
+  if (!user) throw new Error("Insert into users returned no row");
+
+  const session = await issueSession(c, db, toPublicUser(user), body.platform);
+
+  c.executionCtx.waitUntil(
+    logAudit(db, {
+      entity: "user",
+      entityId: user.id,
+      action: AuditAction.REGISTER,
+      actorId: user.id,
+      actorRole: "admin",
+      metadata: { via: "bootstrap" },
+      ipAddress: clientIp(c),
+    })
+  );
+
+  return c.json(session, 201);
+});
+
+// Every OTHER route in this file is admin-only (L16) — registered after
+// bootstrap so the wildcard doesn't shadow that one public route (same
+// pattern as driver_profile.ts's public /register).
 admin.use("*", authenticate, requireRole("admin"));
 
 function toAdminUser(user: {

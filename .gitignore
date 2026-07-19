@@ -40,3 +40,6 @@ npm-debug.log*
 
 # D1 local sqlite state
 apps/api/.wrangler/
+
+# Generated admin bootstrap SQL — contains a real password hash
+apps/api/scripts/seed-admin.sql

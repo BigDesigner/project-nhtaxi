@@ -8,3 +8,7 @@ ENVIRONMENT=development
 # Generate a real one with:
 #   node -e "console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'))"
 DOCUMENT_ENCRYPTION_KEY=UsctM0ECivyhbOIrSbW87y+ARKw6OsyJIAlphgbfq4c=
+# One-time, self-locking POST /api/admin/bootstrap (creates the first admin
+# while none exist) requires this in an X-Bootstrap-Token header. Any random
+# string works — generate one the same way as DOCUMENT_ENCRYPTION_KEY above.
+ADMIN_BOOTSTRAP_TOKEN=RWCvFx4S6m7feuR1FhP9MTB79rDuHkYvasmwX60dIx4=

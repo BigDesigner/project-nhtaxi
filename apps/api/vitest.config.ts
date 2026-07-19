@@ -23,6 +23,7 @@ export default defineConfig(async () => {
             // Must be a valid base64-encoded 256-bit key (AES-GCM import),
             // unlike JWT_SECRET which accepts any string as HMAC key material.
             DOCUMENT_ENCRYPTION_KEY: "AZSkIRAQ3dpCaeg6lN0SqcBwvcU6ry/fvOmVv7v0L4U=",
+            ADMIN_BOOTSTRAP_TOKEN: "test-only-bootstrap-token",
           },
         },
       }),

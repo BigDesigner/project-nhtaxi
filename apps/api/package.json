@@ -10,7 +10,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply gnncab --local",
     "db:migrate:remote": "wrangler d1 migrations apply gnncab --remote",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "seed:admin": "tsx scripts/seed-admin.ts"
   },
   "dependencies": {
     "@gnncab/contract": "workspace:*",
@@ -25,6 +26,7 @@
     "@cloudflare/workers-types": "^5.20260718.1",
     "@types/node": "^26.1.1",
     "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.1",
     "typescript": "^5.9.2",
     "vitest": "^4.1.10",
     "wrangler": "^4.112.0"

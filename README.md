@@ -76,8 +76,24 @@ push to `main` deploys itself via CI.
    # document envelope encryption (L19):
    node -e "console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'))"
    npx wrangler secret put DOCUMENT_ENCRYPTION_KEY
+   # Any random string — gates the one-time, self-locking POST
+   # /api/admin/bootstrap (creates the first admin; 409s forever after):
+   node -e "console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'))"
+   npx wrangler secret put ADMIN_BOOTSTRAP_TOKEN
    # Stripe/FCM secrets get added here the same way once Faz 6/9 land.
    ```
+
+   Then create the first admin account (no CLI/SQL needed — see routes/admin.ts):
+   ```bash
+   curl -X POST https://api.nhtaxi.com/api/admin/bootstrap \
+     -H "Content-Type: application/json" \
+     -H "X-Bootstrap-Token: <the value you just put>" \
+     -d '{"firstName":"...", "lastName":"...", "email":"...", "password":"..."}'
+   ```
+   This only ever works once (409s forever after). Additional admins go
+   through `POST /api/admin/users` once logged in as one; if you're ever
+   locked out entirely, `pnpm run seed:admin -- <email> <password>` in
+   `apps/api` generates a `wrangler d1 execute` command as a fallback.
 
 5. **Custom domain**: `nhtaxi.com` is already on this Cloudflare account, so
    nothing manual is needed — `wrangler.toml` already declares
