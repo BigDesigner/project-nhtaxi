@@ -5,6 +5,8 @@ import {
   CancelTripRequestSchema,
   CreateTripRequestSchema,
   ErrorResponseSchema,
+  EstimateTripRequestSchema,
+  EstimateTripResponseSchema,
   TripEventResponseSchema,
   TripResponseSchema,
   UpdateTripStatusRequestSchema,
@@ -214,6 +216,32 @@ trips.openapi(createTripRoute, async (c) => {
   );
 
   return c.json(toTripResponse(finalTrip!), 201);
+});
+
+// ─── POST /estimate — quote a fare before booking (Faz 7, plan §4.9) ──────
+// Registered before the /{tripId} routes so the literal path always wins.
+// Open to any authenticated role rather than customers only: it writes
+// nothing and exposes nothing secret (the fare table is public pricing), and
+// admins need the same quote when hand-assigning a trip.
+const estimateTripRoute = createRoute({
+  method: "post",
+  path: "/estimate",
+  tags: ["trips"],
+  summary: "Estimate distance and fare for a pickup/dropoff pair, without creating a trip",
+  request: { body: { required: true, content: { "application/json": { schema: EstimateTripRequestSchema } } } },
+  responses: {
+    200: { description: "Estimate", content: { "application/json": { schema: EstimateTripResponseSchema } } },
+  },
+});
+
+trips.openapi(estimateTripRoute, async (c) => {
+  const body = c.req.valid("json");
+  const db = createDb(c.env.DB);
+
+  const straightLineMiles = haversineMiles(body.pickupLat, body.pickupLng, body.dropoffLat, body.dropoffLng);
+  const { distanceMiles, estimatedFareCents, currency } = await estimateFare(db, straightLineMiles);
+
+  return c.json({ distanceMiles, estimatedFare: estimatedFareCents / 100, currency }, 200);
 });
 
 // ─── GET / — list, role-scoped ──────────────────────────────────────────────

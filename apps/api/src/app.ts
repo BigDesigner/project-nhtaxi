@@ -18,8 +18,15 @@ app.use(
   "*",
   cors({
     origin: (origin, c) => {
+      // Flutter Web is browser-hosted, so its XHRs are CORS-checked even
+      // though the app authenticates with Bearer tokens rather than cookies
+      // (see apps/mobile — it registers as ios/android on every platform).
+      // Port 5174 is pinned in apps/mobile's run script so this origin stays
+      // stable instead of Flutter picking a random dev port.
       const allowed =
-        c.env.ENVIRONMENT === "development" ? ["http://localhost:5173"] : ["https://admin.nhtaxi.com"];
+        c.env.ENVIRONMENT === "development"
+          ? ["http://localhost:5173", "http://localhost:5174"]
+          : ["https://admin.nhtaxi.com", "https://preview.nhtaxi.com"];
       return origin && allowed.includes(origin) ? origin : null;
     },
     credentials: true,

@@ -1,0 +1,61 @@
+name: Mobile
+
+# L26 stage 1: CI builds a debug APK, you download the artifact and run it on
+# an emulator. No store signing and no iOS — macOS runners burn the free
+# Actions quota ~10x, so iOS waits until there's a reason to pay for it.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/mobile.yml"
+  pull_request:
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/mobile.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: apps/mobile
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Pinned to the version verified locally — a silent minor bump can
+          # change analyzer behaviour and break CI without a code change.
+          flutter-version: "3.44.6"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      # --target-platform includes x86_64 so the APK actually runs on a
+      # standard Android emulator, not just physical ARM devices.
+      - name: Build debug APK
+        run: flutter build apk --debug --target-platform=android-arm,android-arm64,android-x64
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: gnncab-debug-apk
+          path: apps/mobile/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

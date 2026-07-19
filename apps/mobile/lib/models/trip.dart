@@ -1,0 +1,72 @@
+/// Mirrors TripResponseSchema in packages/contract.
+///
+/// Only the fields the passenger UI actually uses are modelled — the wire
+/// response carries more (commission, guest details, city) that belongs to
+/// the admin/driver surfaces.
+class Trip {
+  const Trip({
+    required this.id,
+    required this.status,
+    required this.pickupAddress,
+    required this.requestedAt,
+    this.dropoffAddress,
+    this.distanceMiles,
+    this.estimatedFare,
+    this.finalFare,
+    required this.currency,
+    this.completedAt,
+  });
+
+  final String id;
+  final String status;
+  final String pickupAddress;
+
+  /// Null until a driver fills it in at pickup, for admin-assigned trips.
+  final String? dropoffAddress;
+
+  final double? distanceMiles;
+  final double? estimatedFare;
+  final double? finalFare;
+  final String currency;
+  final DateTime requestedAt;
+  final DateTime? completedAt;
+
+  /// What the passenger was actually charged, falling back to the quote
+  /// while the trip is still in flight.
+  double? get displayFare => finalFare ?? estimatedFare;
+
+  bool get isActive => !const {
+        'TRIP_COMPLETED',
+        'TRIP_CANCELLED',
+        'TIMEOUT',
+      }.contains(status);
+
+  /// Human-readable form of the 11-state machine (see plan §4.2).
+  String get statusLabel => switch (status) {
+        'REQUESTED' => 'Looking for a driver',
+        'DRIVER_ASSIGNED' => 'Driver assigned',
+        'DRIVER_ACCEPTED' => 'Driver accepted',
+        'DRIVER_EN_ROUTE' => 'Driver on the way',
+        'DRIVER_ARRIVED' => 'Driver has arrived',
+        'TRIP_STARTED' => 'On the way',
+        'TRIP_COMPLETED' => 'Completed',
+        'TRIP_CANCELLED' => 'Cancelled',
+        'DRIVER_REJECTED' => 'Finding another driver',
+        'DRIVER_NO_RESPONSE' => 'Finding another driver',
+        'TIMEOUT' => 'No driver available',
+        _ => status,
+      };
+
+  factory Trip.fromJson(Map<String, dynamic> json) => Trip(
+        id: json['id'] as String,
+        status: json['status'] as String,
+        pickupAddress: json['pickupAddress'] as String,
+        dropoffAddress: json['dropoffAddress'] as String?,
+        distanceMiles: (json['distanceMiles'] as num?)?.toDouble(),
+        estimatedFare: (json['estimatedFare'] as num?)?.toDouble(),
+        finalFare: (json['finalFare'] as num?)?.toDouble(),
+        currency: json['currency'] as String? ?? 'USD',
+        requestedAt: DateTime.parse(json['requestedAt'] as String),
+        completedAt: json['completedAt'] == null ? null : DateTime.parse(json['completedAt'] as String),
+      );
+}

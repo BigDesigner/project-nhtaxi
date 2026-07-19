@@ -68,6 +68,26 @@ export const CancelTripRequestSchema = z
   })
   .openapi("CancelTripRequest");
 
+// Faz 7 — quote a fare *before* booking (plan §4.9). Same pickup/dropoff
+// shape as CreateTripRequest minus everything that only matters once a trip
+// actually exists.
+export const EstimateTripRequestSchema = z
+  .object({
+    pickupLat: z.number().min(-90).max(90),
+    pickupLng: z.number().min(-180).max(180),
+    dropoffLat: z.number().min(-90).max(90),
+    dropoffLng: z.number().min(-180).max(180),
+  })
+  .openapi("EstimateTripRequest");
+
+export const EstimateTripResponseSchema = z
+  .object({
+    distanceMiles: z.number(),
+    estimatedFare: z.number(),
+    currency: z.string(),
+  })
+  .openapi("EstimateTripResponse");
+
 export const TripResponseSchema = z
   .object({
     id: z.string(),
