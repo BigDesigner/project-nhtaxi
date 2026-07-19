@@ -2,7 +2,15 @@
 // dependency, since Workers has no native binding for either. Iteration
 // count is embedded in the stored string so it can be raised later without
 // invalidating existing hashes.
-const PBKDF2_ITERATIONS = 210_000;
+//
+// 100,000 is the real ceiling here, not a choice: the live Cloudflare Workers
+// edge runtime rejects crypto.subtle.deriveBits({name:"PBKDF2"}) above
+// 100,000 iterations ("NotSupportedError: Pbkdf2 failed: iteration counts
+// above 100000 are not supported"), even though the locally-bundled workerd
+// used by `wrangler dev` and the vitest-pool-workers test runner does NOT
+// enforce this cap — this bug shipped past local dev and CI and only
+// surfaced in a real production smoke test (Faz 1).
+const PBKDF2_ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const HASH_BITS = 256;
 

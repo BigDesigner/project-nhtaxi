@@ -36,3 +36,21 @@ ENVIRONMENT = "production"
 
 # Secrets (JWT_SECRET, STRIPE_*, FCM_*) are never set here — they are pushed
 # with `wrangler secret put <NAME>` and injected by CI from GitHub Secrets (L25).
+
+# Enabled via the dashboard while debugging the Faz 1 register 500 — mirrored
+# here so the next `wrangler deploy` doesn't silently revert it (wrangler.toml
+# is the source of truth on every deploy).
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
