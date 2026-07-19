@@ -98,7 +98,7 @@ jobs:
         run: flutter pub get
 
       # No --dart-define: the default in core/config.dart is production, which
-      # is what the preview must talk to. preview.nhtaxi.com is already in the
+      # is what the preview must talk to. gnncab.nhtaxi.com is already in the
       # API's production CORS allowlist (apps/api/src/app.ts).
       - name: Build web
         if: steps.creds.outputs.configured == 'true'

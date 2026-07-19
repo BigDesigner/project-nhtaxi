@@ -26,7 +26,7 @@ app.use(
       const allowed =
         c.env.ENVIRONMENT === "development"
           ? ["http://localhost:5173", "http://localhost:5174"]
-          : ["https://admin.nhtaxi.com", "https://preview.nhtaxi.com"];
+          : ["https://admin.nhtaxi.com", "https://gnncab.nhtaxi.com"];
       return origin && allowed.includes(origin) ? origin : null;
     },
     credentials: true,
