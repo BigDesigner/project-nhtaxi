@@ -49,7 +49,16 @@ CREATE TABLE `__new_trips` (
 	CONSTRAINT "chk_trips_origin" CHECK("__new_trips"."origin" in ('CUSTOMER_APP','ADMIN_ASSIGNED'))
 );
 --> statement-breakpoint
-INSERT INTO `__new_trips`("id", "customer_id", "guest_name", "guest_phone", "driver_id", "city_id", "pickup_lat", "pickup_lng", "pickup_address", "dropoff_lat", "dropoff_lng", "dropoff_address", "status", "origin", "commission_percent", "distance_miles", "estimated_fare_cents", "final_fare_cents", "currency", "payment_method", "cancellation_reason", "notes", "requested_at", "assigned_at", "started_at", "completed_at", "created_at", "updated_at") SELECT "id", "customer_id", "guest_name", "guest_phone", "driver_id", "city_id", "pickup_lat", "pickup_lng", "pickup_address", "dropoff_lat", "dropoff_lng", "dropoff_address", "status", "origin", "commission_percent", "distance_miles", "estimated_fare_cents", "final_fare_cents", "currency", "payment_method", "cancellation_reason", "notes", "requested_at", "assigned_at", "started_at", "completed_at", "created_at", "updated_at" FROM `trips`;--> statement-breakpoint
+-- NOTE: hand-fixed after a failed remote deploy. drizzle-kit's generated
+-- INSERT...SELECT listed "origin"/"commission_percent" as if they already
+-- existed on the OLD `trips` table (they're brand new here). Since neither
+-- column exists on the old table, SQLite's double-quoted-identifier fallback
+-- silently treated `"origin"` as the string literal 'origin' instead of
+-- erroring, which failed chk_trips_origin for every existing row (harmless
+-- for a still-empty local DB, but production already had real rows). Fix:
+-- omit both from the copy entirely so SQLite applies their real defaults
+-- ('CUSTOMER_APP' and NULL) to existing rows instead, exactly as intended.
+INSERT INTO `__new_trips`("id", "customer_id", "guest_name", "guest_phone", "driver_id", "city_id", "pickup_lat", "pickup_lng", "pickup_address", "dropoff_lat", "dropoff_lng", "dropoff_address", "status", "distance_miles", "estimated_fare_cents", "final_fare_cents", "currency", "payment_method", "cancellation_reason", "notes", "requested_at", "assigned_at", "started_at", "completed_at", "created_at", "updated_at") SELECT "id", "customer_id", "guest_name", "guest_phone", "driver_id", "city_id", "pickup_lat", "pickup_lng", "pickup_address", "dropoff_lat", "dropoff_lng", "dropoff_address", "status", "distance_miles", "estimated_fare_cents", "final_fare_cents", "currency", "payment_method", "cancellation_reason", "notes", "requested_at", "assigned_at", "started_at", "completed_at", "created_at", "updated_at" FROM `trips`;--> statement-breakpoint
 DROP TABLE `trips`;--> statement-breakpoint
 ALTER TABLE `__new_trips` RENAME TO `trips`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint
