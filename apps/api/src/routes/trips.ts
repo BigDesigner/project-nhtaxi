@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { and, desc, eq, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import {
   CancelTripRequestSchema,
   CreateTripRequestSchema,
@@ -367,6 +368,16 @@ trips.openapi(updateStatusRoute, async (c) => {
   const now = new Date();
   const updates: Partial<typeof tripsTable.$inferInsert> = { status: status as any, updatedAt: now };
 
+  // Every mutation this transition performs is collected here and executed
+  // as ONE D1 batch (a single implicit transaction) at the end. Running them
+  // as sequential awaits risked a partially-applied transition if the isolate
+  // died mid-way — most damagingly, a commission row could be inserted while
+  // the trip stayed TRIP_STARTED, letting a retry insert a *second* one and
+  // double-charge the driver. D1 has no interactive transactions, so batch()
+  // is the atomicity primitive here (drizzle's .transaction() emits
+  // BEGIN/COMMIT as separate round trips, which D1 does not honour).
+  const writes: BatchItem<"sqlite">[] = [];
+
   if (status === "TRIP_STARTED") {
     updates.startedAt = now;
 
@@ -393,58 +404,78 @@ trips.openapi(updateStatusRoute, async (c) => {
         .where(eq(paymentsTable.tripId, trip.id))
         .limit(1);
       if (!existingPayment) {
-        await db.insert(paymentsTable).values({
-          tripId: trip.id,
-          amountCents: fare.estimatedFareCents,
-          currency: fare.currency,
-          method: trip.paymentMethod,
-          status: "PENDING",
-        });
+        writes.push(
+          db.insert(paymentsTable).values({
+            tripId: trip.id,
+            amountCents: fare.estimatedFareCents,
+            currency: fare.currency,
+            method: trip.paymentMethod,
+            status: "PENDING",
+          })
+        );
       }
     }
   }
+
+  // Recorded here, logged only after the batch actually commits.
+  let chargedCommissionCents: number | null = null;
 
   if (status === "TRIP_COMPLETED") {
     updates.completedAt = now;
     updates.finalFareCents = updates.estimatedFareCents ?? trip.estimatedFareCents;
     if (trip.driverId) {
-      await db
-        .update(driverProfilesTable)
-        .set({ status: "AVAILABLE", totalTrips: sql`total_trips + 1`, updatedAt: now })
-        .where(eq(driverProfilesTable.id, trip.driverId));
+      writes.push(
+        db
+          .update(driverProfilesTable)
+          .set({ status: "AVAILABLE", totalTrips: sql`total_trips + 1`, updatedAt: now })
+          .where(eq(driverProfilesTable.id, trip.driverId))
+      );
       if (trip.customerId) {
-        await db.update(customerProfilesTable).set({ updatedAt: now }).where(eq(customerProfilesTable.userId, trip.customerId));
+        writes.push(db.update(customerProfilesTable).set({ updatedAt: now }).where(eq(customerProfilesTable.userId, trip.customerId)));
       }
       if (trip.origin === "ADMIN_ASSIGNED" && trip.commissionPercent != null && updates.finalFareCents != null) {
-        const commissionCents = Math.round((updates.finalFareCents * trip.commissionPercent) / 100);
-        await db.insert(driverTripCommissionsTable).values({
-          driverId: trip.driverId,
-          tripId: trip.id,
-          fareCents: updates.finalFareCents,
-          commissionPercent: trip.commissionPercent,
-          commissionCents,
-        });
-        c.executionCtx.waitUntil(
-          logAudit(db, {
-            entity: "driver_trip_commission",
-            entityId: trip.id,
-            action: AuditAction.DRIVER_COMMISSION_CHARGED,
-            metadata: { driverId: trip.driverId, fareCents: updates.finalFareCents, commissionCents },
+        chargedCommissionCents = Math.round((updates.finalFareCents * trip.commissionPercent) / 100);
+        writes.push(
+          db.insert(driverTripCommissionsTable).values({
+            driverId: trip.driverId,
+            tripId: trip.id,
+            fareCents: updates.finalFareCents,
+            commissionPercent: trip.commissionPercent,
+            commissionCents: chargedCommissionCents,
           })
         );
       }
     }
-    await db.update(paymentsTable).set({ status: "COMPLETED", updatedAt: now }).where(eq(paymentsTable.tripId, trip.id));
+    writes.push(db.update(paymentsTable).set({ status: "COMPLETED", updatedAt: now }).where(eq(paymentsTable.tripId, trip.id)));
   }
 
   if (status === "DRIVER_REJECTED" && trip.driverId) {
-    await db.update(driverProfilesTable).set({ status: "AVAILABLE", updatedAt: now }).where(eq(driverProfilesTable.id, trip.driverId));
+    writes.push(db.update(driverProfilesTable).set({ status: "AVAILABLE", updatedAt: now }).where(eq(driverProfilesTable.id, trip.driverId)));
   }
 
-  const [updated] = await db.update(tripsTable).set(updates).where(eq(tripsTable.id, tripId)).returning();
-  await db
-    .insert(tripEventsTable)
-    .values({ tripId, status, actorId: authUser.userId, actorRole: authUser.role });
+  // The trip row itself goes last so that if any earlier statement in the
+  // batch fails, the trip keeps its old status and the whole transition can
+  // be safely retried.
+  const tripUpdateIndex = writes.length;
+  writes.push(db.update(tripsTable).set(updates).where(eq(tripsTable.id, tripId)).returning());
+  writes.push(db.insert(tripEventsTable).values({ tripId, status, actorId: authUser.userId, actorRole: authUser.role }));
+
+  // `writes` is always non-empty (the two pushes above) — the cast just
+  // satisfies batch()'s non-empty-tuple signature, which a dynamically
+  // built array can't express.
+  const results = await db.batch(writes as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
+  const [updated] = results[tripUpdateIndex] as (typeof tripsTable.$inferSelect)[];
+
+  if (chargedCommissionCents != null && trip.driverId) {
+    c.executionCtx.waitUntil(
+      logAudit(db, {
+        entity: "driver_trip_commission",
+        entityId: trip.id,
+        action: AuditAction.DRIVER_COMMISSION_CHARGED,
+        metadata: { driverId: trip.driverId, fareCents: updates.finalFareCents, commissionCents: chargedCommissionCents },
+      })
+    );
+  }
 
   c.executionCtx.waitUntil(
     logAudit(db, {
