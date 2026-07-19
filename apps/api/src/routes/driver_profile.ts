@@ -1,15 +1,17 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, gte, lte } from "drizzle-orm";
 import {
   AuthResponseSchema,
   DriverDocumentSchema,
+  DriverEarningsQuerySchema,
+  DriverEarningsSummarySchema,
   DriverProfileResponseSchema,
   DriverProfileUpdateRequestSchema,
   DriverRegisterRequestSchema,
   DRIVER_DOCUMENT_TYPES,
   ErrorResponseSchema,
 } from "@gnncab/contract";
-import { createDb, driverDocumentsTable, driverProfilesTable, usersTable } from "@gnncab/db";
+import { createDb, driverDocumentsTable, driverProfilesTable, tripsTable, usersTable } from "@gnncab/db";
 import type { AppBindings } from "../env";
 import { AuditAction, logAudit } from "../lib/audit";
 import { encryptDocument } from "../lib/document-encryption";
@@ -113,6 +115,7 @@ driverProfile.openapi(registerRoute, async (c) => {
 driverProfile.use("/profile", authenticate, requireRole("driver"));
 driverProfile.use("/documents", authenticate, requireRole("driver"));
 driverProfile.use("/documents/:type", authenticate, requireRole("driver"));
+driverProfile.use("/earnings", authenticate, requireRole("driver"));
 
 // ─── GET /profile — own driver profile ─────────────────────────────────────
 const getProfileRoute = createRoute({
@@ -303,6 +306,62 @@ driverProfile.openapi(listDocumentsRoute, async (c) => {
   const docs = await db.select().from(driverDocumentsTable).where(eq(driverDocumentsTable.driverId, profile.id));
   return c.json(
     docs.map((d) => toDocumentResponse(d)),
+    200
+  );
+});
+
+// ─── GET /earnings — own completed-trip earnings (4.10 — own tax record) ──
+const earningsRoute = createRoute({
+  method: "get",
+  path: "/earnings",
+  tags: ["driver"],
+  summary: "My own completed-trip earnings summary, optionally filtered by date range",
+  request: { query: DriverEarningsQuerySchema },
+  responses: {
+    200: { description: "Earnings summary", content: { "application/json": { schema: DriverEarningsSummarySchema } } },
+  },
+});
+
+driverProfile.openapi(earningsRoute, async (c) => {
+  const authUser = c.get("user")!;
+  const query = c.req.valid("query");
+  const db = createDb(c.env.DB);
+
+  const [profile] = await db
+    .select({ id: driverProfilesTable.id })
+    .from(driverProfilesTable)
+    .where(eq(driverProfilesTable.userId, authUser.userId))
+    .limit(1);
+  if (!profile) {
+    return c.json({ tripCount: 0, totalEarnings: 0, currency: "USD", trips: [] }, 200);
+  }
+
+  const conditions = [eq(tripsTable.driverId, profile.id), eq(tripsTable.status, "TRIP_COMPLETED")];
+  if (query.from) conditions.push(gte(tripsTable.completedAt, query.from));
+  if (query.to) conditions.push(lte(tripsTable.completedAt, query.to));
+
+  const rows = await db
+    .select()
+    .from(tripsTable)
+    .where(and(...conditions))
+    .orderBy(desc(tripsTable.completedAt));
+
+  const totalCents = rows.reduce((sum, t) => sum + (t.finalFareCents ?? 0), 0);
+
+  return c.json(
+    {
+      tripCount: rows.length,
+      totalEarnings: totalCents / 100,
+      currency: rows[0]?.currency ?? "USD",
+      trips: rows.map((t) => ({
+        tripId: t.id,
+        completedAt: t.completedAt?.toISOString() ?? null,
+        distanceMiles: t.distanceMiles,
+        fare: t.finalFareCents != null ? t.finalFareCents / 100 : null,
+        currency: t.currency,
+        paymentMethod: t.paymentMethod,
+      })),
+    },
     200
   );
 });

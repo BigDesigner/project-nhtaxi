@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import {
   AdminCreateUserRequestSchema,
   AdminDocumentReviewRequestSchema,
@@ -7,26 +8,33 @@ import {
   AdminUpdateUserRequestSchema,
   AdminUserSchema,
   AdminVerifyDriverRequestSchema,
+  AuditLogEntrySchema,
+  AuditLogQuerySchema,
   AuthResponseSchema,
   CitySchema,
   CreateCityRequestSchema,
   DriverDocumentSchema,
   ErrorResponseSchema,
   PricingConfigSchema,
+  TripReportQuerySchema,
+  TripReportRowSchema,
   UpdatePricingConfigRequestSchema,
   USER_ROLES,
 } from "@gnncab/contract";
 import {
+  auditLogsTable,
   citiesTable,
   createDb,
   customerProfilesTable,
   driverDocumentsTable,
   driverProfilesTable,
   pricingConfigTable,
+  tripsTable,
   usersTable,
 } from "@gnncab/db";
 import type { AppBindings } from "../env";
 import { AuditAction, logAudit } from "../lib/audit";
+import { toCsv } from "../lib/csv";
 import { decryptDocument } from "../lib/document-encryption";
 import { driverProfileWithUserColumns } from "../lib/driver-queries";
 import { hashPassword } from "../lib/password";
@@ -707,6 +715,142 @@ admin.openapi(updatePricingRoute, async (c) => {
       currency: row!.currency,
       updatedAt: row!.updatedAt.toISOString(),
     },
+    200
+  );
+});
+
+// ─── GET /reports/trips — trip + fare breakdown (L16 — vergi/güvenlik) ─────
+// Filterable by driver/customer/status/date range; `?format=csv` streams a
+// spreadsheet-ready file instead of JSON for import into accounting/tax tools.
+const driverUser = alias(usersTable, "driver_user");
+const customerUser = alias(usersTable, "customer_user");
+
+const tripReportRoute = createRoute({
+  method: "get",
+  path: "/reports/trips",
+  tags: ["admin"],
+  summary: "Trip + fare report — filterable by driver/customer/status/date range, JSON or CSV",
+  request: { query: TripReportQuerySchema },
+  responses: {
+    200: {
+      description: "Report rows (JSON by default) or a CSV file with ?format=csv",
+      content: {
+        "application/json": { schema: z.array(TripReportRowSchema) },
+        "text/csv": { schema: z.string() },
+      },
+    },
+  },
+});
+
+admin.openapi(tripReportRoute, async (c) => {
+  const query = c.req.valid("query");
+  const db = createDb(c.env.DB);
+
+  const conditions = [];
+  if (query.driverId) conditions.push(eq(tripsTable.driverId, query.driverId));
+  if (query.customerId) conditions.push(eq(tripsTable.customerId, query.customerId));
+  if (query.status) conditions.push(eq(tripsTable.status, query.status));
+  if (query.from) conditions.push(gte(tripsTable.requestedAt, query.from));
+  if (query.to) conditions.push(lte(tripsTable.requestedAt, query.to));
+
+  const rows = await db
+    .select({
+      tripId: tripsTable.id,
+      status: tripsTable.status,
+      requestedAt: tripsTable.requestedAt,
+      completedAt: tripsTable.completedAt,
+      driverId: tripsTable.driverId,
+      driverFirstName: driverUser.firstName,
+      driverLastName: driverUser.lastName,
+      customerId: tripsTable.customerId,
+      customerFirstName: customerUser.firstName,
+      customerLastName: customerUser.lastName,
+      distanceMiles: tripsTable.distanceMiles,
+      estimatedFareCents: tripsTable.estimatedFareCents,
+      finalFareCents: tripsTable.finalFareCents,
+      currency: tripsTable.currency,
+      paymentMethod: tripsTable.paymentMethod,
+    })
+    .from(tripsTable)
+    .innerJoin(customerUser, eq(tripsTable.customerId, customerUser.id))
+    .leftJoin(driverProfilesTable, eq(tripsTable.driverId, driverProfilesTable.id))
+    .leftJoin(driverUser, eq(driverProfilesTable.userId, driverUser.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(tripsTable.requestedAt))
+    .limit(query.limit)
+    .offset(query.offset);
+
+  const reportRows = rows.map((r) => ({
+    tripId: r.tripId,
+    status: r.status,
+    requestedAt: r.requestedAt.toISOString(),
+    completedAt: r.completedAt?.toISOString() ?? null,
+    driverId: r.driverId,
+    driverName: r.driverFirstName ? `${r.driverFirstName} ${r.driverLastName}` : null,
+    customerId: r.customerId,
+    customerName: `${r.customerFirstName} ${r.customerLastName}`,
+    distanceMiles: r.distanceMiles,
+    estimatedFare: r.estimatedFareCents != null ? r.estimatedFareCents / 100 : null,
+    finalFare: r.finalFareCents != null ? r.finalFareCents / 100 : null,
+    currency: r.currency,
+    paymentMethod: r.paymentMethod,
+  }));
+
+  if (query.format === "csv") {
+    return new Response(toCsv(reportRows), {
+      status: 200,
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="trip-report-${new Date().toISOString().slice(0, 10)}.csv"`,
+      },
+    });
+  }
+  return c.json(reportRows, 200);
+});
+
+// ─── GET /audit-logs — security/compliance trail (L16) ──────────────────────
+const listAuditLogsRoute = createRoute({
+  method: "get",
+  path: "/audit-logs",
+  tags: ["admin"],
+  summary: "List audit log entries — filterable by entity/action/actor/date range",
+  request: { query: AuditLogQuerySchema },
+  responses: {
+    200: { description: "Audit log entries", content: { "application/json": { schema: z.array(AuditLogEntrySchema) } } },
+  },
+});
+
+admin.openapi(listAuditLogsRoute, async (c) => {
+  const query = c.req.valid("query");
+  const db = createDb(c.env.DB);
+
+  const conditions = [];
+  if (query.entity) conditions.push(eq(auditLogsTable.entity, query.entity));
+  if (query.action) conditions.push(eq(auditLogsTable.action, query.action));
+  if (query.actorId) conditions.push(eq(auditLogsTable.actorId, query.actorId));
+  if (query.from) conditions.push(gte(auditLogsTable.createdAt, query.from));
+  if (query.to) conditions.push(lte(auditLogsTable.createdAt, query.to));
+
+  const rows = await db
+    .select()
+    .from(auditLogsTable)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(auditLogsTable.createdAt))
+    .limit(query.limit)
+    .offset(query.offset);
+
+  return c.json(
+    rows.map((r) => ({
+      id: r.id,
+      entity: r.entity,
+      entityId: r.entityId,
+      action: r.action,
+      actorId: r.actorId,
+      actorRole: r.actorRole,
+      metadata: r.metadata,
+      ipAddress: r.ipAddress,
+      createdAt: r.createdAt.toISOString(),
+    })),
     200
   );
 });

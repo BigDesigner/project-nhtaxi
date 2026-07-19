@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import {
   CancelTripRequestSchema,
   CreateTripRequestSchema,
@@ -245,7 +245,7 @@ trips.openapi(listTripsRoute, async (c) => {
     .select()
     .from(tripsTable)
     .where(where)
-    .orderBy(tripsTable.createdAt)
+    .orderBy(desc(tripsTable.createdAt))
     .limit(limit)
     .offset(offset);
   return c.json(rows.map(toTripResponse), 200);
