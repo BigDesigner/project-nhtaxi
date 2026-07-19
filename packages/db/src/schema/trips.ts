@@ -26,22 +26,39 @@ export type TripStatus = (typeof TRIP_STATUSES)[number];
 export const PAYMENT_METHODS = ["cash"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
+// Faz 5c — CUSTOMER_APP is the existing passenger-requested/auto-dispatch
+// flow; ADMIN_ASSIGNED is a trip an admin hand-picks a driver for directly
+// (e.g. a phoned-in booking), which owes GNN LLC a commission (see
+// commissionPercent below) instead of the flat usage-time fee alone.
+export const TRIP_ORIGINS = ["CUSTOMER_APP", "ADMIN_ASSIGNED"] as const;
+export type TripOrigin = (typeof TRIP_ORIGINS)[number];
+
 export const tripsTable = sqliteTable(
   "trips",
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    customerId: text("customer_id")
-      .notNull()
-      .references(() => usersTable.id),
+    // Faz 5c — nullable: an admin-assigned trip may be a walk-in/phone
+    // booking with no registered account (guestName/guestPhone instead).
+    customerId: text("customer_id").references(() => usersTable.id),
+    guestName: text("guest_name"),
+    guestPhone: text("guest_phone"),
     driverId: text("driver_id").references(() => driverProfilesTable.id),
     cityId: text("city_id").references(() => citiesTable.id),
     pickupLat: real("pickup_lat").notNull(),
     pickupLng: real("pickup_lng").notNull(),
     pickupAddress: text("pickup_address").notNull(),
-    dropoffLat: real("dropoff_lat").notNull(),
-    dropoffLng: real("dropoff_lng").notNull(),
-    dropoffAddress: text("dropoff_address").notNull(),
+    // Faz 5c — nullable: an admin-assigned trip may not know the
+    // destination until the driver has picked the passenger up in person
+    // and asks them; the driver fills it in when marking the ride started.
+    dropoffLat: real("dropoff_lat"),
+    dropoffLng: real("dropoff_lng"),
+    dropoffAddress: text("dropoff_address"),
     status: text("status", { enum: TRIP_STATUSES }).notNull().default("REQUESTED"),
+    origin: text("origin", { enum: TRIP_ORIGINS }).notNull().default("CUSTOMER_APP"),
+    // Snapshotted from pricing_config at admin-assignment time (ADMIN_ASSIGNED
+    // trips only) so a later change to the global rate never retroactively
+    // changes what was disclosed to/accepted by the driver for this trip.
+    commissionPercent: real("commission_percent"),
     distanceMiles: real("distance_miles"),
     // Money stored as integer cents (USD) — avoids float rounding drift in tax/reporting.
     estimatedFareCents: integer("estimated_fare_cents"),
@@ -66,6 +83,7 @@ export const tripsTable = sqliteTable(
       sql`${table.status} in ('REQUESTED','DRIVER_ASSIGNED','DRIVER_ACCEPTED','DRIVER_REJECTED','DRIVER_EN_ROUTE','DRIVER_ARRIVED','TRIP_STARTED','TRIP_COMPLETED','TRIP_CANCELLED','DRIVER_NO_RESPONSE','TIMEOUT')`
     ),
     check("chk_trips_payment_method", sql`${table.paymentMethod} in ('cash','card','online')`),
+    check("chk_trips_origin", sql`${table.origin} in ('CUSTOMER_APP','ADMIN_ASSIGNED')`),
   ]
 );
 

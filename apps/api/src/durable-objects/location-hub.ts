@@ -134,7 +134,7 @@ export class LocationHub extends DurableObject<Env> {
         .from(tripsTable)
         .where(and(eq(tripsTable.driverId, driver.id), inArray(tripsTable.status, ACTIVE_TRIP_STATUSES)))
         .limit(1);
-      customerId = trip?.customerId;
+      customerId = trip?.customerId ?? undefined;
     }
 
     const payload = JSON.stringify({

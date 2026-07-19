@@ -3,6 +3,7 @@ import {
   driverCashCollectionsTable,
   driverProfilesTable,
   driverSessionsTable,
+  driverTripCommissionsTable,
   pricingConfigTable,
   type Database,
   type DriverSession,
@@ -166,9 +167,8 @@ export interface DriverBalance {
 /**
  * A driver's combined debt owed to GNN LLC: closed-session usage-fee charges
  * + a currently-open session's live accrual (so the figure is accurate up
- * to the minute, not just as of its last close) + trip commissions (Faz 5c
- * — always 0 until `driver_trip_commissions` lands in Wave 2), minus cash
- * already collected.
+ * to the minute, not just as of its last close) + trip commissions (Faz 5c,
+ * admin-assigned trips only), minus cash already collected.
  */
 export async function computeDriverBalance(db: Database, driverId: string, now: Date = new Date()): Promise<DriverBalance> {
   const [closedSum] = await db
@@ -183,13 +183,18 @@ export async function computeDriverBalance(db: Database, driverId: string, now: 
     liveCents = computeLiveChargeCents(openSession, perMinuteCents, now);
   }
 
+  const [commissionSum] = await db
+    .select({ total: sql<number>`coalesce(sum(${driverTripCommissionsTable.commissionCents}), 0)` })
+    .from(driverTripCommissionsTable)
+    .where(eq(driverTripCommissionsTable.driverId, driverId));
+
   const [collectedSum] = await db
     .select({ total: sql<number>`coalesce(sum(${driverCashCollectionsTable.amountCents}), 0)` })
     .from(driverCashCollectionsTable)
     .where(eq(driverCashCollectionsTable.driverId, driverId));
 
   const usageFeeChargedCents = Number(closedSum?.total ?? 0) + liveCents;
-  const commissionChargedCents = 0; // Faz 5c (Wave 2) sums driver_trip_commissions here
+  const commissionChargedCents = Number(commissionSum?.total ?? 0);
   const totalChargedCents = usageFeeChargedCents + commissionChargedCents;
   const totalCollectedCents = Number(collectedSum?.total ?? 0);
 

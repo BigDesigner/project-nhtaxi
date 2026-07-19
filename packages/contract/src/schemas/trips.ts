@@ -32,6 +32,11 @@ export const CLIENT_SETTABLE_TRIP_STATUSES = [
 // reversible by widening this array again when Stripe returns).
 export const PAYMENT_METHODS = ["cash"] as const;
 
+// Faz 5c — CUSTOMER_APP is the existing passenger-requested/auto-dispatch
+// flow; ADMIN_ASSIGNED is a trip an admin hand-picks a driver for directly,
+// which owes GNN LLC a commission (see commissionPercent below).
+export const TRIP_ORIGINS = ["CUSTOMER_APP", "ADMIN_ASSIGNED"] as const;
+
 export const CreateTripRequestSchema = z
   .object({
     pickupLat: z.number().min(-90).max(90),
@@ -48,6 +53,12 @@ export const CreateTripRequestSchema = z
 export const UpdateTripStatusRequestSchema = z
   .object({
     status: z.enum(CLIENT_SETTABLE_TRIP_STATUSES),
+    // Faz 5c — only required when transitioning to TRIP_STARTED on a trip
+    // that has no dropoff yet (an admin-assigned trip whose destination
+    // wasn't known at booking time); ignored otherwise. All-or-nothing.
+    dropoffLat: z.number().min(-90).max(90).optional(),
+    dropoffLng: z.number().min(-180).max(180).optional(),
+    dropoffAddress: z.string().min(1).max(500).optional(),
   })
   .openapi("UpdateTripStatusRequest");
 
@@ -60,16 +71,22 @@ export const CancelTripRequestSchema = z
 export const TripResponseSchema = z
   .object({
     id: z.string(),
-    customerId: z.string(),
+    customerId: z.string().nullable(),
+    guestName: z.string().nullable(),
+    guestPhone: z.string().nullable(),
     driverId: z.string().nullable(),
     cityId: z.string().nullable(),
     pickupLat: z.number(),
     pickupLng: z.number(),
     pickupAddress: z.string(),
-    dropoffLat: z.number(),
-    dropoffLng: z.number(),
-    dropoffAddress: z.string(),
+    dropoffLat: z.number().nullable(),
+    dropoffLng: z.number().nullable(),
+    dropoffAddress: z.string().nullable(),
     status: z.enum(TRIP_STATUSES),
+    origin: z.enum(TRIP_ORIGINS),
+    // Disclosed to the driver before they accept an ADMIN_ASSIGNED trip —
+    // null for ordinary CUSTOMER_APP trips.
+    commissionPercent: z.number().nullable(),
     distanceMiles: z.number().nullable(),
     estimatedFare: z.number().nullable(),
     finalFare: z.number().nullable(),

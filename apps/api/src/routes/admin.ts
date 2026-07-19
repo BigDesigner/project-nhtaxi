@@ -2,9 +2,11 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { and, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import {
+  AdminCreateTripRequestSchema,
   AdminCreateUserRequestSchema,
   AdminDocumentReviewRequestSchema,
   AdminDriverListItemSchema,
+  AdminReassignTripRequestSchema,
   AdminUpdateUserRequestSchema,
   AdminUserSchema,
   AdminVerifyDriverRequestSchema,
@@ -16,6 +18,8 @@ import {
   DriverBalanceReportRowSchema,
   DriverCashCollectionSchema,
   DriverCollectionQuerySchema,
+  DriverCommissionChargeSchema,
+  DriverCommissionQuerySchema,
   DriverDocumentSchema,
   DriverSessionQuerySchema,
   DriverSessionSchema,
@@ -24,6 +28,7 @@ import {
   RecordCashCollectionRequestSchema,
   TripReportQuerySchema,
   TripReportRowSchema,
+  TripResponseSchema,
   UpdatePricingConfigRequestSchema,
   USER_ROLES,
 } from "@gnncab/contract";
@@ -36,7 +41,10 @@ import {
   driverDocumentsTable,
   driverProfilesTable,
   driverSessionsTable,
+  driverTripCommissionsTable,
+  paymentsTable,
   pricingConfigTable,
+  tripEventsTable,
   tripsTable,
   usersTable,
 } from "@gnncab/db";
@@ -46,11 +54,13 @@ import { toCsv } from "../lib/csv";
 import { decryptDocument } from "../lib/document-encryption";
 import { driverProfileWithUserColumns } from "../lib/driver-queries";
 import { closeOpenSession, computeDriverBalance, getDriverUsageRates, toSessionResponse } from "../lib/driver-sessions";
+import { estimateFare, haversineMiles } from "../lib/fare";
 import { hashPassword } from "../lib/password";
 import { clientIp } from "../lib/request";
 import { issueSession, toPublicUser } from "../lib/session";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { toDocumentResponse } from "./driver_profile";
+import { toTripResponse } from "./trips";
 
 const admin = new OpenAPIHono<AppBindings>();
 
@@ -1173,6 +1183,267 @@ admin.openapi(driverCollectionsReportRoute, async (c) => {
     });
   }
   return c.json(reportRows, 200);
+});
+
+// ─── GET /reports/driver-commissions — per-trip commission charges (Faz 5c) ─
+const driverCommissionsReportRoute = createRoute({
+  method: "get",
+  path: "/reports/driver-commissions",
+  tags: ["admin"],
+  summary: "Commission charges from admin-assigned trips — filterable by driver/date range",
+  request: { query: DriverCommissionQuerySchema },
+  responses: {
+    200: {
+      description: "Commission charges",
+      content: { "application/json": { schema: z.array(DriverCommissionChargeSchema) } },
+    },
+  },
+});
+
+admin.openapi(driverCommissionsReportRoute, async (c) => {
+  const query = c.req.valid("query");
+  const db = createDb(c.env.DB);
+
+  const conditions = [];
+  if (query.driverId) conditions.push(eq(driverTripCommissionsTable.driverId, query.driverId));
+  if (query.from) conditions.push(gte(driverTripCommissionsTable.createdAt, query.from));
+  if (query.to) conditions.push(lte(driverTripCommissionsTable.createdAt, query.to));
+
+  const rows = await db
+    .select({
+      id: driverTripCommissionsTable.id,
+      driverId: driverTripCommissionsTable.driverId,
+      driverFirstName: usersTable.firstName,
+      driverLastName: usersTable.lastName,
+      tripId: driverTripCommissionsTable.tripId,
+      fareCents: driverTripCommissionsTable.fareCents,
+      commissionPercent: driverTripCommissionsTable.commissionPercent,
+      commissionCents: driverTripCommissionsTable.commissionCents,
+      createdAt: driverTripCommissionsTable.createdAt,
+    })
+    .from(driverTripCommissionsTable)
+    .innerJoin(driverProfilesTable, eq(driverTripCommissionsTable.driverId, driverProfilesTable.id))
+    .innerJoin(usersTable, eq(driverProfilesTable.userId, usersTable.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(driverTripCommissionsTable.createdAt))
+    .limit(query.limit)
+    .offset(query.offset);
+
+  return c.json(
+    rows.map((r) => ({
+      id: r.id,
+      driverId: r.driverId,
+      driverName: `${r.driverFirstName} ${r.driverLastName}`,
+      tripId: r.tripId,
+      fare: r.fareCents / 100,
+      commissionPercent: r.commissionPercent,
+      commission: r.commissionCents / 100,
+      createdAt: r.createdAt.toISOString(),
+    })),
+    200
+  );
+});
+
+// ─── POST /trips — admin directly assigns a trip to a chosen driver (Faz 5c) ─
+// Skips DispatchCoordinator entirely (no nearest-driver search, no accept/
+// reject timer) — the admin already chose who does this job. Uses RESERVED
+// (defined since Faz 3 but never actually used anywhere) for its first real
+// purpose: this driver is spoken for until they accept or are reassigned.
+const REASSIGNABLE_STATUSES = new Set(["REQUESTED", "DRIVER_ASSIGNED", "DRIVER_REJECTED", "DRIVER_NO_RESPONSE", "TIMEOUT"]);
+
+const adminCreateTripRoute = createRoute({
+  method: "post",
+  path: "/trips",
+  tags: ["admin"],
+  summary: "Directly assign a trip to a chosen driver, skipping auto-dispatch (e.g. a phoned-in booking)",
+  request: { body: { required: true, content: { "application/json": { schema: AdminCreateTripRequestSchema } } } },
+  responses: {
+    201: { description: "Created", content: { "application/json": { schema: TripResponseSchema } } },
+    404: { description: "Driver or customer not found", content: { "application/json": { schema: ErrorResponseSchema } } },
+    409: { description: "Driver is not currently available", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+admin.openapi(adminCreateTripRoute, async (c) => {
+  const body = c.req.valid("json");
+  const db = createDb(c.env.DB);
+  const authUser = c.get("user")!;
+
+  const [driver] = await db.select().from(driverProfilesTable).where(eq(driverProfilesTable.id, body.driverId)).limit(1);
+  if (!driver) {
+    return c.json({ error: "NotFound", message: "Driver not found" }, 404);
+  }
+  if (driver.status !== "AVAILABLE") {
+    return c.json({ error: "Conflict", message: "This driver is not currently available" }, 409);
+  }
+
+  if (body.customerId) {
+    const [customer] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(and(eq(usersTable.id, body.customerId), eq(usersTable.role, "customer")))
+      .limit(1);
+    if (!customer) {
+      return c.json({ error: "NotFound", message: "Customer not found" }, 404);
+    }
+  }
+
+  let distanceMiles: number | null = null;
+  let estimatedFareCents: number | null = null;
+  let currency = "USD";
+  if (body.dropoffLat != null && body.dropoffLng != null) {
+    const straightLineMiles = haversineMiles(body.pickupLat, body.pickupLng, body.dropoffLat, body.dropoffLng);
+    const fare = await estimateFare(db, straightLineMiles);
+    distanceMiles = fare.distanceMiles;
+    estimatedFareCents = fare.estimatedFareCents;
+    currency = fare.currency;
+  }
+
+  const { commissionPercent } = await getDriverUsageRates(db);
+  const now = new Date();
+
+  await db.update(driverProfilesTable).set({ status: "RESERVED", updatedAt: now }).where(eq(driverProfilesTable.id, body.driverId));
+
+  const [trip] = await db
+    .insert(tripsTable)
+    .values({
+      customerId: body.customerId ?? null,
+      guestName: body.guestName ?? null,
+      guestPhone: body.guestPhone ?? null,
+      driverId: body.driverId,
+      pickupLat: body.pickupLat,
+      pickupLng: body.pickupLng,
+      pickupAddress: body.pickupAddress,
+      dropoffLat: body.dropoffLat ?? null,
+      dropoffLng: body.dropoffLng ?? null,
+      dropoffAddress: body.dropoffAddress ?? null,
+      distanceMiles,
+      estimatedFareCents,
+      currency,
+      paymentMethod: body.paymentMethod,
+      notes: body.notes,
+      status: "DRIVER_ASSIGNED",
+      origin: "ADMIN_ASSIGNED",
+      commissionPercent,
+      assignedAt: now,
+    })
+    .returning();
+  if (!trip) throw new Error("Insert into trips returned no row");
+
+  await db.insert(tripEventsTable).values({
+    tripId: trip.id,
+    status: "DRIVER_ASSIGNED",
+    actorId: authUser.userId,
+    actorRole: "admin",
+    metadata: { driverId: body.driverId },
+  });
+
+  if (estimatedFareCents != null) {
+    await db
+      .insert(paymentsTable)
+      .values({ tripId: trip.id, amountCents: estimatedFareCents, currency, method: body.paymentMethod, status: "PENDING" });
+  }
+
+  c.executionCtx.waitUntil(
+    logAudit(db, {
+      entity: "trip",
+      entityId: trip.id,
+      action: AuditAction.TRIP_ADMIN_ASSIGNED,
+      actorId: authUser.userId,
+      actorRole: "admin",
+      metadata: { driverId: body.driverId, commissionPercent },
+      ipAddress: clientIp(c),
+    })
+  );
+
+  return c.json(toTripResponse(trip), 201);
+});
+
+// ─── PUT /trips/{tripId}/reassign — pick a different driver (Faz 5c) ──────
+// No DO accept/reject timer exists for admin-assigned trips (nothing ever
+// called /dispatch for them) — if a driver rejects or never responds, the
+// trip just sits there until an admin reassigns it here.
+const adminReassignTripRoute = createRoute({
+  method: "put",
+  path: "/trips/{tripId}/reassign",
+  tags: ["admin"],
+  summary: "Reassign an admin-assigned trip to a different driver",
+  request: {
+    params: z.object({ tripId: z.string().uuid() }),
+    body: { required: true, content: { "application/json": { schema: AdminReassignTripRequestSchema } } },
+  },
+  responses: {
+    200: { description: "Reassigned", content: { "application/json": { schema: TripResponseSchema } } },
+    400: { description: "Cannot reassign in the trip's current state", content: { "application/json": { schema: ErrorResponseSchema } } },
+    404: { description: "Trip or driver not found", content: { "application/json": { schema: ErrorResponseSchema } } },
+    409: { description: "Driver is not currently available", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+admin.openapi(adminReassignTripRoute, async (c) => {
+  const { tripId } = c.req.valid("param");
+  const body = c.req.valid("json");
+  const db = createDb(c.env.DB);
+  const authUser = c.get("user")!;
+
+  const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId)).limit(1);
+  if (!trip) {
+    return c.json({ error: "NotFound", message: "Trip not found" }, 404);
+  }
+  if (trip.origin !== "ADMIN_ASSIGNED") {
+    return c.json({ error: "InvalidState", message: "Only admin-assigned trips can be reassigned this way" }, 400);
+  }
+  if (!REASSIGNABLE_STATUSES.has(trip.status)) {
+    return c.json({ error: "InvalidState", message: `Cannot reassign a trip in status ${trip.status}` }, 400);
+  }
+
+  const [driver] = await db
+    .select({ id: driverProfilesTable.id, status: driverProfilesTable.status })
+    .from(driverProfilesTable)
+    .where(eq(driverProfilesTable.id, body.driverId))
+    .limit(1);
+  if (!driver) {
+    return c.json({ error: "NotFound", message: "Driver not found" }, 404);
+  }
+  if (driver.status !== "AVAILABLE") {
+    return c.json({ error: "Conflict", message: "This driver is not currently available" }, 409);
+  }
+
+  const now = new Date();
+  const previousDriverId = trip.driverId;
+
+  if (previousDriverId && previousDriverId !== body.driverId) {
+    await db.update(driverProfilesTable).set({ status: "AVAILABLE", updatedAt: now }).where(eq(driverProfilesTable.id, previousDriverId));
+  }
+  await db.update(driverProfilesTable).set({ status: "RESERVED", updatedAt: now }).where(eq(driverProfilesTable.id, body.driverId));
+
+  const [updated] = await db
+    .update(tripsTable)
+    .set({ driverId: body.driverId, status: "DRIVER_ASSIGNED", assignedAt: now, updatedAt: now })
+    .where(eq(tripsTable.id, tripId))
+    .returning();
+
+  await db.insert(tripEventsTable).values({
+    tripId,
+    status: "DRIVER_ASSIGNED",
+    actorId: authUser.userId,
+    actorRole: "admin",
+    metadata: { driverId: body.driverId, reassigned: true },
+  });
+
+  c.executionCtx.waitUntil(
+    logAudit(db, {
+      entity: "trip",
+      entityId: tripId,
+      action: AuditAction.TRIP_REASSIGNED,
+      actorId: authUser.userId,
+      actorRole: "admin",
+      metadata: { fromDriverId: previousDriverId, toDriverId: body.driverId },
+      ipAddress: clientIp(c),
+    })
+  );
+
+  return c.json(toTripResponse(updated!), 200);
 });
 
 export default admin;

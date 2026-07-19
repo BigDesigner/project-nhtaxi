@@ -12,6 +12,7 @@ import {
   createDb,
   customerProfilesTable,
   driverProfilesTable,
+  driverTripCommissionsTable,
   paymentsTable,
   tripEventsTable,
   tripsTable,
@@ -64,6 +65,8 @@ function toTripResponse(t: typeof tripsTable.$inferSelect) {
   return {
     id: t.id,
     customerId: t.customerId,
+    guestName: t.guestName,
+    guestPhone: t.guestPhone,
     driverId: t.driverId,
     cityId: t.cityId,
     pickupLat: t.pickupLat,
@@ -73,6 +76,8 @@ function toTripResponse(t: typeof tripsTable.$inferSelect) {
     dropoffLng: t.dropoffLng,
     dropoffAddress: t.dropoffAddress,
     status: t.status,
+    origin: t.origin,
+    commissionPercent: t.commissionPercent,
     distanceMiles: t.distanceMiles,
     estimatedFare: t.estimatedFareCents != null ? t.estimatedFareCents / 100 : null,
     finalFare: t.finalFareCents != null ? t.finalFareCents / 100 : null,
@@ -338,7 +343,7 @@ const updateStatusRoute = createRoute({
 trips.openapi(updateStatusRoute, async (c) => {
   const authUser = c.get("user")!;
   const { tripId } = c.req.valid("param");
-  const { status } = c.req.valid("json");
+  const { status, dropoffLat, dropoffLng, dropoffAddress } = c.req.valid("json");
   const db = createDb(c.env.DB);
 
   const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId)).limit(1);
@@ -359,20 +364,73 @@ trips.openapi(updateStatusRoute, async (c) => {
 
   const now = new Date();
   const updates: Partial<typeof tripsTable.$inferInsert> = { status: status as any, updatedAt: now };
-  if (status === "TRIP_STARTED") updates.startedAt = now;
+
+  if (status === "TRIP_STARTED") {
+    updates.startedAt = now;
+
+    // Faz 5c — an admin-assigned trip may not have a dropoff yet (the
+    // passenger tells the driver in person); the driver supplies it here.
+    if (trip.dropoffLat == null) {
+      if (dropoffLat == null || dropoffLng == null || !dropoffAddress) {
+        return c.json({ error: "ValidationError", message: "Dropoff location is required to start this trip" }, 400);
+      }
+      const straightLineMiles = haversineMiles(trip.pickupLat, trip.pickupLng, dropoffLat, dropoffLng);
+      const fare = await estimateFare(db, straightLineMiles);
+      updates.dropoffLat = dropoffLat;
+      updates.dropoffLng = dropoffLng;
+      updates.dropoffAddress = dropoffAddress;
+      updates.distanceMiles = fare.distanceMiles;
+      updates.estimatedFareCents = fare.estimatedFareCents;
+      updates.currency = fare.currency;
+
+      // The fare (and so the payments record) couldn't be created at
+      // admin-assignment time since the dropoff wasn't known yet.
+      const [existingPayment] = await db
+        .select({ id: paymentsTable.id })
+        .from(paymentsTable)
+        .where(eq(paymentsTable.tripId, trip.id))
+        .limit(1);
+      if (!existingPayment) {
+        await db.insert(paymentsTable).values({
+          tripId: trip.id,
+          amountCents: fare.estimatedFareCents,
+          currency: fare.currency,
+          method: trip.paymentMethod,
+          status: "PENDING",
+        });
+      }
+    }
+  }
 
   if (status === "TRIP_COMPLETED") {
     updates.completedAt = now;
-    updates.finalFareCents = trip.estimatedFareCents;
+    updates.finalFareCents = updates.estimatedFareCents ?? trip.estimatedFareCents;
     if (trip.driverId) {
       await db
         .update(driverProfilesTable)
         .set({ status: "AVAILABLE", totalTrips: sql`total_trips + 1`, updatedAt: now })
         .where(eq(driverProfilesTable.id, trip.driverId));
-      await db
-        .update(customerProfilesTable)
-        .set({ updatedAt: now })
-        .where(eq(customerProfilesTable.userId, trip.customerId));
+      if (trip.customerId) {
+        await db.update(customerProfilesTable).set({ updatedAt: now }).where(eq(customerProfilesTable.userId, trip.customerId));
+      }
+      if (trip.origin === "ADMIN_ASSIGNED" && trip.commissionPercent != null && updates.finalFareCents != null) {
+        const commissionCents = Math.round((updates.finalFareCents * trip.commissionPercent) / 100);
+        await db.insert(driverTripCommissionsTable).values({
+          driverId: trip.driverId,
+          tripId: trip.id,
+          fareCents: updates.finalFareCents,
+          commissionPercent: trip.commissionPercent,
+          commissionCents,
+        });
+        c.executionCtx.waitUntil(
+          logAudit(db, {
+            entity: "driver_trip_commission",
+            entityId: trip.id,
+            action: AuditAction.DRIVER_COMMISSION_CHARGED,
+            metadata: { driverId: trip.driverId, fareCents: updates.finalFareCents, commissionCents },
+          })
+        );
+      }
     }
     await db.update(paymentsTable).set({ status: "COMPLETED", updatedAt: now }).where(eq(paymentsTable.tripId, trip.id));
   }
@@ -477,3 +535,4 @@ trips.openapi(cancelTripRoute, async (c) => {
 });
 
 export default trips;
+export { toTripResponse };
