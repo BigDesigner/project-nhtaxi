@@ -76,6 +76,19 @@ final adminTripsProvider = FutureProvider<List<AdminTripRow>>((ref) async {
   return raw.map((e) => AdminTripRow.fromJson(e as Map<String, dynamic>)).toList();
 });
 
+/// Marks a trip as referred by GNN LLC, or takes that back.
+///
+/// The office has the last word here on purpose: commission rests on this,
+/// nobody volunteers to pay it, and the office is the one that knows which
+/// jobs it handed out. Refused once a trip is finished — the commission row
+/// is already written by then, and quietly re-deriving money after the fact
+/// is worse than making someone adjust the balance deliberately.
+Future<void> setTripReferral(WidgetRef ref, String tripId, bool referred) async {
+  await ref.read(apiClientProvider).put('/api/admin/trips/$tripId/referral', body: {'referred': referred});
+  ref.invalidate(adminTripsProvider);
+  ref.invalidate(driverBalancesProvider);
+}
+
 final pricingConfigProvider = FutureProvider<PricingConfig>((ref) async {
   final json = await ref.read(apiClientProvider).get('/api/admin/pricing');
   return PricingConfig.fromJson(json);

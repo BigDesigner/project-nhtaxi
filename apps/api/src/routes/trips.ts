@@ -23,6 +23,7 @@ import {
 import type { AppBindings } from "../env";
 import { AuditAction, logAudit } from "../lib/audit";
 import { MAX_SEARCH_ROUNDS } from "../lib/dispatch";
+import { getDriverUsageRates } from "../lib/driver-sessions";
 import { estimateFare } from "../lib/fare";
 import { RoutingUnavailableError, roadDistanceMiles } from "../lib/routing";
 import { sendPushToDriver, sendPushToUser } from "../lib/fcm";
@@ -102,6 +103,7 @@ function toTripResponse(t: typeof tripsTable.$inferSelect) {
     dropoffAddress: t.dropoffAddress,
     status: t.status,
     origin: t.origin,
+    referralSource: t.referralSource,
     commissionPercent: t.commissionPercent,
     searchAttempts: t.searchAttempts,
     nextSearchAt: t.nextSearchAt?.toISOString() ?? null,
@@ -406,7 +408,7 @@ const updateStatusRoute = createRoute({
 trips.openapi(updateStatusRoute, async (c) => {
   const authUser = c.get("user")!;
   const { tripId } = c.req.valid("param");
-  const { status, dropoffLat, dropoffLng, dropoffAddress } = c.req.valid("json");
+  const { status, dropoffLat, dropoffLng, dropoffAddress, gnnReferred } = c.req.valid("json");
   const db = createDb(c.env.DB);
 
   const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId)).limit(1);
@@ -427,6 +429,19 @@ trips.openapi(updateStatusRoute, async (c) => {
 
   const now = new Date();
   const updates: Partial<typeof tripsTable.$inferInsert> = { status: status as any, updatedAt: now };
+
+  // The driver ticked "GNN LLC referred this job" on the accept screen.
+  //
+  // Deliberately one-way: it can only turn a referral on. A driver clearing
+  // one the office already set would be opting themselves out of commission,
+  // which is exactly what the office needs to be able to rely on. The rate is
+  // snapshotted here so a later change to the global percentage cannot
+  // retroactively alter what the driver was shown before they accepted.
+  if (status === "DRIVER_ACCEPTED" && gnnReferred === true && trip.referralSource === "NONE") {
+    const { commissionPercent } = await getDriverUsageRates(db);
+    updates.referralSource = "DRIVER_DECLARED";
+    updates.commissionPercent = commissionPercent;
+  }
 
   // Every mutation this transition performs is collected here and executed
   // as ONE D1 batch (a single implicit transaction) at the end. Running them
@@ -496,7 +511,11 @@ trips.openapi(updateStatusRoute, async (c) => {
       if (trip.customerId) {
         writes.push(db.update(customerProfilesTable).set({ updatedAt: now }).where(eq(customerProfilesTable.userId, trip.customerId)));
       }
-      if (trip.origin === "ADMIN_ASSIGNED" && trip.commissionPercent != null && updates.finalFareCents != null) {
+      // Commission follows referralSource, not origin. Drivers pay rent for
+      // time on the app and ordinary dispatch work is what that rent buys —
+      // only jobs GNN LLC actually referred owe a cut, and a referral can
+      // reach a driver by several routes that all look like different origins.
+      if (trip.referralSource !== "NONE" && trip.commissionPercent != null && updates.finalFareCents != null) {
         chargedCommissionCents = Math.round((updates.finalFareCents * trip.commissionPercent) / 100);
         writes.push(
           db.insert(driverTripCommissionsTable).values({

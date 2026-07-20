@@ -10,6 +10,7 @@ import {
   AdminUpdateUserRequestSchema,
   AdminUserSchema,
   AdminVerifyDriverRequestSchema,
+  SetTripReferralRequestSchema,
   AuditLogEntrySchema,
   AuditLogQuerySchema,
   AuthResponseSchema,
@@ -811,6 +812,7 @@ admin.openapi(tripReportRoute, async (c) => {
       customerId: tripsTable.customerId,
       customerFirstName: customerUser.firstName,
       customerLastName: customerUser.lastName,
+      referralSource: tripsTable.referralSource,
       distanceMiles: tripsTable.distanceMiles,
       estimatedFareCents: tripsTable.estimatedFareCents,
       finalFareCents: tripsTable.finalFareCents,
@@ -835,6 +837,7 @@ admin.openapi(tripReportRoute, async (c) => {
     driverName: r.driverFirstName ? `${r.driverFirstName} ${r.driverLastName}` : null,
     customerId: r.customerId,
     customerName: `${r.customerFirstName} ${r.customerLastName}`,
+    referralSource: r.referralSource,
     distanceMiles: r.distanceMiles,
     estimatedFare: r.estimatedFareCents != null ? r.estimatedFareCents / 100 : null,
     finalFare: r.finalFareCents != null ? r.finalFareCents / 100 : null,
@@ -1330,6 +1333,9 @@ admin.openapi(adminCreateTripRoute, async (c) => {
       notes: body.notes,
       status: "DRIVER_ASSIGNED",
       origin: "ADMIN_ASSIGNED",
+      // The office picked this driver, so it is a referral by definition —
+      // the driver's checkbox arrives already ticked and they just accept.
+      referralSource: "ADMIN_ASSIGNED",
       commissionPercent,
       assignedAt: now,
     })
@@ -1369,6 +1375,79 @@ admin.openapi(adminCreateTripRoute, async (c) => {
   }
 
   return c.json(toTripResponse(trip), 201);
+});
+
+// ─── PUT /trips/{tripId}/referral — did GNN LLC refer this job? ───────────
+//
+// The office has the last word on this, by design. Commission rests on it,
+// and nobody volunteers to pay commission — a system that trusted only the
+// driver's checkbox would quietly lose money on every job they forgot or
+// chose not to tick. The office knows what it handed out, so it can always
+// correct the record, and every change is audit-logged so a later dispute has
+// something to read.
+//
+// Only takes effect before completion: once the trip is done the commission
+// row is already written, and silently re-deriving money after the fact is
+// worse than making someone do it deliberately.
+const adminSetTripReferralRoute = createRoute({
+  method: "put",
+  path: "/trips/{tripId}/referral",
+  tags: ["admin"],
+  summary: "Mark (or unmark) a trip as referred by GNN LLC",
+  request: {
+    params: z.object({ tripId: z.string() }),
+    body: { required: true, content: { "application/json": { schema: SetTripReferralRequestSchema } } },
+  },
+  responses: {
+    200: { description: "Updated", content: { "application/json": { schema: TripResponseSchema } } },
+    400: { description: "Trip already finished", content: { "application/json": { schema: ErrorResponseSchema } } },
+    404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+admin.openapi(adminSetTripReferralRoute, async (c) => {
+  const authUser = c.get("user")!;
+  const { tripId } = c.req.valid("param");
+  const { referred } = c.req.valid("json");
+  const db = createDb(c.env.DB);
+
+  const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId)).limit(1);
+  if (!trip) return c.json({ error: "NotFound", message: "Trip not found" }, 404);
+
+  if (trip.status === "TRIP_COMPLETED") {
+    return c.json(
+      {
+        error: "InvalidState",
+        message: "This trip is finished and its commission is already booked. Adjust the driver's balance instead.",
+      },
+      400
+    );
+  }
+
+  const { commissionPercent } = await getDriverUsageRates(db);
+  const [updated] = await db
+    .update(tripsTable)
+    .set(
+      referred
+        ? { referralSource: "ADMIN_MARKED", commissionPercent, updatedAt: new Date() }
+        : { referralSource: "NONE", commissionPercent: null, updatedAt: new Date() }
+    )
+    .where(eq(tripsTable.id, tripId))
+    .returning();
+
+  c.executionCtx.waitUntil(
+    logAudit(db, {
+      entity: "trip",
+      entityId: tripId,
+      action: AuditAction.TRIP_REFERRAL_CHANGED,
+      actorId: authUser.userId,
+      actorRole: "admin",
+      metadata: { from: trip.referralSource, to: updated!.referralSource, commissionPercent },
+      ipAddress: clientIp(c),
+    })
+  );
+
+  return c.json(toTripResponse(updated!), 200);
 });
 
 // ─── PUT /trips/{tripId}/reassign — pick a different driver (Faz 5c) ──────

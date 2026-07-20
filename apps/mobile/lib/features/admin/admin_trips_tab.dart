@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api_client.dart';
 import '../../core/fare_range.dart';
 import '../../models/admin.dart';
 import '../../widgets/error_banner.dart';
@@ -103,30 +104,83 @@ class _TripSections extends StatelessWidget {
   }
 }
 
-class _TripCard extends StatelessWidget {
+class _TripCard extends ConsumerStatefulWidget {
   const _TripCard({required this.trip, required this.accent});
 
   final AdminTripRow trip;
   final Color? accent;
 
   @override
+  ConsumerState<_TripCard> createState() => _TripCardState();
+}
+
+class _TripCardState extends ConsumerState<_TripCard> {
+  bool _busy = false;
+
+  Future<void> _toggleReferral() async {
+    setState(() => _busy = true);
+    try {
+      await setTripReferral(ref, widget.trip.tripId, !widget.trip.isReferred);
+    } on ApiException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final trip = widget.trip;
+    // Commission is settled the moment a trip completes, so the flag stops
+    // being editable there — see the API, which refuses it too.
+    final canChange = trip.status != 'TRIP_COMPLETED';
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: Icon(Icons.local_taxi, color: accent),
-        title: Text(trip.customerName),
-        subtitle: Text(
-          [
-            trip.driverName ?? 'No driver yet',
-            trip.status.toLowerCase().replaceAll('_', ' '),
-            _formatDate(trip.requestedAt),
-          ].join(' · '),
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        trailing: trip.displayFare == null
-            ? null
-            : Text(formatFare(trip.displayFare!, currency: trip.currency)),
+      child: Column(
+        children: [
+          ListTile(
+            leading: Icon(Icons.local_taxi, color: widget.accent),
+            title: Text(trip.customerName),
+            subtitle: Text(
+              [
+                trip.driverName ?? 'No driver yet',
+                trip.status.toLowerCase().replaceAll('_', ' '),
+                _formatDate(trip.requestedAt),
+              ].join(' · '),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            trailing: trip.displayFare == null
+                ? null
+                : Text(formatFare(trip.displayFare!, currency: trip.currency)),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+            child: Row(
+              children: [
+                Icon(
+                  trip.isReferred ? Icons.handshake : Icons.handshake_outlined,
+                  size: 16,
+                  color: trip.isReferred ? Colors.green : Theme.of(context).disabledColor,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    trip.isReferred ? 'Referred by GNN LLC — commission applies' : 'No commission',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                if (_busy)
+                  const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                else if (canChange)
+                  TextButton(
+                    onPressed: _toggleReferral,
+                    child: Text(trip.isReferred ? 'Not referred' : 'Mark referred'),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

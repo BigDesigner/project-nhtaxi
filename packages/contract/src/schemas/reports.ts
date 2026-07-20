@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { PAYMENT_METHODS, TRIP_STATUSES } from "./trips";
+import { PAYMENT_METHODS, REFERRAL_SOURCES, TRIP_STATUSES } from "./trips";
 
 // ─── Admin trip/fare report (L16 — tax + security reporting) ───────────────
 export const TripReportQuerySchema = z.object({
@@ -23,6 +23,7 @@ export const TripReportRowSchema = z
     driverName: z.string().nullable(),
     customerId: z.string(),
     customerName: z.string(),
+    referralSource: z.enum(REFERRAL_SOURCES),
     distanceMiles: z.number().nullable(),
     estimatedFare: z.number().nullable(),
     finalFare: z.number().nullable(),

@@ -116,8 +116,13 @@ class DriverTripsController extends AsyncNotifier<List<Trip>> {
 
   /// Drives the whole job through its states: accept, decline, on my way,
   /// arrived, passenger aboard, dropped off.
-  Future<void> setStatus(String tripId, String status) async {
-    await ref.read(apiClientProvider).put('/api/trips/$tripId/status', body: {'status': status});
+  Future<void> setStatus(String tripId, String status, {bool? gnnReferred}) async {
+    await ref.read(apiClientProvider).put(
+      '/api/trips/$tripId/status',
+      // Only sent on accept; the server ignores it elsewhere and will not let
+      // it clear a referral the office already set.
+      body: {'status': status, 'gnnReferred': ?gnnReferred},
+    );
     await refresh();
     // Accepting or finishing a job moves the driver between AVAILABLE and
     // BUSY, and finishing an admin-assigned one books a commission charge.

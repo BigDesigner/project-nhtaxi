@@ -1,0 +1,1 @@
+ALTER TABLE `trips` ADD `referral_source` text DEFAULT 'NONE' NOT NULL;

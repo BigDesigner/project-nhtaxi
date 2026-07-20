@@ -37,6 +37,12 @@ export const PAYMENT_METHODS = ["cash"] as const;
 // which owes GNN LLC a commission (see commissionPercent below).
 export const TRIP_ORIGINS = ["CUSTOMER_APP", "ADMIN_ASSIGNED"] as const;
 
+// What decides whether a trip owes GNN LLC commission. See REFERRAL_SOURCES
+// in packages/db for the full reasoning — in short, drivers pay rent for time
+// on the app and ordinary dispatch work is what that rent buys, so only jobs
+// GNN LLC actually referred carry a cut.
+export const REFERRAL_SOURCES = ["NONE", "ADMIN_ASSIGNED", "DRIVER_DECLARED", "ADMIN_MARKED"] as const;
+
 export const CreateTripRequestSchema = z
   .object({
     pickupLat: z.number().min(-90).max(90),
@@ -58,6 +64,11 @@ export const CreateTripRequestSchema = z
 export const UpdateTripStatusRequestSchema = z
   .object({
     status: z.enum(CLIENT_SETTABLE_TRIP_STATUSES),
+    // Set by the driver when accepting: "GNN LLC referred this job to me".
+    // Only read on the DRIVER_ACCEPTED transition, and only capable of
+    // turning a referral *on* — a driver cannot clear one the office set,
+    // which would let them opt out of commission after the fact.
+    gnnReferred: z.boolean().optional(),
     // Faz 5c — only required when transitioning to TRIP_STARTED on a trip
     // that has no dropoff yet (an admin-assigned trip whose destination
     // wasn't known at booking time); ignored otherwise. All-or-nothing.
@@ -109,6 +120,7 @@ export const TripResponseSchema = z
     dropoffAddress: z.string().nullable(),
     status: z.enum(TRIP_STATUSES),
     origin: z.enum(TRIP_ORIGINS),
+    referralSource: z.enum(REFERRAL_SOURCES),
     // Driver-search progress. The client renders its countdown from
     // nextSearchAt rather than its own timer, so every screen showing this
     // trip counts down to the same instant.
@@ -131,6 +143,14 @@ export const TripResponseSchema = z
     completedAt: z.string().nullable(),
   })
   .openapi("TripResponse");
+
+// Admin has the last word on whether a job was referred: nobody volunteers to
+// pay commission, and the office knows what it handed out.
+export const SetTripReferralRequestSchema = z
+  .object({
+    referred: z.boolean(),
+  })
+  .openapi("SetTripReferralRequest");
 
 export const TripEventResponseSchema = z
   .object({

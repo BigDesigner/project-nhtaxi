@@ -34,10 +34,10 @@ class JobActions extends ConsumerStatefulWidget {
 class _JobActionsState extends ConsumerState<JobActions> {
   bool _busy = false;
 
-  Future<void> _send(String status) async {
+  Future<void> _send(String status, {bool? gnnReferred}) async {
     setState(() => _busy = true);
     try {
-      await ref.read(driverTripsProvider.notifier).setStatus(widget.job.id, status);
+      await ref.read(driverTripsProvider.notifier).setStatus(widget.job.id, status, gnnReferred: gnnReferred);
     } on ApiException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
@@ -46,36 +46,17 @@ class _JobActionsState extends ConsumerState<JobActions> {
   }
 
   Future<void> _accept() async {
-    // A commission is money out of the driver's pocket, so it gets an
-    // explicit confirmation with the figure spelled out — accepting must
-    // never be the moment they find out what it costs.
-    if (widget.job.commissionPercent != null) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('This job pays GNN LLC a commission'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'The office assigned you this job. If you take it, '
-                '${widget.job.commissionPercent!.toStringAsFixed(0)}% of the fare goes to GNN LLC '
-                'and is added to what you owe.',
-              ),
-              const SizedBox(height: 16),
-              _CommissionBreakdown(job: widget.job),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Not this one')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Accept job')),
-          ],
-        ),
-      );
-      if (ok != true) return;
-    }
-    await _send('DRIVER_ACCEPTED');
+    // Every acceptance goes through this, not just the office's own
+    // assignments. A referral can reach a driver by a phone call the app never
+    // sees — the office rings the passenger and says "ask for Dan" — and only
+    // the driver knows that happened. The box is how they say so.
+    final referred = await showDialog<bool>(
+      context: context,
+      builder: (context) => _AcceptJobDialog(job: widget.job),
+    );
+    if (referred == null) return;
+
+    await _send('DRIVER_ACCEPTED', gnnReferred: referred);
   }
 
   Future<void> _decline() async {
@@ -126,6 +107,103 @@ class _JobActionsState extends ConsumerState<JobActions> {
       icon: Icon(step.icon),
       label: Text(step.label),
       style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+    );
+  }
+}
+
+/// The accept screen, including the one question only the driver can answer.
+///
+/// Returns true/false for "GNN LLC referred this", or null if they backed out.
+class _AcceptJobDialog extends StatefulWidget {
+  const _AcceptJobDialog({required this.job});
+
+  final Trip job;
+
+  @override
+  State<_AcceptJobDialog> createState() => _AcceptJobDialogState();
+}
+
+class _AcceptJobDialogState extends State<_AcceptJobDialog> {
+  late bool _referred = widget.job.isReferred;
+
+  @override
+  Widget build(BuildContext context) {
+    final job = widget.job;
+    // When the office assigned the job it already knows, so the box arrives
+    // ticked and locked. Letting a driver untick it here would be letting them
+    // opt out of commission on exactly the jobs that owe it — the server
+    // refuses this too, but a control that looks editable and silently isn't
+    // is worse than one that plainly can't be touched.
+    final locked = job.referralSetByOffice;
+
+    // The rate is only snapshotted on the trip once a referral exists. Before
+    // that we can't show a figure, so the box explains in words instead.
+    final percent = job.commissionPercent;
+    final fare = job.displayFare;
+
+    return AlertDialog(
+      title: const Text('Accept this job?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (fare != null) ...[
+            _JobLine(label: 'Fare you collect in cash', value: formatFare(fare, currency: job.currency)),
+            const SizedBox(height: 12),
+          ],
+          CheckboxListTile(
+            value: _referred,
+            onChanged: locked ? null : (v) => setState(() => _referred = v ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('GNN LLC sent me this job'),
+            subtitle: Text(
+              locked
+                  ? 'The office assigned this job to you.'
+                  : 'Tick this if the office put this passenger in touch with you.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          if (_referred) ...[
+            const Divider(height: 20),
+            if (percent != null && fare != null)
+              _CommissionBreakdown(job: job)
+            else
+              Text(
+                'A share of this fare will go to GNN LLC and be added to what you owe. '
+                'The exact figure appears on the job once it is accepted.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+          ] else
+            Text(
+              'No commission on this one — it is covered by what you already pay '
+              'for time on the app.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Not this one')),
+        FilledButton(onPressed: () => Navigator.pop(context, _referred), child: const Text('Accept job')),
+      ],
+    );
+  }
+}
+
+class _JobLine extends StatelessWidget {
+  const _JobLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
+      ],
     );
   }
 }

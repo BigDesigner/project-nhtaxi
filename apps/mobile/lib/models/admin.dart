@@ -172,6 +172,7 @@ class AdminTripRow {
     required this.requestedAt,
     required this.customerName,
     required this.currency,
+    required this.referralSource,
     this.completedAt,
     this.driverId,
     this.driverName,
@@ -187,6 +188,11 @@ class AdminTripRow {
   final String? driverId;
   final String? driverName;
   final String customerName;
+
+  /// Whether GNN LLC referred this job, and so whether it owes commission.
+  final String referralSource;
+
+  bool get isReferred => referralSource != 'NONE';
   final double? distanceMiles;
   final double? estimatedFare;
   final double? finalFare;
@@ -208,6 +214,7 @@ class AdminTripRow {
         driverId: json['driverId'] as String?,
         driverName: json['driverName'] as String?,
         customerName: json['customerName'] as String? ?? 'Guest',
+        referralSource: json['referralSource'] as String? ?? 'NONE',
         distanceMiles: (json['distanceMiles'] as num?)?.toDouble(),
         estimatedFare: (json['estimatedFare'] as num?)?.toDouble(),
         finalFare: (json['finalFare'] as num?)?.toDouble(),

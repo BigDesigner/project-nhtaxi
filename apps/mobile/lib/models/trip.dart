@@ -19,6 +19,7 @@ class Trip {
     this.nextSearchAt,
     this.maxSearchAttempts = 0,
     this.origin = 'CUSTOMER_APP',
+    this.referralSource = 'NONE',
     this.commissionPercent,
     this.pickupLat,
     this.pickupLng,
@@ -50,6 +51,16 @@ class Trip {
   /// CUSTOMER_APP for an ordinary booking, ADMIN_ASSIGNED when an admin
   /// hand-picked the driver — the latter owes GNN LLC a cut of the fare.
   final String origin;
+
+  /// Whether GNN LLC referred this job — and so whether commission is owed.
+  /// NONE / ADMIN_ASSIGNED / DRIVER_DECLARED / ADMIN_MARKED.
+  final String referralSource;
+
+  /// Set by the office, so the driver's checkbox arrives already ticked and
+  /// they cannot untick it.
+  bool get referralSetByOffice => referralSource == 'ADMIN_ASSIGNED' || referralSource == 'ADMIN_MARKED';
+
+  bool get isReferred => referralSource != 'NONE';
 
   /// The percentage of the fare the driver owes GNN LLC. Only set on
   /// ADMIN_ASSIGNED trips, and it must be shown to the driver *before* they
@@ -172,6 +183,7 @@ class Trip {
         nextSearchAt: json['nextSearchAt'] == null ? null : DateTime.parse(json['nextSearchAt'] as String),
         maxSearchAttempts: (json['maxSearchAttempts'] as num?)?.toInt() ?? 0,
         origin: json['origin'] as String? ?? 'CUSTOMER_APP',
+        referralSource: json['referralSource'] as String? ?? 'NONE',
         commissionPercent: (json['commissionPercent'] as num?)?.toDouble(),
         pickupLat: (json['pickupLat'] as num?)?.toDouble(),
         pickupLng: (json['pickupLng'] as num?)?.toDouble(),
