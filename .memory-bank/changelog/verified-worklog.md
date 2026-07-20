@@ -363,6 +363,49 @@ start/stop, and the position providers' filtering (one driver vs. the whole
 fleet). Zero backend changes — LocationHub was already correct; only the
 client side was missing.
 
+### Brevo transactional email — signup, password change, trip completion
+`lib/email.ts` calls Brevo's HTTP API directly with `fetch()`, no SDK — same
+reasoning as the FCM push integration: their client libraries assume Node,
+this Worker doesn't have it, and the surface actually needed is one endpoint.
+`BREVO_API_KEY` follows the exact rollout pattern as
+`FCM_SERVICE_ACCOUNT_KEY`: empty/unset means "not configured yet", every send
+silently no-ops, and the feature ships ahead of the secret existing. **The
+secret is not yet set in production** — the user sets it themselves via
+`wrangler secret put BREVO_API_KEY` (never typed into chat; see
+`.specs/bootstrap.md`), and nothing above needs touching once they do.
+
+Four best-effort call sites, all fired via `c.executionCtx.waitUntil(...)`
+alongside the existing push/audit calls on the same transitions:
+- Passenger and driver registration → a welcome email to the new account,
+  plus a notice to every active admin (`getAdminEmails` — queries
+  `users` for `role='admin' AND isActive`, so this already works whether
+  GNN LLC ever has one admin or several). For a driver this is the notice
+  that starts the office's document-review clock.
+- Password changed → a security notice to the account, alongside the
+  existing "every session revoked" behaviour on that same route.
+- Trip completed → a summary to the passenger (skipped for a guest/referral
+  trip — no registered account means no inbox to reach) and a fuller copy to
+  the office naming the driver and the fare. Wired into **both** completion
+  paths: the ordinary status transition (`routes/trips.ts`) and the
+  referral-trip endpoint from wave B (`routes/referral_trips.ts`) — a
+  referral trip never has a `customerId`, so only the office copy fires
+  there, which is exactly the record a job with no passenger account behind
+  it most needs.
+
+`test/stub-routing.ts` — already the guard that stops the suite reaching the
+real routing service — now does the same for Brevo, capturing what would
+have been sent (`capturedEmails()`) so tests assert on the real payload
+without ever sending mail. 9 new tests: `sendEmail`'s no-op paths and a
+successful-send payload shape, `getAdminEmails` filtering out drivers/
+passengers/deactivated admins, and `sendTripCompletedEmails` covering a
+registered passenger, a guest/referral trip, and the no-admins case.
+
+**Not yet detailed, on purpose:** templates are plain HTML with no branding —
+content and layout were explicitly left for later. A "reports by email"
+category the user mentioned has no natural trigger event yet (unlike
+registration/password-change/trip-completion, which are all real moments)
+and needs its own design pass before it's built.
+
 ## Known Incomplete Work
 - **Push notifications deliver nothing, and the missing piece is bigger than
   it was recorded as.** This was previously noted as "waiting for the Firebase
@@ -579,14 +622,13 @@ same pattern is worth applying to the other routers if they're ever touched.
 
 ## Validation Status
 
-As of commit `b7733ce` (Faz 7 Wave 3), everything below is deployed and
+As of commit `d1a3f2e` (Brevo email), everything below is deployed and
 verified against production.
 
-- Backend: 157/157 vitest tests passing (real D1/DO via
-  `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean. Untouched by
-  Wave 3 — LocationHub was already correct; only the Flutter client side was
-  missing.
-- Mobile: 70/70 Flutter tests passing, `flutter analyze` clean.
+- Backend: 166/166 vitest tests passing (real D1/DO via
+  `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean.
+- Mobile: 70/70 Flutter tests passing, `flutter analyze` clean. Untouched by
+  the Brevo wave — no Flutter change was needed.
 - CI `Deploy` + `Mobile` workflows green; live on `api.nhtaxi.com` and
   `gnncab-preview.pages.dev`.
 - Migrations `0004`–`0006` were single `ALTER TABLE … ADD COLUMN` statements,
@@ -620,6 +662,14 @@ verified against production.
     needs a real phone with GPS. Everything the client depends on the server
     still doing correctly was checked; the new client code itself wants a
     device test.
+  - Brevo: registering a passenger and changing that account's password on
+    production both still return 201/200 with the email calls wired in —
+    proves the new `waitUntil`s don't break the request they ride on.
+    **Not yet proven live: an email actually arriving anywhere.** `BREVO_API_KEY`
+    isn't set in production yet, so every send today takes the same no-op
+    path the test suite exercises. Once the user runs
+    `wrangler secret put BREVO_API_KEY`, register a test account and confirm
+    the welcome email and the admin notice both land.
 
 ### Test accounts in production
 The drivers visible in the admin panel are from live smoke tests, not real
