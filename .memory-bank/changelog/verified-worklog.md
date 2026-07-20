@@ -158,31 +158,6 @@ by two driver-owed revenue streams for GNN LLC.
 - Added footer navigation (Home/Profile/Settings) with icon-based tabs.
 - Added a sign-out confirmation dialog instead of signing out on a single tap.
 
-### Faz 9 — Admin Panel & Driver Photos
-- Admin shell (Drivers / Trips / Money / Settings), again built against
-  endpoints that already existed.
-- Drivers tab leads with the approval queue, because an unverified driver
-  cannot go online at all and a sign-up lost in an alphabetical list is
-  someone who cannot work. Approving is one tap; withdrawing approval asks
-  first, since it takes a working driver off shift.
-- Money tab: total outstanding across the fleet, split usage-fee vs
-  commission, sorted by who owes most, plus the cash-collection log.
-  Recording a payment pre-fills the full outstanding amount and invalidates
-  both views, so the same cash can't be recorded twice.
-- Trips tab pulls TIMEOUT / DRIVER_NO_RESPONSE rows to the top — the only
-  ones the office must act on. Phoned-in bookings are guest-only by design.
-- Settings edits both revenue streams, kept visually separate because the
-  passenger fare and the driver's debt are different businesses sharing a row.
-- **Driver photos**: stored in the *existing* R2 bucket under an `avatars/`
-  prefix, unencrypted (unlike the identity documents beside them, which stay
-  envelope-encrypted and admin-only), and served through an authenticated
-  Worker route rather than a public URL — it's a person's face, and an
-  unguessable URL is not access control. The serve route refuses any key
-  outside `avatars/`, with a test proving a `photoKey` pointed at a document
-  yields 404 rather than leaking it. SVG uploads rejected (script vector).
-  Flutter fetches the bytes through the API client, since `NetworkImage`
-  can't carry a Bearer token on the web build.
-
 ### Faz 8 — Driver App
 Built almost entirely against endpoints that already existed (`/api/driver/*`
 and the shared trip routes), so this wave was a Flutter build rather than new
@@ -210,35 +185,126 @@ backend work.
 - Vehicle details editable from Profile, since that's what the passenger
   driver map renders.
 
+### Faz 9 — Admin Panel & Driver Photos
+- Admin shell (Drivers / Trips / Money / Settings), again built against
+  endpoints that already existed.
+- Drivers tab leads with the approval queue, because an unverified driver
+  cannot go online at all and a sign-up lost in an alphabetical list is
+  someone who cannot work. Approving is one tap; withdrawing approval asks
+  first, since it takes a working driver off shift.
+- Money tab: total outstanding across the fleet, split usage-fee vs
+  commission, sorted by who owes most, plus the cash-collection log.
+  Recording a payment pre-fills the full outstanding amount and invalidates
+  both views, so the same cash can't be recorded twice.
+- Trips tab pulls TIMEOUT / DRIVER_NO_RESPONSE rows to the top — the only
+  ones the office must act on. Phoned-in bookings are guest-only by design.
+- Settings edits both revenue streams, kept visually separate because the
+  passenger fare and the driver's debt are different businesses sharing a row.
+- **Driver photos**: stored in the *existing* R2 bucket under an `avatars/`
+  prefix, unencrypted (unlike the identity documents beside them, which stay
+  envelope-encrypted and admin-only), and served through an authenticated
+  Worker route rather than a public URL — it's a person's face, and an
+  unguessable URL is not access control. The serve route refuses any key
+  outside `avatars/`, with a test proving a `photoKey` pointed at a document
+  yields 404 rather than leaking it. SVG uploads rejected (script vector).
+  Flutter fetches the bytes through the API client, since `NetworkImage`
+  can't carry a Bearer token on the web build.
+
+### Faz 10 — Correct pricing, signup agreements, password rotation
+Three unrelated things that landed together, each one a gap that mattered.
+- **Driving distance became real.** See "Distance is real driving distance"
+  below — this was the single most valuable fix in the project so far.
+- **Sign-up now requires accepting terms**, with separate passenger and
+  driver documents, enforced server-side and recorded per account. See
+  "Sign-up requires accepting terms" below.
+- **Change password** (`PUT /api/auth/password`). Until this there was no way
+  to rotate a credential at all — a leaked password could only be changed by
+  editing the database by hand. It asks for the current password even though
+  the caller already holds a token (a phone left unlocked must not be enough
+  to take an account), revokes every existing session including the calling
+  device's (the usual reason to change a password is that somebody else has
+  it), and hands back a fresh session so the person doing it isn't signed out
+  of the app they're standing in. Reachable from all three roles' settings.
+- Fixed a test that had failed twice under full-suite load while passing
+  alone: it waited for "the next WebSocket frame" and asserted on its type,
+  which is order-dependent with thirty sends in flight. A test that fails
+  randomly in CI blocks deploys for no reason and teaches people to re-run
+  rather than look.
+
+### Testing Round 3 — 10 items
+Mostly questions and two real bugs.
+- **Driver sign-up was unreachable.** "Drive with us" looked dead; it was
+  navigating correctly and being bounced straight back. The redirect guard
+  matched `/signup` by exact equality, so `/signup/driver` counted as a
+  protected page for an anonymous visitor. Now a prefix match over the
+  pre-login subtree, with a test asserting every route under the auth screens
+  is reachable without a session. The existing router test only checked route
+  *shape*, which is exactly why this slipped through.
+- **Passenger home screen split.** It listed every trip ever taken, pushing
+  the useful part off the bottom. Home now shows only what is happening now
+  (including a timed-out search, which is technically over but is the thing a
+  passenger most wants to restart); everything else moved to a new Trips tab
+  grouped into in-progress / completed / cancelled.
+- **Driver map no longer disappears** when nobody is on shift. Replacing the
+  whole screen with a sentence read as a failure and gave no way to tell "no
+  drivers" apart from "the map didn't load".
+- Renamed the admin assign-a-job entry, which was called "Phoned-in booking"
+  and wasn't recognisable as the way to send a driver to a pickup — the user
+  couldn't find a feature that had been built and working.
+
+### Faz 11 wave A — Commission follows referrals, not origin
+The business model, stated plainly because the code now depends on it:
+**drivers pay rent for time on the app, and ordinary dispatch work is what
+that rent buys.** Commission is owed *only* on jobs GNN LLC referred. Taking
+a cut of everything would be charging twice for the same thing.
+
+Commission used to key off `origin`, so it only ever landed on admin-panel
+assignments. That missed the commonest referral by far: the office rings a
+passenger, says "download the app and ask for Dan", and the trip arrives
+looking like any other booking. Nobody was charged for those.
+
+`referralSource` now decides, and records who said so — see "Referrals and
+commission" below for the full mechanism.
+
 ## Known Incomplete Work
 
-- **Metered fare from the actual trip** — the driver already marks "passenger
-  is in the car" (TRIP_STARTED) and "dropped off" (TRIP_COMPLETED), but the
-  final fare still just copies the booking estimate
-  (`finalFareCents = estimatedFareCents` in `routes/trips.ts`). Making it
-  reflect what actually happened needs a decision on the basis: time elapsed,
-  distance really travelled (from LocationHub's position stream), or both.
-  The passenger-side quote is already presented as a floor with a +10%
-  ceiling precisely so this can move without breaking a promise.
-- **No way to change a password.** There is no change-password or
-  password-reset endpoint anywhere. A compromised or shared password can only
-  be rotated by editing the database by hand. This matters now: the
-  production admin password was generated in-session during Faz 2 and has
-  been sitting in plain text in chat transcripts and personal notes ever
-  since, with no way to rotate it.
-- **Phase 7 Wave 3 / live tracking** — see below.
-- **Phase 7 Wave 3**: WebSocket live driver-position updates in the app
-  (LocationHub DO already exists server-side; the Flutter client doesn't
-  consume it yet — the driver map currently shows a static snapshot,
-  refreshable by pull/tap only).
+- **Faz 11 wave B — live referral trips, breadcrumbs, metered fare.** Agreed
+  and specified, not yet built. The driver taps a Referral button at the
+  kerb: a trip opens at their current GPS, position breadcrumbs are recorded
+  every ~30s while it runs, they tap "dropped off" and it closes at their
+  current GPS, and the fare comes from the real route rather than a booking
+  estimate. The office sees the path drawn on a map.
+  - This replaces an earlier idea of a manual "log a past job" form. The
+    live version is better because it removes driver-declared amounts
+    entirely — coordinates and timings are captured as they happen, and the
+    system computes the fare. The remaining weakness (did they tap in the
+    right places?) is much smaller, and the office referred the job so it can
+    sanity-check.
+  - Blocks **metered fare**: `finalFareCents` still copies
+    `estimatedFareCents` in `routes/trips.ts`. Open decision when it lands —
+    charge the routed distance between real pickup and dropoff (reproducible,
+    immune to GPS jitter, can't be inflated by a wandering route) versus the
+    summed breadcrumb distance (reflects detours but inflates with jitter).
+    The passenger quote is already framed as a floor with a +10% ceiling so
+    this can move without breaking a promise.
+  - Needs `DRIVER_REFERRAL` added to `TRIP_ORIGINS`, which means rewriting a
+    CHECK constraint, which in SQLite means rebuilding the trips table. That
+    is the exact operation that failed twice against remote D1. **Give it its
+    own migration with nothing else riding on it.**
+- **Phase 7 Wave 3**: WebSocket live driver-position updates in the app.
+  LocationHub exists server-side; the Flutter client doesn't consume it yet,
+  so the driver map is a static snapshot refreshed by pull/tap. Overlaps with
+  breadcrumbs above — worth doing together.
 - **Firebase service-account key** not yet supplied — push notifications are
   wired and deployed but silently no-op.
 - **Custom domain** `gnncab.nhtaxi.com` → `gnncab-preview.pages.dev` needs to
   be attached in the Cloudflare dashboard (user-owned step; CORS is already
   configured for it).
-- Driver sign-up doesn't collect a profile photo yet — `DirectoryDriver.photoUrl`
-  exists in the API response and is wired through the Flutter model/UI, just
-  always `null` until driver registration adds an avatar upload.
+- **Public OSRM instance** is what prices every trip today. It is a demo
+  service, not a production one, and can rate-limit us — at which point
+  quoting fails closed (503) rather than returning a wrong price. Move
+  `ROUTING_BASE_URL` to a self-hosted or paid OSRM-compatible endpoint before
+  real volume. Config only, no code change.
 
 ## How Things Work — Non-Obvious Mechanisms
 
@@ -374,6 +440,39 @@ to OpenStreetMap for lookup and device tokens to Firebase for notifications.
 Overclaiming would be worse than saying nothing. If a third-party service is
 ever added, these documents need updating.
 
+### Referrals and commission
+**The rule: drivers pay rent for time on the app; ordinary dispatch work is
+what that rent buys. Commission is owed only on jobs GNN LLC referred.** This
+is not a platform taking a cut of everything, and code that assumes otherwise
+is wrong.
+
+`trips.referralSource` decides — never `origin`, which cannot express it. A
+referral reaches a driver by three different routes that all look like
+different origins:
+
+| How it happened | What sets the flag |
+|---|---|
+| Office picked the driver in the admin panel | `ADMIN_ASSIGNED`, set at creation |
+| Office phoned the passenger ("ask for Dan") — arrives as an ordinary booking | `DRIVER_DECLARED`, driver ticks the box |
+| Office set it afterwards | `ADMIN_MARKED` |
+
+Two rules hold the money together:
+
+1. **The driver's tick is one-way.** `gnnReferred: true` can turn a referral
+   on; it can never clear one the office set. Otherwise a driver could opt out
+   of commission on exactly the jobs that owe it and nobody would notice. The
+   rate is snapshotted at that moment so a later change to the global
+   percentage can't rewrite what they agreed to before accepting.
+2. **The office has the last word.** Nobody volunteers to pay commission, so
+   a system resting only on the driver's tick would quietly lose money on
+   every job they forgot. `PUT /api/admin/trips/{id}/referral` sets or clears
+   it on any *live* trip, audit-logged. Refused once completed: the commission
+   row is written by then, and silently re-deriving money after the fact is
+   worse than making someone adjust the balance deliberately.
+
+`routes/referral-commission.test.ts` pins all of this, including the
+one-way rule, the rate snapshot and the admin-only permission.
+
 ### Fare presentation
 Booking quotes come from straight-line distance against a rate card, so a
 single exact figure reads as a promise and turns any normal re-route or
@@ -398,17 +497,33 @@ same pattern is worth applying to the other routers if they're ever touched.
 
 ## Validation Status
 
-- Backend: 129/129 vitest tests passing (real D1/DO via
+As of commit `77323af` (Faz 11 wave A), everything below is deployed and
+verified against production.
+
+- Backend: 143/143 vitest tests passing (real D1/DO via
   `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean.
-- Mobile: 41/41 Flutter tests passing, `flutter analyze` clean.
-- **Not yet deployed or live smoke-tested**: the fare/marker fixes and the
-  whole driver app are committed locally but unpushed at the user's request.
-  The usual rule still applies — deploy, then verify against production
-  before calling any of it done.
-- Last verified deploy was commit `73ad5ec`: CI green, live against
-  `api.nhtaxi.com` and `gnncab-preview.pages.dev`, `GET /api/drivers`
-  returning 200 (empty list, no drivers registered yet) and 401 when
-  unauthenticated.
+- Mobile: 44/44 Flutter tests passing, `flutter analyze` clean.
+- CI `Deploy` + `Mobile` workflows green; live on `api.nhtaxi.com` and
+  `gnncab-preview.pages.dev`.
+- Migrations `0004`–`0006` all applied cleanly to remote D1. All three were
+  single `ALTER TABLE … ADD COLUMN` statements — deliberately, since the two
+  migrations that ever failed remotely were table rebuilds.
+- Live smoke tests run against production, not just CI:
+  - **Driving distance is right.** North Conway → Boston Logan quotes
+    136.27 mi (real drive ~135–140); → Portland ME quotes 65.04 mi (real
+    ~62). For contrast, the straight-line-only version quoted 117 mi and the
+    straight-line×1.3 version quoted 151.8 — under- and over-charging
+    respectively, which is why no single factor was ever going to work.
+  - Registration without accepting terms → 400.
+  - Every `/api/driver/*` endpoint → 401 when anonymous.
+  - Change password: wrong current password → 401; correct → 200 with a new
+    session; the old refresh token → 401.
+
+### Test accounts in production
+The drivers visible in the admin panel are from live smoke tests, not real
+people. They can be deleted. The admin account is `info@nhtaxi.com`
+(bootstrap, now locked); its password was rotated by the user via the new
+change-password flow.
 
 ## Unconfirmed Historical Notes
 

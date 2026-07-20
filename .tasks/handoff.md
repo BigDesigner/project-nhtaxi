@@ -2,49 +2,42 @@
 
 - **Current mode**: Interactive
 - **Current branch**: `main`
-- **Last commit**: `e40b4c6` — "Add the driver map and settle post-match cancellation"
-- **Worktree status**: Clean
-- **What changed**:
-  - Driver map (`GET /api/drivers`, `DirectoryDriver` model, `DriversScreen`)
-    so passengers can browse the on-duty fleet and request a specific driver.
-  - Preferred-driver dispatch: `POST /api/trips` accepts `preferredDriverId`;
-    `DispatchCoordinator` offers that driver once, then falls back to nearest.
-  - Post-match cancellation narrowed to free-until-`DRIVER_EN_ROUTE`, then a
-    "call dispatch" card replaces the cancel button. Assigned driver gets a
-    push on any cancellation.
-  - Full detail on how both work: see
-    `.memory-bank/changelog/verified-worklog.md` ("How Things Work" section).
-- **What was verified**:
-  - Backend 95/95 vitest, `pnpm run typecheck` clean.
-  - Mobile 17/17 Flutter tests, `flutter analyze` clean.
-  - CI `Deploy` + `Mobile` workflows green on this commit.
-  - Live smoke test against `api.nhtaxi.com`: `GET /api/drivers` → 200 (empty
-    list, expected — no driver app exists yet to register real drivers), 401
-    when unauthenticated.
-- **Known failures**: none currently open (see `.memory-bank/bugs/bug-list.md`).
+- **Last commit**: `77323af` — "Charge commission on referred jobs only, not on everything"
+- **Worktree status**: Clean, pushed, deployed
+- **What changed** (most recent first — full history in
+  `.memory-bank/changelog/verified-worklog.md`):
+  - **Faz 11 wave A**: commission now follows `trips.referralSource`, not
+    `origin`. Driver ticks a box on accept (pre-ticked and locked when the
+    office assigned it, and never able to *clear* a referral); admin can set
+    or clear it on any live trip and that wins. Audit-logged.
+  - **Testing round 3**: fixed driver sign-up being unreachable (redirect
+    guard matched `/signup` exactly, bouncing `/signup/driver` to login);
+    split passenger trips onto their own tab; driver map no longer vanishes
+    when nobody is on shift.
+  - **Faz 10**: real driving distance from a routing engine (replacing a
+    straight-line estimate ×1.3), gated sign-up with separate passenger and
+    driver terms, and a change-password endpoint.
+- **What was verified**: 143/143 backend, 44/44 Flutter, analyze clean, both
+  CI workflows green, migrations `0004`–`0006` applied cleanly to remote D1,
+  and live smoke tests against production covering distance accuracy, terms
+  enforcement, driver-route auth and the password-change flow.
+- **Known failures**: none open (see `.memory-bank/bugs/bug-list.md`).
 - **Suggested validation commands**:
   - `pnpm run typecheck`
   - `cd apps/api && npx vitest run`
   - `cd apps/mobile && flutter analyze && flutter test`
-- **Next recommended action**:
-  - Build the driver app (registration incl. vehicle/plate/photo, the
-    Online/Offline toggle, accept/reject flow, balance + footprint view) —
-    this is also the only way to get real drivers into the new map to test
-    it against.
-  - Phase 7 Wave 3: wire the Flutter client to the existing LocationHub
-    Durable Object for live driver position updates (map is currently a
-    static snapshot).
-  - User-owned: attach `gnncab.nhtaxi.com` as a custom domain on the
-    `gnncab-preview` Pages project; supply the Firebase service-account key
-    so push notifications go live.
-- **Files touched** (this batch):
-  - `apps/api/src/routes/drivers_directory.ts` (new),
-    `apps/api/src/routes/drivers-directory.test.ts` (new)
-  - `apps/api/src/lib/dispatch.ts`, `apps/api/src/durable-objects/dispatch-coordinator.ts`
-  - `apps/api/src/routes/trips.ts`, `apps/api/src/lib/trip-notifications.ts`, `apps/api/src/app.ts`
-  - `packages/contract/src/schemas/drivers-directory.ts` (new), `packages/contract/src/schemas/trips.ts`, `packages/contract/src/index.ts`
-  - `apps/mobile/lib/models/directory_driver.dart` (new), `apps/mobile/lib/models/trip.dart`
-  - `apps/mobile/lib/features/passenger/drivers/` (new: `drivers_controller.dart`, `drivers_screen.dart`)
-  - `apps/mobile/lib/features/passenger/booking/booking_controller.dart`, `booking_screen.dart`
-  - `apps/mobile/lib/features/passenger/active_trip_screen.dart`, `passenger_home_screen.dart`, `router.dart`
-  - `apps/mobile/lib/widgets/help_card.dart`
+- **Next recommended action** — Faz 11 wave B, already agreed with the user:
+  1. Live referral trips: the driver taps a Referral button at the kerb, a
+     trip opens at their current GPS, and closes at their GPS on drop-off.
+     Removes driver-declared amounts entirely.
+  2. Breadcrumbs every ~30s during a trip, drawn on a map in the admin panel.
+     The user considers the audit trail important ("ayak izi önemli").
+  3. Metered fare from the real route rather than the booking estimate.
+  4. Needs `DRIVER_REFERRAL` in `TRIP_ORIGINS` → CHECK constraint rewrite →
+     **trips table rebuild. Give it its own migration, alone.** This is the
+     operation that failed twice remotely.
+- **Things only the user can do**:
+  - Move `ROUTING_BASE_URL` off the public OSRM demo instance before real
+    volume.
+  - Supply the Firebase service-account key (push is wired but no-ops).
+  - Attach `gnncab.nhtaxi.com` to the `gnncab-preview` Pages project.
