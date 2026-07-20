@@ -448,6 +448,69 @@ admin's existing trip-route map (wave B) and a driver's own completed job.
 6 for the access gate itself: admin yes, owning driver yes, another driver
 no, the booking passenger no, unknown trip 404) and 3 Flutter model tests.
 
+### Service areas, and the owner-operator dual role
+Answered a direct question honestly rather than building something to match
+a guess: **service areas do nothing today.** No dispatch or booking code
+anywhere reads a city's bounds — `cities` is a name+timezone label with no
+radius, and the `zones` table that could hold a real polygon geofence is
+defined but never read anywhere. Left unenforced on purpose, not just
+unfinished: `admin_settings_tab.dart`'s own passenger-facing copy already
+promises coverage across New England and long-distance runs into New York
+and Pennsylvania, so a hard boundary would reject exactly the bookings this
+business wants. Fixed the two real bugs instead — duplicate detection
+(name+state, case-insensitive) and a working delete, with a 409 rather than
+a raw FK error if something still references the area.
+
+While in `routes/admin.ts`, closed the two paths that could mint a second
+admin: `POST /users` and `PUT /users/{id}` now refuse `role: "admin"`
+outright, 403. Nothing reachable through the API grants it any more — the
+bootstrap endpoint (already capped at one account) is the only path left,
+and a future second admin is a direct database change.
+
+That same "no API path grants it" reasoning is what the owner-operator dual
+role rests on: the same person runs the office and also drives. Rather than
+teaching every driver-only check in this codebase about a new combined role
+value, `users.isAdmin` is orthogonal to `role` — the account keeps
+`role: "driver"` (so dispatch, the driver app, `assertOwnsTrip`, LocationHub
+all treat it as an ordinary driver with zero special-casing) while
+`isAdmin: true` unlocks the admin panel through `requireAdmin()`, the one new
+gate that replaced `requireRole("admin")` on the admin router. No endpoint
+sets `isAdmin` either — direct database access, once, for the one account
+this is for.
+
+In the app, which shell is on screen is a pure UI toggle
+(`viewModeProvider`), not a security boundary — both surfaces stay reachable
+to that account regardless. Defaults to the driver screens on login (per the
+office's own description of the desired flow), with a cross-over tile in
+each side's settings, and resets to driver on logout so a later session on
+the same device can't inherit the wrong shell.
+
+Migration `0009` adds `users.is_admin` as a plain `ADD COLUMN`, no `CHECK` —
+same reasoning as `path_verification` before it: a column only this codebase
+ever writes doesn't need the SQL-level enum enforcement, and skipping it
+keeps the migration in the cheap, safe category.
+
+**Not yet done: actually flipping the production admin account.** Everything
+above is inert until an account has `role: "driver"` + `isAdmin: true` — the
+current production admin (`info@nhtaxi.com`) is untouched, still
+`role: "admin"`, `isAdmin: false`. Converting it is the one step held back
+for the user to confirm before it happens to the account that runs the
+business, per this session's own "ask before an irreversible-ish production
+change" rule — see the wrap-up message for that ask.
+
+Added a Tawk.to live-chat button to the passenger app as a separate, smaller
+piece: a chat-bubble FAB on the passenger shell opens the direct chat link
+in a WebView (native) or a browser tab (the Flutter web preview build, which
+`webview_flutter` doesn't support at all) — never the `<script>` embed Tawk.to
+hands out, which assumes an HTML host page a native screen doesn't have.
+
+10 new backend tests, 5 new Flutter model tests, live-verified: the new
+`DELETE /cities/{cityId}` route is in the live OpenAPI doc, and the admin
+auth gate still 401s an unauthenticated request. **Not yet proven live: the
+admin-lockdown and dual-role gates themselves**, which need real admin
+credentials this session doesn't have — worth a quick manual check once the
+account conversion above happens.
+
 ## Known Incomplete Work
 - **Push notifications deliver nothing, and the missing piece is bigger than
   it was recorded as.** This was previously noted as "waiting for the Firebase
@@ -664,12 +727,12 @@ same pattern is worth applying to the other routers if they're ever touched.
 
 ## Validation Status
 
-As of commit `82bbceb` (trip path verification), everything below is
-deployed and verified against production.
+As of commit `0aca2d7` (Tawk.to chat), everything below is deployed and
+verified against production.
 
-- Backend: 180/180 vitest tests passing (real D1/DO via
+- Backend: 190/190 vitest tests passing (real D1/DO via
   `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean.
-- Mobile: 73/73 Flutter tests passing, `flutter analyze` clean.
+- Mobile: 78/78 Flutter tests passing, `flutter analyze` clean.
 - CI `Deploy` + `Mobile` workflows green; live on `api.nhtaxi.com` and
   `gnncab-preview.pages.dev`.
 - Migrations `0004`–`0006` were single `ALTER TABLE … ADD COLUMN` statements,
