@@ -32,7 +32,7 @@ const dropSite = (n: number) => ({ lat: 44.05 + n * 0.01, lng: -71.2 });
 
 afterEach(() => failRouting(false));
 
-async function registerDriver(email: string) {
+async function registerDriver(email: string, {verified = true} = {}) {
   const jar = new CookieJar();
   const res = await req("/api/driver/register", {
     method: "POST",
@@ -53,7 +53,7 @@ async function registerDriver(email: string) {
   const [user] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, email)).limit(1);
   const [profile] = await db
     .update(driverProfilesTable)
-    .set({ isVerified: true, status: "AVAILABLE" })
+    .set({ isVerified: verified, status: "AVAILABLE" })
     .where(eq(driverProfilesTable.userId, user!.id))
     .returning({ id: driverProfilesTable.id });
 
@@ -119,6 +119,17 @@ describe("opening a referral trip at the kerb", () => {
 
     const res = await startReferral(driver.jar, site(4));
     expect(res.status).toBe(409);
+  });
+
+  it("refuses a driver the office has not approved yet", async () => {
+    // Every other route to a job runs through dispatch, which only offers work
+    // to approved drivers. This one bypasses dispatch, so without a check here
+    // someone whose licence the office has never seen could open real,
+    // billable trips. The app hides the button, but a UI-only gate is not one.
+    const driver = await registerDriver(uniqueEmail("rt-unverified-d"), {verified: false});
+
+    const res = await startReferral(driver.jar, site(15));
+    expect(res.status).toBe(403);
   });
 
   it("is not something a passenger can call", async () => {

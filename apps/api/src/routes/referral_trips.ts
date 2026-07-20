@@ -64,7 +64,7 @@ function coordinateLabel(lat: number, lng: number): string {
 
 async function requireDriverProfile(db: ReturnType<typeof createDb>, userId: string) {
   const [dp] = await db
-    .select({ id: driverProfilesTable.id })
+    .select({ id: driverProfilesTable.id, isVerified: driverProfilesTable.isVerified })
     .from(driverProfilesTable)
     .where(eq(driverProfilesTable.userId, userId))
     .limit(1);
@@ -95,6 +95,17 @@ referralTrips.openapi(startReferralRoute, async (c) => {
   const profile = await requireDriverProfile(db, authUser.userId);
   if (!profile) {
     return c.json({ error: "Forbidden", message: "No driver profile found for this account" }, 403);
+  }
+  // Every other route to a job runs through dispatch, which only offers work
+  // to approved drivers. This one bypasses dispatch entirely, so without this
+  // check someone whose licence and background check the office has never seen
+  // could open real, billable trips — the exact thing approval exists to stop.
+  // The driver app hides the button too, but a UI-only gate is not a gate.
+  if (!profile.isVerified) {
+    return c.json(
+      { error: "Forbidden", message: "The office needs to approve your account before you can take jobs" },
+      403
+    );
   }
 
   const [busy] = await db
@@ -184,6 +195,10 @@ referralTrips.openapi(completeReferralRoute, async (c) => {
   const body = c.req.valid("json");
   const db = createDb(c.env.DB);
 
+  // Deliberately no isVerified check here, unlike the start endpoint. If the
+  // office revokes a driver's approval mid-journey, the passenger is still in
+  // the car — refusing to close the job would leave a trip open forever and
+  // the fare uncomputed. Approval gates *taking* work, not finishing it.
   const profile = await requireDriverProfile(db, authUser.userId);
   if (!profile) {
     return c.json({ error: "Forbidden", message: "No driver profile found for this account" }, 403);
