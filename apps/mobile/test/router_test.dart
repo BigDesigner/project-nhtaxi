@@ -78,6 +78,35 @@ void main() {
     });
   });
 
+  group('pre-login routes', () {
+    // The bug this pins: the redirect matched '/signup' exactly, so
+    // '/signup/driver' counted as a protected page and an anonymous visitor
+    // was bounced to /login. The "Drive with us" button looked broken while
+    // actually navigating and being sent straight back.
+    test('every route under the auth screens is reachable without a session', () {
+      final authRoutes = _collectPaths(appRoutes()).where(
+        (p) => p == '/login' || p == '/signup' || p.startsWith('/login/') || p.startsWith('/signup/'),
+      );
+
+      expect(authRoutes, contains('/signup/driver'), reason: 'driver sign-up should be in the auth subtree');
+      for (final path in authRoutes) {
+        expect(isPreLoginRoute(path), isTrue, reason: '$path must be reachable while signed out');
+      }
+    });
+
+    test('protected routes stay protected', () {
+      for (final path in ['/home', '/home/book', '/home/drivers', '/home/trip/abc']) {
+        expect(isPreLoginRoute(path), isFalse, reason: path);
+      }
+    });
+
+    test('does not treat a lookalike path as pre-login', () {
+      // '/signupsomething' shares a prefix with '/signup' but is not under it.
+      expect(isPreLoginRoute('/signup-other'), isFalse);
+      expect(isPreLoginRoute('/loginish'), isFalse);
+    });
+  });
+
   group('app router shape', () {
     test('every passenger screen sits under /home so back always has a target', () {
       // Reads the real route table from lib/router.dart, so a route added to

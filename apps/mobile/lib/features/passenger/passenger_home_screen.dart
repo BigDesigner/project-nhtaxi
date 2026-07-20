@@ -35,7 +35,10 @@ class PassengerHomeTab extends ConsumerWidget {
               const SizedBox(height: 8),
               const _BrowseDriversCard(),
               const SizedBox(height: 24),
-              Text('Your trips', style: Theme.of(context).textTheme.titleMedium),
+              // Only what's happening now. Finished and cancelled trips were
+              // pushing the useful part of this screen off the bottom — they
+              // live on the Trips tab instead.
+              Text('Happening now', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               switch (trips) {
                 // Only a cold load blanks the list; a refresh keeps the old
@@ -45,10 +48,10 @@ class PassengerHomeTab extends ConsumerWidget {
                     child: Center(child: CircularProgressIndicator()),
                   ),
                 AsyncError(:final error) when !trips.hasValue => ErrorBanner(message: error.toString()),
-                AsyncValue(:final value?) when value.isEmpty => const _EmptyTrips(),
-                AsyncValue(:final value?) => Column(
-                    children: [for (final trip in value) _TripTile(trip: trip)],
-                  ),
+                AsyncValue(:final value?) => switch (value.where((t) => t.needsAttentionOnHome).toList()) {
+                    final live when live.isEmpty => const _EmptyTrips(),
+                    final live => Column(children: [for (final trip in live) TripTile(trip: trip)]),
+                  },
                 _ => const SizedBox.shrink(),
               },
             ],
@@ -138,7 +141,9 @@ class _EmptyTrips extends StatelessWidget {
         children: [
           Icon(Icons.map_outlined, size: 48, color: Theme.of(context).disabledColor),
           const SizedBox(height: 12),
-          Text('No trips yet', style: Theme.of(context).textTheme.bodyMedium),
+          Text('Nothing in progress', style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 4),
+          Text('Past trips are on the Trips tab.', style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
     );
@@ -175,8 +180,10 @@ class _FareLabel extends StatelessWidget {
   }
 }
 
-class _TripTile extends StatelessWidget {
-  const _TripTile({required this.trip});
+/// One row in a trip list. Shared by the home screen and the Trips tab so the
+/// same trip looks identical wherever it appears.
+class TripTile extends StatelessWidget {
+  const TripTile({super.key, required this.trip});
 
   final Trip trip;
 

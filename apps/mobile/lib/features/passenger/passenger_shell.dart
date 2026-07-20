@@ -5,6 +5,7 @@ import '../auth/change_password_sheet.dart';
 import '../../widgets/help_card.dart';
 import '../auth/auth_controller.dart';
 import 'passenger_home_screen.dart';
+import 'trips_tab.dart';
 import 'trips_controller.dart';
 
 /// Home / Profile / Settings shell.
@@ -30,7 +31,7 @@ class _PassengerShellState extends ConsumerState<PassengerShell> {
     });
   }
 
-  static const _titles = ['GNNcab', 'Profile', 'Settings'];
+  static const _titles = ['GNNcab', 'Your trips', 'Profile', 'Settings'];
 
   @override
   Widget build(BuildContext context) {
@@ -38,17 +39,22 @@ class _PassengerShellState extends ConsumerState<PassengerShell> {
       appBar: AppBar(title: Text(_titles[_index])),
       body: IndexedStack(
         index: _index,
-        children: const [PassengerHomeTab(), _ProfileTab(), _SettingsTab()],
+        children: const [PassengerHomeTab(), PassengerTripsTab(), _ProfileTab(), _SettingsTab()],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) {
           setState(() => _index = i);
-          // Coming back to the list is the other moment stale data shows up.
-          if (i == 0) ref.read(tripsControllerProvider.notifier).refresh();
+          // Coming back to either list is the moment stale data shows up.
+          if (i == 0 || i == 1) ref.read(tripsControllerProvider.notifier).refresh();
         },
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'Trips',
+          ),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
           NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
         ],

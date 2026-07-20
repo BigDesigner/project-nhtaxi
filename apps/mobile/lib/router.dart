@@ -68,6 +68,19 @@ List<RouteBase> appRoutes() => [
       ),
     ];
 
+/// Routes reachable without a session: the auth screens and everything under
+/// them.
+///
+/// Exported so `router_test.dart` can check the redirect rule directly. It is
+/// a prefix match on purpose — a new screen added under `/signup` or `/login`
+/// is reachable by definition, whereas the previous exact-equality version
+/// silently made every child of them unreachable.
+bool isPreLoginRoute(String path) =>
+    path == '/login' ||
+    path == '/signup' ||
+    path.startsWith('/login/') ||
+    path.startsWith('/signup/');
+
 final routerProvider = Provider<GoRouter>((ref) {
   // go_router needs a plain Listenable to re-run redirects; this bridges
   // Riverpod's auth state onto one. Bumping the value is enough — the
@@ -89,7 +102,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (auth.isLoading) return path == '/' ? null : '/';
 
       final user = auth.value;
-      final isAuthRoute = path == '/login' || path == '/signup';
+      // The whole pre-login subtree, not just its two roots. Matching
+      // '/signup' exactly meant '/signup/driver' was treated as a protected
+      // page and bounced straight back to /login — the "Drive with us" button
+      // looked dead when it was actually navigating and being sent back.
+      final isAuthRoute = isPreLoginRoute(path);
 
       if (user == null) return isAuthRoute ? null : '/login';
       if (isAuthRoute || path == '/') return '/home';

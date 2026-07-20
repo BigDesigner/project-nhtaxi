@@ -113,7 +113,7 @@ class _AdminAssignTripScreenState extends ConsumerState<AdminAssignTripScreen> {
     final drivers = ref.watch(adminDriversProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Phoned-in booking'), leading: const AppBackButton()),
+      appBar: AppBar(title: const Text('Assign a job'), leading: const AppBackButton()),
       body: Form(
         key: _formKey,
         child: ListView(

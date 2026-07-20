@@ -134,6 +134,13 @@ class Trip {
         'TIMEOUT',
       }.contains(status);
 
+  /// Worth a place on the home screen.
+  ///
+  /// A timed-out search is "over" as far as [isActive] goes, but the
+  /// passenger can still restart it — so it stays in front of them rather
+  /// than disappearing into history where they'd never look.
+  bool get needsAttentionOnHome => isActive || canRetrySearch;
+
   /// Human-readable form of the 11-state machine (see plan §4.2).
   String get statusLabel => switch (status) {
         'REQUESTED' => 'Looking for a driver',

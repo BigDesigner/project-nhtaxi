@@ -19,10 +19,10 @@ const _serviceAreaCenter = LatLng(44.0537, -71.1281);
 /// Each also gets its own icon, because colour alone is unreadable to a good
 /// share of people.
 ({Color color, IconData icon}) _marker(DirectoryDriver d) => switch (d.status) {
-      'AVAILABLE' => (color: Colors.green, icon: Icons.local_taxi),
-      'RESERVED' => (color: Colors.amber.shade800, icon: Icons.schedule),
-      _ => (color: Colors.red, icon: Icons.do_not_disturb_on),
-    };
+  'AVAILABLE' => (color: Colors.green, icon: Icons.local_taxi),
+  'RESERVED' => (color: Colors.amber.shade800, icon: Icons.schedule),
+  _ => (color: Colors.red, icon: Icons.do_not_disturb_on),
+};
 
 class DriversScreen extends ConsumerStatefulWidget {
   const DriversScreen({super.key});
@@ -91,14 +91,14 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
       body: switch (drivers) {
         AsyncLoading() when !drivers.hasValue => const Center(child: CircularProgressIndicator()),
         AsyncError(:final error) when !drivers.hasValue => Padding(
-            padding: const EdgeInsets.all(16),
-            child: ErrorBanner(message: error.toString()),
-          ),
+          padding: const EdgeInsets.all(16),
+          child: ErrorBanner(message: error.toString()),
+        ),
         AsyncValue(:final value?) => _DriversBody(
-            drivers: value,
-            mapController: _mapController,
-            onTap: _openDriver,
-          ),
+          drivers: value,
+          mapController: _mapController,
+          onTap: _openDriver,
+        ),
         _ => const SizedBox.shrink(),
       },
     );
@@ -114,18 +114,6 @@ class _DriversBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (drivers.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(32),
-          child: Text(
-            'No drivers are on shift right now.\nYou can still request a trip — we will keep looking.',
-            textAlign: TextAlign.center,
-          ),
-        ),
-      );
-    }
-
     return Column(
       children: [
         Expanded(
@@ -161,24 +149,43 @@ class _DriversBody extends StatelessWidget {
         ),
         Expanded(
           flex: 2,
-          child: ListView.builder(
-            itemCount: drivers.length,
-            itemBuilder: (context, i) {
-              final d = drivers[i];
-              final m = _marker(d);
-              return ListTile(
-                leading: DriverAvatar(name: d.firstName, photoUrl: d.photoUrl, color: m.color),
-                title: Text(d.firstName),
-                subtitle: Text(
-                  [d.availabilityDetail, if (d.vehicleDescription != null) d.vehicleDescription!].join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+          // The map stays up even with nobody on shift. Replacing the whole
+          // screen with a sentence made it look broken, and left no way to
+          // tell "no drivers" apart from "the map failed to load".
+          child: drivers.isEmpty
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      'No drivers are on shift right now.\n'
+                      'You can still request a trip — we will keep looking for you.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: drivers.length,
+                  itemBuilder: (context, i) {
+                    final d = drivers[i];
+                    final m = _marker(d);
+                    return ListTile(
+                      leading: DriverAvatar(name: d.firstName, photoUrl: d.photoUrl, color: m.color),
+                      title: Text(d.firstName),
+                      subtitle: Text(
+                        [
+                          d.availabilityDetail,
+                          if (d.vehicleDescription != null) d.vehicleDescription!,
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: d.distanceMiles == null
+                          ? null
+                          : Text('${d.distanceMiles!.toStringAsFixed(1)} mi'),
+                      onTap: () => onTap(d),
+                    );
+                  },
                 ),
-                trailing: d.distanceMiles == null ? null : Text('${d.distanceMiles!.toStringAsFixed(1)} mi'),
-                onTap: () => onTap(d),
-              );
-            },
-          ),
         ),
       ],
     );
@@ -224,12 +231,7 @@ class _DriverSheet extends StatelessWidget {
           children: [
             Row(
               children: [
-                DriverAvatar(
-                  name: driver.firstName,
-                  photoUrl: driver.photoUrl,
-                  radius: 32,
-                  color: m.color,
-                ),
+                DriverAvatar(name: driver.firstName, photoUrl: driver.photoUrl, radius: 32, color: m.color),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -258,7 +260,11 @@ class _DriverSheet extends StatelessWidget {
             if (driver.vehicleDescription != null)
               _DetailRow(icon: Icons.directions_car, label: 'Vehicle', value: driver.vehicleDescription!),
             if (driver.vehiclePlate != null)
-              _DetailRow(icon: Icons.confirmation_number_outlined, label: 'Plate', value: driver.vehiclePlate!),
+              _DetailRow(
+                icon: Icons.confirmation_number_outlined,
+                label: 'Plate',
+                value: driver.vehiclePlate!,
+              ),
             if (driver.phone != null) _DetailRow(icon: Icons.phone, label: 'Phone', value: driver.phone!),
             if (driver.distanceMiles != null)
               _DetailRow(
