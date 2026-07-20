@@ -321,12 +321,49 @@ locally and fail twice remotely — local had trips but no *child* rows, so
 `DROP TABLE trips` had no foreign key to violate and "it worked locally" was
 measuring nothing. **Seed it before testing any future table rebuild.**
 
-## Known Incomplete Work
+### Faz 7 Wave 3 — WebSocket live tracking, and the bug it uncovered
+LocationHub has broadcast a driver's position to their matched passenger and
+to every connected admin since Faz 4. Nobody ever consumed it — and while
+investigating that, found something worse: **nobody ever sent one either.**
+`driver_profiles.currentLat/currentLng` is written *only* by a
+`LOCATION_UPDATE` frame arriving over this socket, and no client-side code
+existed to send that frame. Nearest-driver dispatch (`lib/dispatch.ts`) and
+the passenger's "choose a driver" map both silently skip a driver whose
+position is null. In production, that meant every real driver who hadn't
+been hand-seeded by a test — i.e. all of them — was invisible to both, the
+whole time. This was not a missing nicety; it was dispatch quietly not
+working for anyone who wasn't a test fixture.
 
-- **Phase 7 Wave 3**: WebSocket live driver-position updates in the app.
-  LocationHub exists server-side; the Flutter client doesn't consume it yet,
-  so the driver map is a static snapshot refreshed by pull/tap. Overlaps with
-  breadcrumbs above — worth doing together.
+Fixed with `core/driver_location_broadcaster.dart`: starts the moment a
+driver goes online (and on a cold relaunch mid-shift), samples position every
+10 seconds, sends it over a new shared `core/location_socket.dart`
+(reconnects on drop, torn down on logout). Deliberately separate from the
+trip-breadcrumb recorder (wave B) rather than merged into one GPS loop — one
+is an ephemeral live position feeding dispatch, the other a permanent
+evidentiary trail that only exists once a passenger is actually in the car;
+merging them would have meant recording a driver's pre-pickup movement as
+part of a trip's permanent record, which wave B explicitly ruled out.
+
+Consumers: the passenger's active-trip screen gets a small live map once a
+driver is matched (`core/live_driver_position.dart`'s single-driver stream —
+the hub never sends more than that to a passenger); the admin panel gets a
+new "Live map" tab showing the whole fleet (the hub already sent admins
+everything; this just puts it on screen). The passenger's *browsing* map
+(choose-a-driver, pre-trip) deliberately stays snapshot + pull-to-refresh —
+the hub has no authorized relationship to hang a live broadcast on until
+there's an actual trip, and broadcasting every driver's position to anyone
+browsing would be both wasteful and a real position leak. Trip-status
+polling is unchanged; only the driver's position moved off it, onto the
+socket.
+
+15 new Flutter tests, all against a fake in-memory transport — no real
+sockets touched in CI: message decoding, reconnect-after-drop, disconnect
+stops reconnecting, the broadcaster's immediate-first-tick and idempotent
+start/stop, and the position providers' filtering (one driver vs. the whole
+fleet). Zero backend changes — LocationHub was already correct; only the
+client side was missing.
+
+## Known Incomplete Work
 - **Push notifications deliver nothing, and the missing piece is bigger than
   it was recorded as.** This was previously noted as "waiting for the Firebase
   service-account key", which understated it: the app had no push client at
@@ -542,12 +579,14 @@ same pattern is worth applying to the other routers if they're ever touched.
 
 ## Validation Status
 
-As of commit `d60f442` (Faz 11 wave B), everything below is deployed and
+As of commit `b7733ce` (Faz 7 Wave 3), everything below is deployed and
 verified against production.
 
 - Backend: 157/157 vitest tests passing (real D1/DO via
-  `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean.
-- Mobile: 56/56 Flutter tests passing, `flutter analyze` clean.
+  `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean. Untouched by
+  Wave 3 — LocationHub was already correct; only the Flutter client side was
+  missing.
+- Mobile: 70/70 Flutter tests passing, `flutter analyze` clean.
 - CI `Deploy` + `Mobile` workflows green; live on `api.nhtaxi.com` and
   `gnncab-preview.pages.dev`.
 - Migrations `0004`–`0006` were single `ALTER TABLE … ADD COLUMN` statements,
@@ -573,6 +612,14 @@ verified against production.
     admin signing in and approving a test driver or one of the existing
     approved drivers running the flow on a phone. Everything up to the
     approval gate is verified end to end against production.
+  - Wave 3 shipped no backend change, so the live check was narrower:
+    `/api/openapi.json` → 200 (Worker deployed cleanly) and an unauthenticated
+    `/api/ws` upgrade → 401 (unchanged — this is the exact contract the new
+    Flutter socket code depends on). **Not yet proven live: an actual driver
+    broadcasting position and a passenger watching it move**, since that
+    needs a real phone with GPS. Everything the client depends on the server
+    still doing correctly was checked; the new client code itself wants a
+    device test.
 
 ### Test accounts in production
 The drivers visible in the admin panel are from live smoke tests, not real
