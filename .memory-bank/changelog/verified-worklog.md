@@ -395,7 +395,7 @@ same pattern is worth applying to the other routers if they're ever touched.
 
 ## Validation Status
 
-- Backend: 116/116 vitest tests passing (real D1/DO via
+- Backend: 129/129 vitest tests passing (real D1/DO via
   `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean.
 - Mobile: 41/41 Flutter tests passing, `flutter analyze` clean.
 - **Not yet deployed or live smoke-tested**: the fare/marker fixes and the
