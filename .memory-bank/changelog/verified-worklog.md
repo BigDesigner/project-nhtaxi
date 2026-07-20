@@ -266,31 +266,63 @@ looking like any other booking. Nobody was charged for those.
 `referralSource` now decides, and records who said so — see "Referrals and
 commission" below for the full mechanism.
 
+### Faz 11 wave B — Referral jobs opened at the kerb, and the path recorded
+The office often phones a driver directly about a passenger who is not in the
+app at all. There was no way to record that job, so it either went unbilled or
+was reconstructed from memory — and the commission on it rested on that
+recollection.
+
+The driver now taps once as the passenger gets in and once as they get out.
+Both taps carry the phone's GPS (`POST /api/referral-trips`, then
+`/{tripId}/complete`), so pickup and dropoff are captured as they happen and
+the fare is computed from the same routed road distance as every other trip.
+The trip opens already `TRIP_STARTED` with `origin: DRIVER_REFERRAL` and
+`referralSource: DRIVER_DECLARED`, and the commission rate is snapshotted at
+the kerb so a mid-trip rate change can't rewrite it.
+
+An earlier idea — a manual "log a past job" form — was rejected for exactly
+the reason above: it asks a tired driver to recall a route and name a price.
+
+**Metered fare: decided.** The fare is the routed distance between the real
+pickup and the real dropoff. Summing breadcrumbs was rejected — GPS jitter
+would inflate every trip, a wandering route would charge more for being
+wandering, and the price would end up depending on the quality of a phone's
+signal. The reasoning lives in `core/trip_path_recorder.dart` and the
+`tripBreadcrumbsTable` schema comment so it isn't re-litigated later.
+
+**Breadcrumbs are evidence, not billing.** Sampled every ~30s while a
+passenger is aboard — never before pickup, since where a driver drove before
+collecting someone is nobody's business and recording it would collect
+location data with no purpose to justify keeping it. Points carry the time the
+*device* saw them, so a phone coming back into signal uploads a backlog that
+still draws in the order it was driven. A failed upload keeps its points and
+retries; only a 400 (path closed) discards them. The office sees the route at
+`/home/trip-path/:tripId`.
+
+**The approval gate that was nearly missed.** Every other route to a job runs
+through dispatch, which only offers work to approved drivers. This one bypasses
+dispatch, so the driver app hiding the button was the *only* thing stopping an
+unapproved driver opening billable trips. Now checked server-side. Completion
+is deliberately left ungated: if approval is revoked mid-journey the passenger
+is still in the car, and refusing to close the job would leave the trip open
+with its fare uncomputed.
+
+**Migration 0007 — the table rebuild that failed twice, done properly.**
+drizzle-kit's generated version reproduced both prior failure modes plus a new
+one (it created `trip_breadcrumbs` against the table it was about to drop).
+Hand-written instead: all three children — `trip_events`, `payments` and
+`driver_trip_commissions` — are repointed at `__new_trips` *before* the old
+table is dropped, so the drop is safe whether or not `PRAGMA foreign_keys=OFF`
+survives D1's per-statement HTTP requests. `driver_trip_commissions` was new to
+this problem: it was empty during 0002 and holds real charges now.
+
+`apps/api/test/seed-migration-check.sql` closes the gap that made 0002 pass
+locally and fail twice remotely — local had trips but no *child* rows, so
+`DROP TABLE trips` had no foreign key to violate and "it worked locally" was
+measuring nothing. **Seed it before testing any future table rebuild.**
+
 ## Known Incomplete Work
 
-- **Faz 11 wave B — live referral trips, breadcrumbs, metered fare.** Agreed
-  and specified, not yet built. The driver taps a Referral button at the
-  kerb: a trip opens at their current GPS, position breadcrumbs are recorded
-  every ~30s while it runs, they tap "dropped off" and it closes at their
-  current GPS, and the fare comes from the real route rather than a booking
-  estimate. The office sees the path drawn on a map.
-  - This replaces an earlier idea of a manual "log a past job" form. The
-    live version is better because it removes driver-declared amounts
-    entirely — coordinates and timings are captured as they happen, and the
-    system computes the fare. The remaining weakness (did they tap in the
-    right places?) is much smaller, and the office referred the job so it can
-    sanity-check.
-  - Blocks **metered fare**: `finalFareCents` still copies
-    `estimatedFareCents` in `routes/trips.ts`. Open decision when it lands —
-    charge the routed distance between real pickup and dropoff (reproducible,
-    immune to GPS jitter, can't be inflated by a wandering route) versus the
-    summed breadcrumb distance (reflects detours but inflates with jitter).
-    The passenger quote is already framed as a floor with a +10% ceiling so
-    this can move without breaking a promise.
-  - Needs `DRIVER_REFERRAL` added to `TRIP_ORIGINS`, which means rewriting a
-    CHECK constraint, which in SQLite means rebuilding the trips table. That
-    is the exact operation that failed twice against remote D1. **Give it its
-    own migration with nothing else riding on it.**
 - **Phase 7 Wave 3**: WebSocket live driver-position updates in the app.
   LocationHub exists server-side; the Flutter client doesn't consume it yet,
   so the driver map is a static snapshot refreshed by pull/tap. Overlaps with
@@ -510,17 +542,19 @@ same pattern is worth applying to the other routers if they're ever touched.
 
 ## Validation Status
 
-As of commit `77323af` (Faz 11 wave A), everything below is deployed and
+As of commit `d60f442` (Faz 11 wave B), everything below is deployed and
 verified against production.
 
-- Backend: 143/143 vitest tests passing (real D1/DO via
+- Backend: 157/157 vitest tests passing (real D1/DO via
   `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean.
-- Mobile: 44/44 Flutter tests passing, `flutter analyze` clean.
+- Mobile: 56/56 Flutter tests passing, `flutter analyze` clean.
 - CI `Deploy` + `Mobile` workflows green; live on `api.nhtaxi.com` and
   `gnncab-preview.pages.dev`.
-- Migrations `0004`–`0006` all applied cleanly to remote D1. All three were
-  single `ALTER TABLE … ADD COLUMN` statements — deliberately, since the two
-  migrations that ever failed remotely were table rebuilds.
+- Migrations `0004`–`0006` were single `ALTER TABLE … ADD COLUMN` statements,
+  deliberately, since the two migrations that ever failed remotely were table
+  rebuilds. **`0007` is a table rebuild and applied cleanly to remote D1** —
+  the first one to do so. It was proven locally first against a database
+  seeded with rows in all three child tables (see wave B above).
 - Live smoke tests run against production, not just CI:
   - **Driving distance is right.** North Conway → Boston Logan quotes
     136.27 mi (real drive ~135–140); → Portland ME quotes 65.04 mi (real
@@ -531,6 +565,14 @@ verified against production.
   - Every `/api/driver/*` endpoint → 401 when anonymous.
   - Change password: wrong current password → 401; correct → 200 with a new
     session; the old refresh token → 401.
+  - Referral trips (wave B): all three new paths present in the live OpenAPI
+    doc; an unapproved driver → 403; unknown trip → 404; malformed
+    coordinates or an empty breadcrumb batch → 400.
+  - **Not yet proven live: the referral happy path.** It needs an *approved*
+    driver, and approval runs through the admin panel, so it wants either the
+    admin signing in and approving a test driver or one of the existing
+    approved drivers running the flow on a phone. Everything up to the
+    approval gate is verified end to end against production.
 
 ### Test accounts in production
 The drivers visible in the admin panel are from live smoke tests, not real
