@@ -5,6 +5,7 @@ import '../auth/change_password_sheet.dart';
 import '../../widgets/help_card.dart';
 import '../auth/auth_controller.dart';
 import 'passenger_home_screen.dart';
+import 'tawk_chat_screen.dart';
 import 'trips_tab.dart';
 import 'trips_controller.dart';
 
@@ -40,6 +41,13 @@ class _PassengerShellState extends ConsumerState<PassengerShell> {
       body: IndexedStack(
         index: _index,
         children: const [PassengerHomeTab(), PassengerTripsTab(), _ProfileTab(), _SettingsTab()],
+      ),
+      // Present on every tab, not just one — a passenger stuck on any screen
+      // can reach a person without hunting for it.
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'Chat with us',
+        onPressed: () => openTawkChat(context),
+        child: const Icon(Icons.chat_bubble_outline),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
