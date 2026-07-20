@@ -37,7 +37,7 @@ class _FixedLocation extends LocationService {
       point == null ? const LocationResult.failure(LocationFailure.error) : LocationResult.success(point!);
 }
 
-ProviderContainer containerWith(_FakeApi api, LocationService location) {
+ProviderContainer _containerWith(_FakeApi api, LocationService location) {
   final container = ProviderContainer(
     overrides: [
       apiClientProvider.overrideWithValue(api),
@@ -54,7 +54,7 @@ void main() {
       // The pickup is the single most useful point on the whole path — waiting
       // 30 seconds for it would lose exactly the position that matters most.
       final api = _FakeApi(TokenStore());
-      final container = containerWith(api, const _FixedLocation(LatLng(44.05, -71.12)));
+      final container = _containerWith(api, const _FixedLocation(LatLng(44.05, -71.12)));
 
       container.read(tripPathRecorderProvider).start('trip-1');
       await Future<void>.delayed(Duration.zero);
@@ -69,7 +69,7 @@ void main() {
       // coverage is exactly the stretch missing from the record — which is the
       // stretch someone will eventually ask about.
       final api = _FakeApi(TokenStore())..failWith = ApiException('offline');
-      final container = containerWith(api, const _FixedLocation(LatLng(44.06, -71.13)));
+      final container = _containerWith(api, const _FixedLocation(LatLng(44.06, -71.13)));
       final recorder = container.read(tripPathRecorderProvider);
 
       recorder.start('trip-2');
@@ -88,7 +88,7 @@ void main() {
       // A 400 means the trip is finished and its path is a record now. Putting
       // these back would spin against an endpoint that will never accept them.
       final api = _FakeApi(TokenStore())..failWith = ApiException('closed', statusCode: 400);
-      final container = containerWith(api, const _FixedLocation(LatLng(44.07, -71.14)));
+      final container = _containerWith(api, const _FixedLocation(LatLng(44.07, -71.14)));
       final recorder = container.read(tripPathRecorderProvider);
 
       recorder.start('trip-3');
@@ -104,7 +104,7 @@ void main() {
       // A refused or unavailable position is not worth interrupting a driving
       // job over — the next sample may well succeed.
       final api = _FakeApi(TokenStore());
-      final container = containerWith(api, const _FixedLocation(null));
+      final container = _containerWith(api, const _FixedLocation(null));
       final recorder = container.read(tripPathRecorderProvider);
 
       recorder.start('trip-4');
@@ -116,7 +116,7 @@ void main() {
 
     test('stops recording once the trip is over', () async {
       final api = _FakeApi(TokenStore());
-      final container = containerWith(api, const _FixedLocation(LatLng(44.08, -71.15)));
+      final container = _containerWith(api, const _FixedLocation(LatLng(44.08, -71.15)));
       final recorder = container.read(tripPathRecorderProvider);
 
       recorder.start('trip-5');
