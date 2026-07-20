@@ -156,6 +156,31 @@ by two driver-owed revenue streams for GNN LLC.
 - Added footer navigation (Home/Profile/Settings) with icon-based tabs.
 - Added a sign-out confirmation dialog instead of signing out on a single tap.
 
+### Faz 9 — Admin Panel & Driver Photos
+- Admin shell (Drivers / Trips / Money / Settings), again built against
+  endpoints that already existed.
+- Drivers tab leads with the approval queue, because an unverified driver
+  cannot go online at all and a sign-up lost in an alphabetical list is
+  someone who cannot work. Approving is one tap; withdrawing approval asks
+  first, since it takes a working driver off shift.
+- Money tab: total outstanding across the fleet, split usage-fee vs
+  commission, sorted by who owes most, plus the cash-collection log.
+  Recording a payment pre-fills the full outstanding amount and invalidates
+  both views, so the same cash can't be recorded twice.
+- Trips tab pulls TIMEOUT / DRIVER_NO_RESPONSE rows to the top — the only
+  ones the office must act on. Phoned-in bookings are guest-only by design.
+- Settings edits both revenue streams, kept visually separate because the
+  passenger fare and the driver's debt are different businesses sharing a row.
+- **Driver photos**: stored in the *existing* R2 bucket under an `avatars/`
+  prefix, unencrypted (unlike the identity documents beside them, which stay
+  envelope-encrypted and admin-only), and served through an authenticated
+  Worker route rather than a public URL — it's a person's face, and an
+  unguessable URL is not access control. The serve route refuses any key
+  outside `avatars/`, with a test proving a `photoKey` pointed at a document
+  yields 404 rather than leaking it. SVG uploads rejected (script vector).
+  Flutter fetches the bytes through the API client, since `NetworkImage`
+  can't carry a Bearer token on the web build.
+
 ### Faz 8 — Driver App
 Built almost entirely against endpoints that already existed (`/api/driver/*`
 and the shared trip routes), so this wave was a Flutter build rather than new
@@ -185,12 +210,6 @@ backend work.
 
 ## Known Incomplete Work
 
-- **Driver profile photo** — driver sign-up collects vehicle details but not
-  an avatar. `DirectoryDriver.photoUrl` exists end to end (API response,
-  Dart model, both UIs) and is always `null` until an upload path is built.
-  Needs a decision: driver documents live envelope-encrypted in R2 and are
-  admin-only, but a profile photo is shown to passengers, so it needs its own
-  semi-public storage and serving route rather than reusing that pipeline.
 - **Metered fare from the actual trip** — the driver already marks "passenger
   is in the car" (TRIP_STARTED) and "dropped off" (TRIP_COMPLETED), but the
   final fare still just copies the booking estimate
@@ -199,11 +218,12 @@ backend work.
   distance really travelled (from LocationHub's position stream), or both.
   The passenger-side quote is already presented as a floor with a +10%
   ceiling precisely so this can move without breaking a promise.
-- **Admin app** — still a placeholder. Everything it needs exists server-side
-  (reports, cash collection recording, pricing, driver verification), so this
-  is a Flutter/web build rather than new backend work. Note drivers cannot go
-  AVAILABLE until an admin verifies them, so onboarding a real driver
-  currently requires an API call by hand.
+- **No admin account exists in production yet.** `POST /api/admin/bootstrap`
+  creates the first one and then locks itself, but it requires the
+  `ADMIN_BOOTSTRAP_TOKEN` Worker secret. This is a user-owned step and it
+  blocks end-to-end testing entirely: without an admin, no driver can be
+  verified, and an unverified driver cannot go online.
+- **Phase 7 Wave 3 / live tracking** — see below.
 - **Phase 7 Wave 3**: WebSocket live driver-position updates in the app
   (LocationHub DO already exists server-side; the Flutter client doesn't
   consume it yet — the driver map currently shows a static snapshot,
@@ -303,11 +323,25 @@ shown as a ±10% band (`core/fare_range.dart`, rounded to whole dollars).
 A completed trip's `finalFare` is a real charged amount and is shown exactly,
 never as a range — the two cases are distinguished by `finalFare != null`.
 
+### Auth is protected-by-default on driver routes
+`routes/driver_profile.ts` used to apply `authenticate + requireRole` route
+by route (`use("/profile", …)`, `use("/earnings", …)`, …). That meant **every
+new endpoint shipped public** until someone remembered to add a line — and
+the photo upload did exactly that. It only surfaced because the handler
+crashed on a missing `user`; a handler that didn't dereference it would have
+worked fine, for anyone on the internet.
+
+The router now guards `*` via `except("/api/driver/register", …)`, so a new
+route is private unless deliberately exempted, and
+`routes/driver-auth.test.ts` walks every driver endpoint asserting an
+anonymous caller gets 401. **Add a row there when adding an endpoint.** The
+same pattern is worth applying to the other routers if they're ever touched.
+
 ## Validation Status
 
-- Backend: 101/101 vitest tests passing (real D1/DO via
+- Backend: 116/116 vitest tests passing (real D1/DO via
   `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean.
-- Mobile: 31/31 Flutter tests passing, `flutter analyze` clean.
+- Mobile: 41/41 Flutter tests passing, `flutter analyze` clean.
 - **Not yet deployed or live smoke-tested**: the fare/marker fixes and the
   whole driver app are committed locally but unpushed at the user's request.
   The usual rule still applies — deploy, then verify against production
