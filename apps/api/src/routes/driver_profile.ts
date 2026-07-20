@@ -19,6 +19,8 @@ import { createDb, driverDocumentsTable, driverProfilesTable, driverSessionsTabl
 import type { AppBindings } from "../env";
 import { AuditAction, logAudit } from "../lib/audit";
 import { encryptDocument } from "../lib/document-encryption";
+import { getAdminEmails, sendEmail } from "../lib/email";
+import { adminNewSignupEmail, welcomeEmail } from "../lib/email-templates";
 import { closeOpenSession, computeDriverBalance, getDriverUsageRates, openSession, toSessionResponse } from "../lib/driver-sessions";
 import { driverProfileWithUserColumns } from "../lib/driver-queries";
 import { hashPassword } from "../lib/password";
@@ -117,6 +119,21 @@ driverProfile.openapi(registerRoute, async (c) => {
       actorRole: "driver",
       ipAddress: clientIp(c),
     })
+  );
+
+  c.executionCtx.waitUntil(
+    (async () => {
+      const welcome = welcomeEmail(user.firstName, "driver");
+      await sendEmail(c.env.BREVO_API_KEY, { to: [{ email: user.email, name: user.firstName }], subject: welcome.subject, htmlContent: welcome.html });
+
+      // Every driver needs the office to review their documents before they
+      // can go online — this is the notice that starts that clock.
+      const adminEmails = await getAdminEmails(db);
+      if (adminEmails.length > 0) {
+        const notice = adminNewSignupEmail(`${user.firstName} ${user.lastName}`, user.email, "driver");
+        await sendEmail(c.env.BREVO_API_KEY, { to: adminEmails, subject: notice.subject, htmlContent: notice.html });
+      }
+    })()
   );
 
   return c.json(session, 201);

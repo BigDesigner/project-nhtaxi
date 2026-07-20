@@ -13,6 +13,8 @@ import { createDb, customerProfilesTable, refreshTokensTable, usersTable } from 
 import type { AppBindings } from "../env";
 import { AuditAction, logAudit } from "../lib/audit";
 import { clearAuthCookies, getRefreshTokenCookie, setAuthCookies } from "../lib/auth-cookie";
+import { getAdminEmails, sendEmail } from "../lib/email";
+import { adminNewSignupEmail, passwordChangedEmail, welcomeEmail } from "../lib/email-templates";
 import { signAccessToken } from "../lib/jwt";
 import { hashPassword, verifyPassword } from "../lib/password";
 import { clientIp } from "../lib/request";
@@ -90,6 +92,19 @@ auth.openapi(registerRoute, async (c) => {
       actorRole: "customer",
       ipAddress: clientIp(c),
     })
+  );
+
+  c.executionCtx.waitUntil(
+    (async () => {
+      const welcome = welcomeEmail(user.firstName, "customer");
+      await sendEmail(c.env.BREVO_API_KEY, { to: [{ email: user.email, name: user.firstName }], subject: welcome.subject, htmlContent: welcome.html });
+
+      const adminEmails = await getAdminEmails(db);
+      if (adminEmails.length > 0) {
+        const notice = adminNewSignupEmail(`${user.firstName} ${user.lastName}`, user.email, "customer");
+        await sendEmail(c.env.BREVO_API_KEY, { to: adminEmails, subject: notice.subject, htmlContent: notice.html });
+      }
+    })()
   );
 
   return c.json(session, 201);
@@ -378,6 +393,17 @@ auth.openapi(changePasswordRoute, async (c) => {
       actorRole: user.role,
       ipAddress: clientIp(c),
     })
+  );
+
+  c.executionCtx.waitUntil(
+    (async () => {
+      const notice = passwordChangedEmail(user.firstName);
+      await sendEmail(c.env.BREVO_API_KEY, {
+        to: [{ email: user.email, name: user.firstName }],
+        subject: notice.subject,
+        htmlContent: notice.html,
+      });
+    })()
   );
 
   return c.json(session, 200);

@@ -20,7 +20,18 @@ JWT_SECRET=your_32_byte_secret_here
 DOCUMENT_ENCRYPTION_KEY=your_key_here
 ADMIN_BOOTSTRAP_TOKEN=your_token_here
 FCM_SERVICE_ACCOUNT_KEY=your_fcm_json
+BREVO_API_KEY=your_brevo_api_key
 ```
+
+## Production Secrets [Verified]
+Set once via Wrangler — never committed, never passed through chat or any
+other plaintext channel:
+```bash
+cd apps/api
+npx wrangler secret put BREVO_API_KEY   # run yourself; prompts for the value
+```
+Empty/unset is treated as "not configured yet" and every email call silently
+no-ops rather than throwing — same rollout pattern as `FCM_SERVICE_ACCOUNT_KEY`.
 
 ## Database Setup & Migration [Verified]
 ```bash

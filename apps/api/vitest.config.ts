@@ -28,6 +28,11 @@ export default defineConfig(async () => {
             // configured" and no-ops rather than throwing, so tests can
             // exercise notification call sites without real Firebase creds.
             FCM_SERVICE_ACCOUNT_KEY: "",
+            // Same pattern for Brevo (lib/email.ts) — empty means "not
+            // configured", so registration/password/trip-completion tests can
+            // exercise every email call site without a real API key, and
+            // without ever reaching the network.
+            BREVO_API_KEY: "",
           },
         },
       }),

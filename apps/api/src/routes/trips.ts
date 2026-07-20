@@ -33,6 +33,7 @@ import { RoutingUnavailableError, roadDistanceMiles } from "../lib/routing";
 import { sendPushToDriver, sendPushToUser } from "../lib/fcm";
 import { clientIp } from "../lib/request";
 import { customerTripNotification, TRIP_CANCELLED_NOTIFICATION } from "../lib/trip-notifications";
+import { sendTripCompletedEmails } from "../lib/trip-emails";
 import { authenticate } from "../middlewares/auth";
 
 const trips = new OpenAPIHono<AppBindings>();
@@ -593,6 +594,24 @@ trips.openapi(updateStatusRoute, async (c) => {
   if (trip.customerId) {
     const notification = customerTripNotification(status);
     if (notification) c.executionCtx.waitUntil(sendPushToUser(db, c.env.FCM_SERVICE_ACCOUNT_KEY, trip.customerId, notification));
+  }
+
+  // Trip detail, by email, to whoever was in the car and to the office —
+  // best-effort, same as the push above.
+  if (status === "TRIP_COMPLETED") {
+    c.executionCtx.waitUntil(
+      sendTripCompletedEmails(db, c.env.BREVO_API_KEY, {
+        id: updated!.id,
+        pickupAddress: updated!.pickupAddress,
+        dropoffAddress: updated!.dropoffAddress,
+        distanceMiles: updated!.distanceMiles,
+        finalFareCents: updated!.finalFareCents,
+        currency: updated!.currency,
+        driverId: updated!.driverId,
+        customerId: updated!.customerId,
+        guestName: updated!.guestName,
+      })
+    );
   }
 
   return c.json(toTripResponse(updated!), 200);

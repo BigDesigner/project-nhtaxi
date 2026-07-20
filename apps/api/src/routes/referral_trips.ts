@@ -21,6 +21,7 @@ import { getDriverUsageRates } from "../lib/driver-sessions";
 import { estimateFare } from "../lib/fare";
 import { clientIp } from "../lib/request";
 import { roadDistanceMiles } from "../lib/routing";
+import { sendTripCompletedEmails } from "../lib/trip-emails";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { toTripResponse } from "./trips";
 
@@ -321,6 +322,23 @@ referralTrips.openapi(completeReferralRoute, async (c) => {
       })
     );
   }
+
+  // No customerId on a referral trip — there was never a booking — so this
+  // only ever reaches the office's inbox, which is exactly the record a job
+  // with no passenger account behind it most needs.
+  c.executionCtx.waitUntil(
+    sendTripCompletedEmails(db, c.env.BREVO_API_KEY, {
+      id: updated!.id,
+      pickupAddress: updated!.pickupAddress,
+      dropoffAddress: updated!.dropoffAddress,
+      distanceMiles: updated!.distanceMiles,
+      finalFareCents: updated!.finalFareCents,
+      currency: updated!.currency,
+      driverId: updated!.driverId,
+      customerId: updated!.customerId,
+      guestName: updated!.guestName,
+    })
+  );
 
   return c.json(toTripResponse(updated!), 200);
 });

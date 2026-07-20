@@ -15,6 +15,14 @@ export type Env = {
   // late in this phase's rollout.
   FCM_SERVICE_ACCOUNT_KEY: string;
   /**
+   * Brevo transactional-email API key (lib/email.ts). Same rollout pattern
+   * as the FCM key above: empty/unset means "not configured yet" and every
+   * send silently no-ops rather than throwing. Set in production with
+   * `wrangler secret put BREVO_API_KEY` — never committed, never passed
+   * through this codebase in plaintext.
+   */
+  BREVO_API_KEY: string;
+  /**
    * Base URL of an OSRM-compatible routing service, used to price journeys
    * by real driving distance (lib/routing.ts). Optional: defaults to the
    * public OSRM instance, which is fine for this volume but is a demo
