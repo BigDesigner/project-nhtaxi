@@ -166,6 +166,11 @@ Future<void> uploadDriverDocument(WidgetRef ref, String type, Uint8List bytes, S
   ref.invalidate(driverDocumentsProvider);
 }
 
+final driverEarningsProvider = FutureProvider<DriverEarnings>((ref) async {
+  final json = await ref.read(apiClientProvider).get('/api/driver/earnings');
+  return DriverEarnings.fromJson(json);
+});
+
 final driverSessionsProvider = FutureProvider<List<DriverSession>>((ref) async {
   final raw = await ref.read(apiClientProvider).getList('/api/driver/sessions');
   return raw.map((e) => DriverSession.fromJson(e as Map<String, dynamic>)).toList();

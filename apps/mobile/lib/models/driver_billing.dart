@@ -87,3 +87,56 @@ class DriverSession {
         closedReason: json['closedReason'] as String?,
       );
 }
+
+/// What the driver has actually earned (GET /api/driver/earnings).
+///
+/// The counterpart to [DriverBalance]. Drivers could see what they owe but
+/// never what they took, which is a strange half of the picture to be shown —
+/// especially when the money they earn never passes through this system at
+/// all and this is the only record of it.
+class DriverEarnings {
+  const DriverEarnings({
+    required this.tripCount,
+    required this.totalEarnings,
+    required this.currency,
+    required this.trips,
+  });
+
+  final int tripCount;
+  final double totalEarnings;
+  final String currency;
+  final List<EarnedTrip> trips;
+
+  factory DriverEarnings.fromJson(Map<String, dynamic> json) => DriverEarnings(
+        tripCount: (json['tripCount'] as num?)?.toInt() ?? 0,
+        totalEarnings: (json['totalEarnings'] as num?)?.toDouble() ?? 0,
+        currency: json['currency'] as String? ?? 'USD',
+        trips: ((json['trips'] as List<dynamic>?) ?? const [])
+            .map((e) => EarnedTrip.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+class EarnedTrip {
+  const EarnedTrip({
+    required this.tripId,
+    required this.currency,
+    this.completedAt,
+    this.distanceMiles,
+    this.fare,
+  });
+
+  final String tripId;
+  final String currency;
+  final DateTime? completedAt;
+  final double? distanceMiles;
+  final double? fare;
+
+  factory EarnedTrip.fromJson(Map<String, dynamic> json) => EarnedTrip(
+        tripId: json['tripId'] as String,
+        currency: json['currency'] as String? ?? 'USD',
+        completedAt: json['completedAt'] == null ? null : DateTime.parse(json['completedAt'] as String),
+        distanceMiles: (json['distanceMiles'] as num?)?.toDouble(),
+        fare: (json['fare'] as num?)?.toDouble(),
+      );
+}

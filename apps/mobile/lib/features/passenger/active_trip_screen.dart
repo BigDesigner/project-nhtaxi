@@ -12,6 +12,7 @@ import '../../widgets/error_banner.dart';
 import '../../widgets/help_card.dart';
 import '../../widgets/map_markers.dart';
 import '../../widgets/search_countdown.dart';
+import '../../widgets/trip_timeline.dart';
 
 /// Polls one trip.
 ///
@@ -212,6 +213,20 @@ class _TripDetail extends ConsumerWidget {
                     ),
                   ],
                 ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('What has happened', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                TripTimeline(tripId: tripId),
               ],
             ),
           ),

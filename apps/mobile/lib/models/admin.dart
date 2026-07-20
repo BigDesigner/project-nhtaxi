@@ -350,3 +350,71 @@ class AuditEntry {
         ipAddress: json['ipAddress'] as String?,
       );
 }
+
+/// One commission GNN LLC charged on a referred job
+/// (GET /api/admin/reports/driver-commissions).
+///
+/// The Money tab shows totals; this is the line-by-line behind them, which is
+/// what a driver disputing a figure actually needs to see.
+class CommissionCharge {
+  const CommissionCharge({
+    required this.id,
+    required this.driverId,
+    required this.driverName,
+    required this.tripId,
+    required this.fare,
+    required this.commissionPercent,
+    required this.commission,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String driverId;
+  final String driverName;
+  final String tripId;
+  final double fare;
+  final double commissionPercent;
+  final double commission;
+  final DateTime createdAt;
+
+  factory CommissionCharge.fromJson(Map<String, dynamic> json) => CommissionCharge(
+        id: json['id'] as String,
+        driverId: json['driverId'] as String,
+        driverName: json['driverName'] as String? ?? 'Unknown',
+        tripId: json['tripId'] as String,
+        fare: (json['fare'] as num?)?.toDouble() ?? 0,
+        commissionPercent: (json['commissionPercent'] as num?)?.toDouble() ?? 0,
+        commission: (json['commission'] as num?)?.toDouble() ?? 0,
+        createdAt: DateTime.parse(json['createdAt'] as String),
+      );
+}
+
+/// A place the business serves (GET/POST /api/admin/cities).
+class City {
+  const City({
+    required this.id,
+    required this.name,
+    required this.country,
+    required this.timezone,
+    required this.isActive,
+    this.state,
+  });
+
+  final String id;
+  final String name;
+  final String country;
+  final String timezone;
+  final bool isActive;
+  final String? state;
+
+  String get label => [name, ?state].join(', ');
+
+  factory City.fromJson(Map<String, dynamic> json) => City(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        country: json['country'] as String? ?? 'US',
+        timezone: json['timezone'] as String? ?? 'America/New_York',
+        isActive: json['isActive'] as bool? ?? true,
+        state: json['state'] as String?,
+      );
+}

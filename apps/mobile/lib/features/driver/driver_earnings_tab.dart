@@ -21,11 +21,13 @@ class DriverEarningsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final balance = ref.watch(driverBalanceProvider);
     final sessions = ref.watch(driverSessionsProvider);
+    final earnings = ref.watch(driverEarningsProvider);
 
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(driverBalanceProvider);
         ref.invalidate(driverSessionsProvider);
+        ref.invalidate(driverEarningsProvider);
         await ref.read(driverBalanceProvider.future);
       },
       child: ListView(
@@ -38,6 +40,15 @@ class DriverEarningsTab extends ConsumerWidget {
               ),
             AsyncError(:final error) => ErrorBanner(message: error.toString()),
             AsyncData(:final value) => _BalanceCard(balance: value),
+          },
+          const SizedBox(height: 16),
+          // The other half of the picture. Showing a driver only what they owe
+          // is a strange thing to do when the money they earn never passes
+          // through this system and this is its only record.
+          switch (earnings) {
+            AsyncLoading() => const SizedBox.shrink(),
+            AsyncError() => const SizedBox.shrink(),
+            AsyncData(:final value) => _EarningsCard(earnings: value),
           },
           const SizedBox(height: 24),
           Text('When you were online', style: Theme.of(context).textTheme.titleMedium),
@@ -105,6 +116,42 @@ class _BalanceCard extends StatelessWidget {
             _Line(label: 'Charged in total', amount: balance.totalCharged, bold: true),
             const SizedBox(height: 6),
             _Line(label: 'Cash you have handed over', amount: -balance.totalCollected),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// What the driver actually took, in cash, from completed trips.
+class _EarningsCard extends StatelessWidget {
+  const _EarningsCard({required this.earnings});
+
+  final DriverEarnings earnings;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('You have earned', style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height: 4),
+            Text(
+              formatFare(earnings.totalEarnings, currency: earnings.currency),
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              earnings.tripCount == 1 ? 'from 1 completed trip' : 'from ${earnings.tripCount} completed trips',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Paid to you directly in cash — this is a record, not a payment.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ],
         ),
       ),

@@ -20,11 +20,13 @@ class AdminMoneyTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final balances = ref.watch(driverBalancesProvider);
     final collections = ref.watch(cashCollectionsProvider);
+    final commissions = ref.watch(commissionChargesProvider);
 
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(driverBalancesProvider);
         ref.invalidate(cashCollectionsProvider);
+        ref.invalidate(commissionChargesProvider);
         await ref.read(driverBalancesProvider.future);
       },
       child: ListView(
@@ -37,6 +39,23 @@ class AdminMoneyTab extends ConsumerWidget {
               ),
             AsyncError(:final error) => ErrorBanner(message: error.toString()),
             AsyncData(:final value) => _Outstanding(rows: value),
+          },
+          const SizedBox(height: 24),
+          Text('Commission charges', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(
+            'Only jobs GNN LLC referred. Ordinary dispatch work carries none — that '
+            'is what the time-on-app charge already pays for.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          switch (commissions) {
+            AsyncLoading() => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            AsyncError(:final error) => ErrorBanner(message: error.toString()),
+            AsyncData(:final value) => _Commissions(charges: value),
           },
           const SizedBox(height: 24),
           Text('Cash collected', style: Theme.of(context).textTheme.titleMedium),
@@ -145,6 +164,52 @@ class _Split extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [Text(label, style: style), Text(formatFare(amount), style: style)],
     );
+  }
+}
+
+/// Every commission charged, newest first. This is what somebody disputing a
+/// figure on their balance actually needs — the totals above cannot answer
+/// "which job was that?".
+class _Commissions extends StatelessWidget {
+  const _Commissions({required this.charges});
+
+  final List<CommissionCharge> charges;
+
+  @override
+  Widget build(BuildContext context) {
+    if (charges.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Text('No commission charged yet.'),
+      );
+    }
+
+    return Column(
+      children: [
+        for (final c in charges)
+          Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: const Icon(Icons.handshake),
+              title: Text(c.driverName),
+              subtitle: Text(
+                'Fare ${formatFare(c.fare)} · ${c.commissionPercent.toStringAsFixed(0)}% · '
+                '${_formatDate(c.createdAt)}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              trailing: Text(
+                formatFare(c.commission),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    final d = dt.toLocal();
+    return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
   }
 }
 

@@ -190,6 +190,28 @@ final auditLogProvider = FutureProvider<List<AuditEntry>>((ref) async {
   return raw.map((e) => AuditEntry.fromJson(e as Map<String, dynamic>)).toList();
 });
 
+final commissionChargesProvider = FutureProvider<List<CommissionCharge>>((ref) async {
+  final raw = await ref.read(apiClientProvider).getList('/api/admin/reports/driver-commissions');
+  return raw.map((e) => CommissionCharge.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+final citiesProvider = FutureProvider<List<City>>((ref) async {
+  final raw = await ref.read(apiClientProvider).getList('/api/admin/cities');
+  return raw.map((e) => City.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+Future<void> createCity(
+  WidgetRef ref, {
+  required String name,
+  String? state,
+}) async {
+  await ref.read(apiClientProvider).post(
+    '/api/admin/cities',
+    body: {'name': name, 'country': 'US', 'state': ?state, 'timezone': 'America/New_York'},
+  );
+  ref.invalidate(citiesProvider);
+}
+
 final pricingConfigProvider = FutureProvider<PricingConfig>((ref) async {
   final json = await ref.read(apiClientProvider).get('/api/admin/pricing');
   return PricingConfig.fromJson(json);
