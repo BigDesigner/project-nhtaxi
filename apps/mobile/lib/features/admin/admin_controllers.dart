@@ -1,0 +1,142 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/providers.dart';
+import '../../models/admin.dart';
+import '../../models/driver_billing.dart';
+
+/// Everything the office reads and writes.
+///
+/// Kept as plain providers rather than notifiers where nothing mutates: the
+/// admin surface is mostly reports, and `ref.invalidate` after a write is
+/// simpler to follow than hand-rolled state updates.
+
+final adminDriversProvider = FutureProvider<List<AdminDriver>>((ref) async {
+  final raw = await ref.read(apiClientProvider).getList('/api/admin/drivers');
+  return raw.map((e) => AdminDriver.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+/// Verifying is the gate on a driver ever receiving work, so it invalidates
+/// the list rather than patching one row — a stale "unverified" badge here
+/// would have someone chasing a problem that no longer exists.
+Future<void> setDriverVerified(WidgetRef ref, String driverId, bool verified) async {
+  await ref.read(apiClientProvider).put(
+        '/api/admin/drivers/$driverId/verify',
+        body: {'isVerified': verified},
+      );
+  ref.invalidate(adminDriversProvider);
+}
+
+final driverBalancesProvider = FutureProvider<List<DriverBalanceRow>>((ref) async {
+  final raw = await ref.read(apiClientProvider).getList('/api/admin/reports/driver-balances');
+  return raw.map((e) => DriverBalanceRow.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+final cashCollectionsProvider = FutureProvider<List<CashCollection>>((ref) async {
+  final raw = await ref.read(apiClientProvider).getList('/api/admin/reports/driver-collections');
+  return raw.map((e) => CashCollection.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+/// Records cash a driver has physically handed over.
+///
+/// This is the only way a balance ever goes down, so it invalidates both the
+/// report and the collections log — an admin who records a payment and still
+/// sees the old outstanding figure will record it twice.
+Future<void> recordCashCollection(
+  WidgetRef ref,
+  String driverId, {
+  required double amount,
+  String? notes,
+}) async {
+  await ref.read(apiClientProvider).post(
+    '/api/admin/drivers/$driverId/collections',
+    body: {'amount': amount, if (notes != null && notes.isNotEmpty) 'notes': notes},
+  );
+  ref.invalidate(driverBalancesProvider);
+  ref.invalidate(cashCollectionsProvider);
+}
+
+/// One driver's online-session history, for answering "why do I owe this?".
+final adminDriverSessionsProvider =
+    FutureProvider.family<List<DriverSession>, String>((ref, driverId) async {
+  final raw = await ref.read(apiClientProvider).getList('/api/admin/drivers/$driverId/sessions');
+  return raw.map((e) => DriverSession.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+/// Ends a session the driver left running — the app died, the phone was lost,
+/// or they simply forgot. Stops the meter without waiting for the cron sweep.
+Future<void> forceCloseSession(WidgetRef ref, String driverId) async {
+  await ref.read(apiClientProvider).post('/api/admin/drivers/$driverId/close-session');
+  ref.invalidate(driverBalancesProvider);
+  ref.invalidate(adminDriverSessionsProvider(driverId));
+  ref.invalidate(adminDriversProvider);
+}
+
+final adminTripsProvider = FutureProvider<List<AdminTripRow>>((ref) async {
+  final raw = await ref.read(apiClientProvider).getList('/api/admin/reports/trips');
+  return raw.map((e) => AdminTripRow.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+final pricingConfigProvider = FutureProvider<PricingConfig>((ref) async {
+  final json = await ref.read(apiClientProvider).get('/api/admin/pricing');
+  return PricingConfig.fromJson(json);
+});
+
+Future<void> updatePricing(
+  WidgetRef ref, {
+  required double baseFare,
+  required double perMile,
+  double? driverUsagePerMinute,
+  double? driverCommissionPercent,
+}) async {
+  await ref.read(apiClientProvider).put(
+    '/api/admin/pricing',
+    body: {
+      'baseFare': baseFare,
+      'perMile': perMile,
+      'driverUsagePerMinute': ?driverUsagePerMinute,
+      'driverCommissionPercent': ?driverCommissionPercent,
+    },
+  );
+  ref.invalidate(pricingConfigProvider);
+}
+
+/// Hands a job directly to a chosen driver, bypassing auto-dispatch. That
+/// driver owes GNN LLC a commission on it, which the driver app discloses
+/// before they accept.
+Future<String> assignTripToDriver(
+  WidgetRef ref, {
+  required String driverId,
+  required double pickupLat,
+  required double pickupLng,
+  required String pickupAddress,
+  required String guestName,
+  required String guestPhone,
+  double? dropoffLat,
+  double? dropoffLng,
+  String? dropoffAddress,
+  String? notes,
+}) async {
+  final json = await ref.read(apiClientProvider).post(
+    '/api/admin/trips',
+    body: {
+      'driverId': driverId,
+      'pickupLat': pickupLat,
+      'pickupLng': pickupLng,
+      'pickupAddress': pickupAddress,
+      'guestName': guestName,
+      'guestPhone': guestPhone,
+      // The API requires all three dropoff fields together or none at all —
+      // a phoned-in booking often has no destination until pickup.
+      if (dropoffLat != null && dropoffLng != null && dropoffAddress != null) ...{
+        'dropoffLat': dropoffLat,
+        'dropoffLng': dropoffLng,
+        'dropoffAddress': dropoffAddress,
+      },
+      'paymentMethod': 'cash',
+      'notes': ?notes,
+    },
+  );
+  ref.invalidate(adminTripsProvider);
+  ref.invalidate(adminDriversProvider);
+  return json['id'] as String;
+}

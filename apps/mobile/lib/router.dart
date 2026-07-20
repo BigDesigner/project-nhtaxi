@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'features/auth/auth_controller.dart';
+import 'features/admin/admin_assign_trip_screen.dart';
+import 'features/admin/admin_driver_screen.dart';
+import 'features/admin/admin_shell.dart';
 import 'features/auth/driver_signup_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/signup_screen.dart';
@@ -55,6 +58,12 @@ List<RouteBase> appRoutes() => [
             path: 'job/:tripId',
             builder: (_, state) => DriverJobScreen(tripId: state.pathParameters['tripId']!),
           ),
+          // Admin detail screens, nested for the same reason.
+          GoRoute(
+            path: 'driver/:driverId',
+            builder: (_, state) => AdminDriverScreen(driverId: state.pathParameters['driverId']!),
+          ),
+          GoRoute(path: 'assign', builder: (_, _) => const AdminAssignTripScreen()),
         ],
       ),
     ];
@@ -90,9 +99,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Sends each role to its own surface. Passenger and driver apps both exist;
-/// admin is still stubbed so signing in with that account is explicable
-/// rather than broken.
+/// Sends each role to its own surface.
 class _RoleHome extends ConsumerWidget {
   const _RoleHome();
 
@@ -102,6 +109,7 @@ class _RoleHome extends ConsumerWidget {
     if (user == null) return const _SplashScreen();
     if (user.isCustomer) return const PassengerShell();
     if (user.role == 'driver') return const DriverShell();
+    if (user.role == 'admin') return const AdminShell();
     return _ComingSoonScreen(role: user.role);
   }
 }
