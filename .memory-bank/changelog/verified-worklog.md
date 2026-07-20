@@ -406,6 +406,48 @@ category the user mentioned has no natural trigger event yet (unlike
 registration/password-change/trip-completion, which are all real moments)
 and needs its own design pass before it's built.
 
+### Trip path verification — anchored on the booking, not the passenger
+The user's idea was to cross-check a driver's and passenger's GPS against each
+other to catch a shrunk fare. That doesn't actually work: the trips where a
+driver's declared distance most needs checking (referral jobs) have no
+passenger account to compare against, and on an ordinary dispatched trip the
+passenger typed the pickup/dropoff themselves — comparing their own phone to
+their own typed address proves very little. **Decided instead:** anchor on
+the trip's own recorded pickup/dropoff and compare the driver's breadcrumb
+trail against *that*. One check, identical for every trip type, needs
+nothing new from the passenger.
+
+`lib/path-verification.ts` — at completion, takes the earliest breadcrumb
+(by recorded time, not insertion order — a phone catching up on a backlog
+must not scramble which point is "first") against pickup, the latest against
+dropoff, worst of the two decides. `PATH_TOLERANCE_MILES = 0.5` per the
+user's own number. No breadcrumbs at all (dead phone, or a trip that predates
+this) → `NOT_CHECKED`, never a false `MISMATCHED` — silence is unknown, not
+guilt. Wired into both completion paths (ordinary status transition and the
+referral-trip endpoint), awaited synchronously since it's pure DB work with
+no network call, unlike the push/email side effects on the same transition.
+
+New columns `trips.path_verification` / `trips.path_deviation_miles`
+(migration `0008`, applied cleanly) — plain `ADD COLUMN`, no SQL `CHECK`,
+same call already made for `paymentMethod` on this table: skipping the
+constraint on a column only this codebase ever writes keeps the migration in
+the safe category instead of the table-rebuild category.
+
+**Driver/admin only, by construction, not by convention.** The result is
+deliberately absent from `TripResponseSchema` — every existing call site that
+returns a trip, including the passenger's own, is untouched — and exposed
+solely through `GET /api/trips/{tripId}/path-verification`, gated to the
+assigned driver or an admin. Putting the gate on one dedicated endpoint
+means there is exactly one place to get this right, instead of a field that
+has to be remembered and stripped at every trip-returning route.
+
+Surfaced with a small badge (quiet green for matched, amber for mismatched,
+nothing at all for not-checked) on the two screens where it's relevant: the
+admin's existing trip-route map (wave B) and a driver's own completed job.
+14 new backend tests (8 unit — including the out-of-order-backlog case — plus
+6 for the access gate itself: admin yes, owning driver yes, another driver
+no, the booking passenger no, unknown trip 404) and 3 Flutter model tests.
+
 ## Known Incomplete Work
 - **Push notifications deliver nothing, and the missing piece is bigger than
   it was recorded as.** This was previously noted as "waiting for the Firebase
@@ -622,13 +664,12 @@ same pattern is worth applying to the other routers if they're ever touched.
 
 ## Validation Status
 
-As of commit `d1a3f2e` (Brevo email), everything below is deployed and
-verified against production.
+As of commit `82bbceb` (trip path verification), everything below is
+deployed and verified against production.
 
-- Backend: 166/166 vitest tests passing (real D1/DO via
+- Backend: 180/180 vitest tests passing (real D1/DO via
   `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean.
-- Mobile: 70/70 Flutter tests passing, `flutter analyze` clean. Untouched by
-  the Brevo wave — no Flutter change was needed.
+- Mobile: 73/73 Flutter tests passing, `flutter analyze` clean.
 - CI `Deploy` + `Mobile` workflows green; live on `api.nhtaxi.com` and
   `gnncab-preview.pages.dev`.
 - Migrations `0004`–`0006` were single `ALTER TABLE … ADD COLUMN` statements,
@@ -670,6 +711,12 @@ verified against production.
     path the test suite exercises. Once the user runs
     `wrangler secret put BREVO_API_KEY`, register a test account and confirm
     the welcome email and the admin notice both land.
+  - Path verification: the new endpoint is present in the live OpenAPI doc
+    and an unauthenticated request → 401 (route exists, auth gate holds).
+    Migration `0008` applied cleanly to remote D1. **Not yet proven live: a
+    real MISMATCHED flag on a real trip** — the automated route tests plant
+    the mismatching breadcrumb by hand; a genuine test would want a real
+    phone driving somewhere other than the booked pickup.
 
 ### Test accounts in production
 The drivers visible in the admin panel are from live smoke tests, not real
