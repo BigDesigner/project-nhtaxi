@@ -18,6 +18,12 @@ class Trip {
     this.searchAttempts = 0,
     this.nextSearchAt,
     this.maxSearchAttempts = 0,
+    this.origin = 'CUSTOMER_APP',
+    this.commissionPercent,
+    this.pickupLat,
+    this.pickupLng,
+    this.dropoffLat,
+    this.dropoffLng,
   });
 
   final String id;
@@ -40,6 +46,34 @@ class Trip {
   final int searchAttempts;
   final DateTime? nextSearchAt;
   final int maxSearchAttempts;
+
+  /// CUSTOMER_APP for an ordinary booking, ADMIN_ASSIGNED when an admin
+  /// hand-picked the driver — the latter owes GNN LLC a cut of the fare.
+  final String origin;
+
+  /// The percentage of the fare the driver owes GNN LLC. Only set on
+  /// ADMIN_ASSIGNED trips, and it must be shown to the driver *before* they
+  /// accept — that was the whole point of disclosing it.
+  final double? commissionPercent;
+
+  final double? pickupLat;
+  final double? pickupLng;
+  final double? dropoffLat;
+  final double? dropoffLng;
+
+  /// What the driver keeps after GNN LLC's cut, on the trips that have one.
+  double? get driverTakeHome {
+    final fare = displayFare;
+    if (fare == null) return null;
+    if (commissionPercent == null) return fare;
+    return fare * (1 - commissionPercent! / 100);
+  }
+
+  double? get commissionOwed {
+    final fare = displayFare;
+    if (fare == null || commissionPercent == null) return null;
+    return fare * commissionPercent! / 100;
+  }
 
   /// What to call this trip in a list: its destination, or its pickup for an
   /// admin-assigned trip that doesn't have one yet.
@@ -130,5 +164,11 @@ class Trip {
         searchAttempts: (json['searchAttempts'] as num?)?.toInt() ?? 0,
         nextSearchAt: json['nextSearchAt'] == null ? null : DateTime.parse(json['nextSearchAt'] as String),
         maxSearchAttempts: (json['maxSearchAttempts'] as num?)?.toInt() ?? 0,
+        origin: json['origin'] as String? ?? 'CUSTOMER_APP',
+        commissionPercent: (json['commissionPercent'] as num?)?.toDouble(),
+        pickupLat: (json['pickupLat'] as num?)?.toDouble(),
+        pickupLng: (json['pickupLng'] as num?)?.toDouble(),
+        dropoffLat: (json['dropoffLat'] as num?)?.toDouble(),
+        dropoffLng: (json['dropoffLng'] as num?)?.toDouble(),
       );
 }

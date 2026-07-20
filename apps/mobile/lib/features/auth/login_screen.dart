@@ -101,6 +101,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onPressed: isBusy ? null : () => context.go('/signup'),
                       child: const Text("Don't have an account? Sign up"),
                     ),
+                    // Drivers sign up through a different endpoint and get a
+                    // different app, so they need their own way in rather
+                    // than a role picker on the passenger form.
+                    TextButton(
+                      onPressed: isBusy ? null : () => context.go('/signup/driver'),
+                      child: const Text('Drive with us'),
+                    ),
                   ],
                 ),
               ),

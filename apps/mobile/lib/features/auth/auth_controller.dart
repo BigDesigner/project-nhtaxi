@@ -63,6 +63,52 @@ class AuthController extends AsyncNotifier<AppUser?> {
     });
   }
 
+  /// Driver sign-up. Separate endpoint from [register] because it creates a
+  /// driver profile alongside the user and requires explicit agreement to the
+  /// driver terms — `acceptedAgreement` has to be literally true server-side,
+  /// so there is no way to sign someone up by implication.
+  ///
+  /// Vehicle details are optional here: getting a driver signed up quickly
+  /// matters more than a complete record, and the app nags for the missing
+  /// pieces on the home tab until they're filled in.
+  Future<void> registerDriver({
+    required String firstName,
+    required String lastName,
+    required String email,
+    required String phone,
+    required String password,
+    String? vehicleMake,
+    String? vehicleModel,
+    String? vehicleColor,
+    String? vehiclePlate,
+    int? vehicleYear,
+    String? licenseNumber,
+  }) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final json = await ref.read(apiClientProvider).post(
+        '/api/driver/register',
+        body: {
+          'firstName': firstName,
+          'lastName': lastName,
+          'email': email,
+          'phone': phone,
+          'password': password,
+          'acceptedAgreement': true,
+          if (vehicleMake != null && vehicleMake.isNotEmpty) 'vehicleMake': vehicleMake,
+          if (vehicleModel != null && vehicleModel.isNotEmpty) 'vehicleModel': vehicleModel,
+          if (vehicleColor != null && vehicleColor.isNotEmpty) 'vehicleColor': vehicleColor,
+          if (vehiclePlate != null && vehiclePlate.isNotEmpty) 'vehiclePlate': vehiclePlate,
+          'vehicleYear': ?vehicleYear,
+          if (licenseNumber != null && licenseNumber.isNotEmpty) 'licenseNumber': licenseNumber,
+          'platform': AppConfig.authPlatform,
+        },
+        skipAuth: true,
+      );
+      return _persistSession(json);
+    });
+  }
+
   Future<void> logout() async {
     final tokenStore = ref.read(tokenStoreProvider);
     final refreshToken = await tokenStore.readRefreshToken();

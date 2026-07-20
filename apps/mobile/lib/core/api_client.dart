@@ -65,6 +65,9 @@ class ApiClient {
         allowRefresh: !skipAuth,
       );
 
+  Future<Map<String, dynamic>> put(String path, {Object? body}) =>
+      _send(() => _dio.put<dynamic>(path, data: body));
+
   Future<List<dynamic>> getList(String path, {Map<String, dynamic>? query}) async {
     final response = await _raw(() => _dio.get<dynamic>(path, queryParameters: query));
     final data = response.data;

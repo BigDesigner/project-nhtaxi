@@ -156,28 +156,54 @@ by two driver-owed revenue streams for GNN LLC.
 - Added footer navigation (Home/Profile/Settings) with icon-based tabs.
 - Added a sign-out confirmation dialog instead of signing out on a single tap.
 
+### Faz 8 — Driver App
+Built almost entirely against endpoints that already existed (`/api/driver/*`
+and the shared trip routes), so this wave was a Flutter build rather than new
+backend work.
+- Driver sign-up screen (`/signup/driver`, reached from the login screen)
+  collecting vehicle make/model/colour/plate/year — all optional, because
+  getting someone signed up beats a complete record, and the home tab nags
+  for whatever is missing.
+- Driver shell with Jobs / Balance / Profile tabs.
+- An online/offline switch that states the per-minute charge out loud, blocks
+  going offline mid-job, and explains when an unverified account can't go
+  available.
+- Job flow with one action at a time: accept or decline an offer, then "I'm on
+  my way" → "I've arrived" → "passenger is in the car" → "dropped off".
+- Commission disclosure before accepting an office-assigned job, with the
+  fare, GNN LLC's cut and the driver's take-home spelled out — accepting is
+  never the moment they learn what it costs.
+- Job detail screen with a reference map and hand-off to the driver's own
+  navigation app (`geo:` intent, https fallback for iOS/web).
+- Balance tab framed as "what I owe" rather than earnings (cash never touches
+  the system), broken down by usage fee vs commission, plus the session
+  footprint listing which days and hours they were online and what each cost.
+  Sessions the server force-closed are labelled, so an unexplained charge
+  can't turn into a phone call.
+- Vehicle details editable from Profile, since that's what the passenger
+  driver map renders.
+
 ## Known Incomplete Work
 
-- **Driver app** — does not exist yet. Signing in as a driver shows a "coming
-  soon" placeholder. This blocks a real end-to-end test of dispatch,
-  commission disclosure, and the driver map (there are no real drivers to
-  show). Confirmed requirements for when it's built:
-  - Registration must collect vehicle make/model/colour, plate, and a profile
-    photo — the passenger driver map already renders all of these and shows
-    `photoUrl: null` until then.
-  - An Online/Offline toggle, which is what opens and closes the billable
-    usage session (`lib/driver-sessions.ts`).
-  - Drivers must see their own outstanding balance to GNN LLC, broken down by
-    charge type, and their own session footprint (which days/hours they were
-    online).
-  - **Metered fare from the actual trip** — the driver marks "picked up" at
-    the pickup point (starts the trip) and "dropped off" at the destination
-    (ends it), and the final fare is computed from what actually happened
-    rather than the booking estimate. The passenger-side quote is already
-    presented as a ±10% range precisely because the real figure comes from
-    this. Needs a decision on whether the charge is time-based, distance
-    travelled (from LocationHub's position stream), or both.
-- **Admin app** — same placeholder situation.
+- **Driver profile photo** — driver sign-up collects vehicle details but not
+  an avatar. `DirectoryDriver.photoUrl` exists end to end (API response,
+  Dart model, both UIs) and is always `null` until an upload path is built.
+  Needs a decision: driver documents live envelope-encrypted in R2 and are
+  admin-only, but a profile photo is shown to passengers, so it needs its own
+  semi-public storage and serving route rather than reusing that pipeline.
+- **Metered fare from the actual trip** — the driver already marks "passenger
+  is in the car" (TRIP_STARTED) and "dropped off" (TRIP_COMPLETED), but the
+  final fare still just copies the booking estimate
+  (`finalFareCents = estimatedFareCents` in `routes/trips.ts`). Making it
+  reflect what actually happened needs a decision on the basis: time elapsed,
+  distance really travelled (from LocationHub's position stream), or both.
+  The passenger-side quote is already presented as a floor with a +10%
+  ceiling precisely so this can move without breaking a promise.
+- **Admin app** — still a placeholder. Everything it needs exists server-side
+  (reports, cash collection recording, pricing, driver verification), so this
+  is a Flutter/web build rather than new backend work. Note drivers cannot go
+  AVAILABLE until an admin verifies them, so onboarding a real driver
+  currently requires an API call by hand.
 - **Phase 7 Wave 3**: WebSocket live driver-position updates in the app
   (LocationHub DO already exists server-side; the Flutter client doesn't
   consume it yet — the driver map currently shows a static snapshot,
@@ -279,14 +305,16 @@ never as a range — the two cases are distinguished by `finalFare != null`.
 
 ## Validation Status
 
-- Backend: 95/95 vitest tests passing (real D1/DO via
+- Backend: 101/101 vitest tests passing (real D1/DO via
   `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean.
-- Mobile: 17/17 Flutter tests passing, `flutter analyze` clean.
-- CI (`Deploy` + `Mobile` GitHub Actions workflows) green as of commit
-  `e40b4c6`; both deployed live (`api.nhtaxi.com`, `gnncab-preview.pages.dev`).
-- Live smoke-tested against production after the #6/#7 deploy: `GET
-  /api/drivers` returns 200 with an empty list (no real drivers registered
-  yet — expected, since the driver app doesn't exist) and 401 when
+- Mobile: 31/31 Flutter tests passing, `flutter analyze` clean.
+- **Not yet deployed or live smoke-tested**: the fare/marker fixes and the
+  whole driver app are committed locally but unpushed at the user's request.
+  The usual rule still applies — deploy, then verify against production
+  before calling any of it done.
+- Last verified deploy was commit `73ad5ec`: CI green, live against
+  `api.nhtaxi.com` and `gnncab-preview.pages.dev`, `GET /api/drivers`
+  returning 200 (empty list, no drivers registered yet) and 401 when
   unauthenticated.
 
 ## Unconfirmed Historical Notes

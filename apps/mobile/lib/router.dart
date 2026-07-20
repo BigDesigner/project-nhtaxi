@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'features/auth/auth_controller.dart';
+import 'features/auth/driver_signup_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/signup_screen.dart';
+import 'features/driver/driver_job_screen.dart';
+import 'features/driver/driver_shell.dart';
 import 'features/passenger/active_trip_screen.dart';
 import 'features/passenger/booking/booking_screen.dart';
 import 'features/passenger/drivers/drivers_screen.dart';
@@ -26,7 +29,16 @@ import 'features/passenger/passenger_shell.dart';
 List<RouteBase> appRoutes() => [
       GoRoute(path: '/', builder: (_, _) => const _SplashScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
-      GoRoute(path: '/signup', builder: (_, _) => const SignupScreen()),
+      GoRoute(
+        path: '/signup',
+        builder: (_, _) => const SignupScreen(),
+        // Driver sign-up is a sibling of passenger sign-up rather than a
+        // separate top-level screen: same pre-login area, and back lands on
+        // the passenger form it was reached from.
+        routes: [
+          GoRoute(path: 'driver', builder: (_, _) => const DriverSignupScreen()),
+        ],
+      ),
       GoRoute(
         path: '/home',
         builder: (_, _) => const _RoleHome(),
@@ -36,6 +48,12 @@ List<RouteBase> appRoutes() => [
           GoRoute(
             path: 'trip/:tripId',
             builder: (_, state) => ActiveTripScreen(tripId: state.pathParameters['tripId']!),
+          ),
+          // Driver-side detail screen. Shares /home so the role shell is
+          // always underneath it, exactly like the passenger's.
+          GoRoute(
+            path: 'job/:tripId',
+            builder: (_, state) => DriverJobScreen(tripId: state.pathParameters['tripId']!),
           ),
         ],
       ),
@@ -72,9 +90,9 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Sends each role to its own surface. Only the passenger app exists in this
-/// wave; driver and admin are stubbed so signing in with those accounts is
-/// explicable rather than broken.
+/// Sends each role to its own surface. Passenger and driver apps both exist;
+/// admin is still stubbed so signing in with that account is explicable
+/// rather than broken.
 class _RoleHome extends ConsumerWidget {
   const _RoleHome();
 
@@ -83,6 +101,7 @@ class _RoleHome extends ConsumerWidget {
     final user = ref.watch(authControllerProvider).value;
     if (user == null) return const _SplashScreen();
     if (user.isCustomer) return const PassengerShell();
+    if (user.role == 'driver') return const DriverShell();
     return _ComingSoonScreen(role: user.role);
   }
 }

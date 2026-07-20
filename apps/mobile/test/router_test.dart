@@ -84,10 +84,13 @@ void main() {
       // the app without nesting it fails right here.
       final paths = _collectPaths(appRoutes());
 
-      // Auth screens and the splash are the deliberate exceptions: there is
-      // no shell to go back to before signing in.
+      // Two exceptions, both deliberate. The splash and auth screens come
+      // before there is any shell to return to; their own subtree (/signup/…)
+      // falls back to /login instead.
       const allowedTopLevel = {'/', '/login', '/signup', '/home'};
-      final strays = paths.where((p) => !allowedTopLevel.contains(p) && !p.startsWith('/home/'));
+      final strays = paths.where(
+        (p) => !allowedTopLevel.contains(p) && !p.startsWith('/home/') && !p.startsWith('/signup/'),
+      );
 
       expect(
         strays,
