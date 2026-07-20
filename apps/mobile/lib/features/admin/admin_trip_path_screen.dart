@@ -3,10 +3,12 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../core/path_verification.dart';
 import '../../core/providers.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/error_banner.dart';
 import '../../widgets/map_markers.dart';
+import '../../widgets/path_verification_badge.dart';
 import '../../widgets/trip_timeline.dart';
 
 /// One recorded position on a trip.
@@ -42,20 +44,32 @@ class AdminTripPathScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final path = ref.watch(tripPathProvider(tripId));
+    final verification = ref.watch(tripPathVerificationProvider(tripId)).value;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Trip route'),
         leading: const AppBackButton(),
       ),
-      body: switch (path) {
-        AsyncLoading() => const Center(child: CircularProgressIndicator()),
-        AsyncError(:final error) => Padding(
-            padding: const EdgeInsets.all(16),
-            child: ErrorBanner(message: error.toString()),
+      body: Column(
+        children: [
+          if (verification != null && verification.isChecked)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: PathVerificationBadge(verification: verification),
+            ),
+          Expanded(
+            child: switch (path) {
+              AsyncLoading() => const Center(child: CircularProgressIndicator()),
+              AsyncError(:final error) => Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: ErrorBanner(message: error.toString()),
+                ),
+              AsyncValue(:final value?) => _Path(tripId: tripId, points: value),
+            },
           ),
-        AsyncValue(:final value?) => _Path(tripId: tripId, points: value),
-      },
+        ],
+      ),
     );
   }
 }

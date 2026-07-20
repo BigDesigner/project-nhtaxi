@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/path_verification.dart';
 import '../../models/trip.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/error_banner.dart';
 import '../../widgets/map_markers.dart';
+import '../../widgets/path_verification_badge.dart';
 import 'driver_controllers.dart';
 import 'job_actions.dart';
 
@@ -49,7 +51,7 @@ class DriverJobScreen extends ConsumerWidget {
   }
 }
 
-class _JobDetail extends StatelessWidget {
+class _JobDetail extends ConsumerWidget {
   const _JobDetail({required this.job});
 
   final Trip job;
@@ -70,7 +72,9 @@ class _JobDetail extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pathVerification =
+        job.status == 'TRIP_COMPLETED' ? ref.watch(tripPathVerificationProvider(job.id)).value : null;
     final pickup = (job.pickupLat != null && job.pickupLng != null)
         ? LatLng(job.pickupLat!, job.pickupLng!)
         : null;
@@ -112,6 +116,10 @@ class _JobDetail extends StatelessWidget {
             ),
           ),
         ),
+        if (pathVerification != null && pathVerification.isChecked) ...[
+          const SizedBox(height: 16),
+          PathVerificationBadge(verification: pathVerification),
+        ],
         if (pickup != null) ...[
           const SizedBox(height: 16),
           SizedBox(

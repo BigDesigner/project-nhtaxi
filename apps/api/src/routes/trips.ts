@@ -11,6 +11,7 @@ import {
   EstimateTripRequestSchema,
   EstimateTripResponseSchema,
   TripEventResponseSchema,
+  TripPathVerificationResponseSchema,
   TripResponseSchema,
   UpdateTripStatusRequestSchema,
 } from "@gnncab/contract";
@@ -34,6 +35,7 @@ import { sendPushToDriver, sendPushToUser } from "../lib/fcm";
 import { clientIp } from "../lib/request";
 import { customerTripNotification, TRIP_CANCELLED_NOTIFICATION } from "../lib/trip-notifications";
 import { sendTripCompletedEmails } from "../lib/trip-emails";
+import { recordTripPathVerification } from "../lib/path-verification";
 import { authenticate } from "../middlewares/auth";
 
 const trips = new OpenAPIHono<AppBindings>();
@@ -596,6 +598,13 @@ trips.openapi(updateStatusRoute, async (c) => {
     if (notification) c.executionCtx.waitUntil(sendPushToUser(db, c.env.FCM_SERVICE_ACCOUNT_KEY, trip.customerId, notification));
   }
 
+  // Whether the car's own recorded path actually reached this trip's
+  // pickup/dropoff — pure DB work, so awaited rather than backgrounded like
+  // the network calls below, and driver/admin-only (see the schema comment).
+  if (status === "TRIP_COMPLETED") {
+    await recordTripPathVerification(db, tripId);
+  }
+
   // Trip detail, by email, to whoever was in the car and to the office —
   // best-effort, same as the push above.
   if (status === "TRIP_COMPLETED") {
@@ -864,6 +873,41 @@ trips.openapi(listBreadcrumbsRoute, async (c) => {
     rows.map((r) => ({ id: r.id, lat: r.lat, lng: r.lng, recordedAt: r.recordedAt.toISOString() })),
     200
   );
+});
+
+// ─── GET /{tripId}/path-verification ───────────────────────────────────────
+// Driver/admin only — deliberately narrower than the breadcrumbs endpoint
+// above, which a passenger can also read. See the schema comment
+// (packages/db/src/schema/trips.ts) for why this stays off the passenger's
+// own trip response instead of just being another field there.
+const getPathVerificationRoute = createRoute({
+  method: "get",
+  path: "/{tripId}/path-verification",
+  tags: ["trips"],
+  summary: "Whether the car's recorded path matched this trip's booked pickup/dropoff",
+  request: { params: z.object({ tripId: z.string().uuid() }) },
+  responses: {
+    200: { description: "Result", content: { "application/json": { schema: TripPathVerificationResponseSchema } } },
+    403: { description: "Forbidden", content: { "application/json": { schema: ErrorResponseSchema } } },
+    404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+trips.openapi(getPathVerificationRoute, async (c) => {
+  const authUser = c.get("user")!;
+  const { tripId } = c.req.valid("param");
+  const db = createDb(c.env.DB);
+
+  const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId)).limit(1);
+  if (!trip) return c.json({ error: "NotFound", message: "Trip not found" }, 404);
+
+  const isAdmin = authUser.role === "admin";
+  const isOwningDriver = authUser.role === "driver" && (await assertOwnsTrip(db, trip, authUser));
+  if (!isAdmin && !isOwningDriver) {
+    return c.json({ error: "Forbidden", message: "Only the assigned driver or an admin can see this" }, 403);
+  }
+
+  return c.json({ status: trip.pathVerification, deviationMiles: trip.pathDeviationMiles }, 200);
 });
 
 export default trips;

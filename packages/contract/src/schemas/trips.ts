@@ -156,6 +156,16 @@ export const SetTripReferralRequestSchema = z
   })
   .openapi("SetTripReferralRequest");
 
+// Driver/admin-only — deliberately not on TripResponseSchema. See
+// packages/db/src/schema/trips.ts for why: this is exposed through its own
+// endpoint precisely so a passenger-facing response can never carry it.
+export const TripPathVerificationResponseSchema = z
+  .object({
+    status: z.enum(["NOT_CHECKED", "MATCHED", "MISMATCHED"]),
+    deviationMiles: z.number().nullable(),
+  })
+  .openapi("TripPathVerificationResponse");
+
 export const TripEventResponseSchema = z
   .object({
     id: z.string(),

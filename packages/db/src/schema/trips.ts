@@ -64,6 +64,25 @@ export type TripOrigin = (typeof TRIP_ORIGINS)[number];
 export const REFERRAL_SOURCES = ["NONE", "ADMIN_ASSIGNED", "DRIVER_DECLARED", "ADMIN_MARKED"] as const;
 export type ReferralSource = (typeof REFERRAL_SOURCES)[number];
 
+/**
+ * Whether the car's own recorded path actually reached this trip's pickup
+ * and dropoff — computed once, at completion, from `trip_breadcrumbs`
+ * (lib/path-verification.ts). Anchored on the trip's own endpoints rather
+ * than a passenger's GPS: most trips have no passenger location data at all
+ * (a referral job has no passenger account to have any), and anchoring on
+ * the booking is what lets the same check run identically for every trip
+ * type. NOT_CHECKED covers both "no breadcrumbs exist" (a dead phone, or a
+ * trip that predates this feature) and "not completed yet" — silence is
+ * treated as unknown, never as a mismatch.
+ *
+ * Deliberately kept off `TripResponseSchema`: this is driver/admin-only
+ * information, exposed through `GET /api/trips/{tripId}/path-verification`
+ * instead of the general trip response, so a passenger-facing call site can
+ * never leak it by accident.
+ */
+export const PATH_VERIFICATION_STATUSES = ["NOT_CHECKED", "MATCHED", "MISMATCHED"] as const;
+export type PathVerificationStatus = (typeof PATH_VERIFICATION_STATUSES)[number];
+
 export const tripsTable = sqliteTable(
   "trips",
   {
@@ -113,6 +132,14 @@ export const tripsTable = sqliteTable(
     completedAt: integer("completed_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    // No SQL CHECK here, deliberately — same call already made for
+    // paymentMethod above (see its comment): the TS union is enough for a
+    // column only this codebase ever writes, and skipping the constraint
+    // keeps this a plain ADD COLUMN rather than the table rebuild a new CHECK
+    // would force (the exact operation that broke migrations 0002 and, nearly,
+    // 0007 — see packages/db's own migration history).
+    pathVerification: text("path_verification", { enum: PATH_VERIFICATION_STATUSES }).notNull().default("NOT_CHECKED"),
+    pathDeviationMiles: real("path_deviation_miles"),
   },
   (table) => [
     index("idx_trips_customer_id").on(table.customerId),

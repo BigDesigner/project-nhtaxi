@@ -21,6 +21,7 @@ import { getDriverUsageRates } from "../lib/driver-sessions";
 import { estimateFare } from "../lib/fare";
 import { clientIp } from "../lib/request";
 import { roadDistanceMiles } from "../lib/routing";
+import { recordTripPathVerification } from "../lib/path-verification";
 import { sendTripCompletedEmails } from "../lib/trip-emails";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { toTripResponse } from "./trips";
@@ -299,6 +300,11 @@ referralTrips.openapi(completeReferralRoute, async (c) => {
 
   const results = await db.batch(writes as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
   const [updated] = results[tripUpdateIndex] as (typeof tripsTable.$inferSelect)[];
+
+  // Referral jobs are exactly the case this most needs to catch — no booking
+  // behind the pickup/dropoff to cross-check against, only the driver's own
+  // taps. Awaited, same as the ordinary trip-status path: pure DB work.
+  await recordTripPathVerification(db, tripId);
 
   c.executionCtx.waitUntil(
     logAudit(db, {

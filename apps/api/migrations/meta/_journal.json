@@ -57,6 +57,13 @@
       "when": 1784550964647,
       "tag": "0007_fancy_carnage",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1784578213097,
+      "tag": "0008_low_morbius",
+      "breakpoints": true
     }
   ]
 }
