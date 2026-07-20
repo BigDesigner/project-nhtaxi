@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
 import '../../core/fare_range.dart';
+import '../../models/driver_document.dart';
 import '../../models/driver_profile.dart';
 import '../../models/trip.dart';
 import '../../widgets/error_banner.dart';
@@ -145,6 +146,10 @@ class _OnlineToggleCardState extends ConsumerState<_OnlineToggleCard> {
                 text: 'Your account is not verified yet — the office needs to approve you '
                     'before dispatch will send you jobs.',
               ),
+              // The office cannot approve anyone it has not seen documents
+              // for, so tell the driver what is actually holding them up
+              // rather than leaving them waiting on nothing.
+              const _MissingDocumentsNotice(),
             ],
             if (!p.hasCompleteVehicle) ...[
               const SizedBox(height: 12),
@@ -156,6 +161,36 @@ class _OnlineToggleCardState extends ConsumerState<_OnlineToggleCard> {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Names the documents still missing, so "not verified yet" has an action
+/// attached to it instead of being a dead end.
+class _MissingDocumentsNotice extends ConsumerWidget {
+  const _MissingDocumentsNotice();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final docs = ref.watch(driverDocumentsProvider).value;
+    if (docs == null) return const SizedBox.shrink();
+
+    final missing = requiredDocumentTypes.where(
+      (type) => !docs.any((d) => d.type == type && !d.isRejected),
+    ).toList();
+    if (missing.isEmpty) return const SizedBox.shrink();
+
+    final names = missing
+        .map((t) => DriverDocument(id: '', type: t, status: 'PENDING', uploadedAt: DateTime.now()).typeLabel)
+        .join(' and ');
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: _Notice(
+        icon: Icons.upload_file,
+        text: 'Still needed: $names. Upload under Profile — the office cannot approve '
+            'you until it has seen them.',
       ),
     );
   }

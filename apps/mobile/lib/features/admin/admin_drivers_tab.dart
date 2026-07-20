@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/api_client.dart';
 import '../../models/admin.dart';
 import '../../widgets/error_banner.dart';
 import 'admin_controllers.dart';
@@ -82,52 +81,16 @@ class _DriverList extends ConsumerWidget {
   }
 }
 
-class _DriverCard extends ConsumerStatefulWidget {
+/// A row in the fleet list. Approving is deliberately not here — it belongs
+/// next to the documents on the driver's own screen.
+class _DriverCard extends StatelessWidget {
   const _DriverCard({required this.driver});
 
   final AdminDriver driver;
 
   @override
-  ConsumerState<_DriverCard> createState() => _DriverCardState();
-}
-
-class _DriverCardState extends ConsumerState<_DriverCard> {
-  bool _busy = false;
-
-  Future<void> _setVerified(bool verified) async {
-    // Withdrawing approval takes someone's livelihood away mid-shift, so it
-    // asks first. Granting it does not — that's the whole point of the queue.
-    if (!verified) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Suspend ${widget.driver.firstName}?'),
-          content: const Text(
-            'They will be taken offline and will not receive any more jobs until you '
-            'approve them again.',
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Suspend')),
-          ],
-        ),
-      );
-      if (ok != true) return;
-    }
-
-    setState(() => _busy = true);
-    try {
-      await setDriverVerified(ref, widget.driver.id, verified);
-    } on ApiException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final d = widget.driver;
+    final d = driver;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -162,12 +125,12 @@ class _DriverCardState extends ConsumerState<_DriverCard> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (_busy)
-                  const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                else if (d.isVerified)
-                  TextButton(onPressed: () => _setVerified(false), child: const Text('Suspend'))
-                else
-                  FilledButton(onPressed: () => _setVerified(true), child: const Text('Approve')),
+                TextButton(
+                  // Approving happens on the driver's own screen, next to the
+                  // documents it should be based on.
+                  onPressed: () => context.go('/home/driver/${d.id}'),
+                  child: Text(d.isVerified ? 'Review' : 'Review & approve'),
+                ),
               ],
             ),
           ),

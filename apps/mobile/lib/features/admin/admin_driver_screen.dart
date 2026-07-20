@@ -8,6 +8,7 @@ import '../../models/driver_billing.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/error_banner.dart';
 import 'admin_controllers.dart';
+import 'admin_documents_section.dart';
 
 /// One driver in full: what they owe, the hours behind it, and the button
 /// that records a cash hand-over.
@@ -34,12 +35,17 @@ class AdminDriverScreen extends ConsumerWidget {
         onRefresh: () async {
           ref.invalidate(driverBalancesProvider);
           ref.invalidate(adminDriverSessionsProvider(driverId));
+          ref.invalidate(adminDriverDetailProvider(driverId));
           await ref.read(driverBalancesProvider.future);
         },
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
             if (driver != null) _DriverSummary(driver: driver),
+            const SizedBox(height: 16),
+            // Paperwork and the Approve button together — approving used to
+            // sit on a screen with nothing to review.
+            AdminDocumentsSection(driverId: driverId),
             const SizedBox(height: 16),
             // A driver with no billing history has no row in the report at
             // all, which is not an error — it just means nothing is owed.

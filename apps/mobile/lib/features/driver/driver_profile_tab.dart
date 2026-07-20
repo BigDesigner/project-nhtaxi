@@ -10,6 +10,7 @@ import '../../widgets/error_banner.dart';
 import '../../widgets/help_card.dart';
 import '../passenger/passenger_shell.dart' show confirmSignOut;
 import 'driver_controllers.dart';
+import 'driver_documents_section.dart';
 
 class DriverProfileTab extends ConsumerWidget {
   const DriverProfileTab({super.key});
@@ -190,6 +191,8 @@ class _ProfileBodyState extends ConsumerState<_ProfileBody> {
             ],
           ),
         ),
+        const SizedBox(height: 16),
+        const DriverDocumentsSection(),
         const SizedBox(height: 16),
         Card(
           child: Padding(

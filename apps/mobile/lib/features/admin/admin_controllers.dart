@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
@@ -25,6 +27,42 @@ Future<void> setDriverVerified(WidgetRef ref, String driverId, bool verified) as
       );
   ref.invalidate(adminDriversProvider);
 }
+
+/// One driver in full, *including their documents*.
+///
+/// The list endpoint doesn't carry documents, so a screen built off the list
+/// alone can never show them — which is exactly why Approve was a blind
+/// action for so long.
+final adminDriverDetailProvider =
+    FutureProvider.family<AdminDriverDetail, String>((ref, driverId) async {
+  final json = await ref.read(apiClientProvider).get('/api/admin/drivers/$driverId');
+  return AdminDriverDetail.fromJson(json);
+});
+
+/// Approves or rejects one document. Write-once server-side: an approved
+/// document can't be changed again, so the UI stops offering it.
+Future<void> reviewDriverDocument(
+  WidgetRef ref,
+  String driverId,
+  String documentId,
+  bool approve,
+) async {
+  await ref.read(apiClientProvider).put(
+        '/api/admin/drivers/$driverId/documents/$documentId',
+        body: {'status': approve ? 'APPROVED' : 'REJECTED'},
+      );
+  ref.invalidate(adminDriverDetailProvider(driverId));
+}
+
+/// The decrypted bytes of one document, for the office to actually look at.
+/// Fetched through the API client because the route is admin-authenticated
+/// and `NetworkImage` can't carry a Bearer token on the web build.
+final driverDocumentFileProvider =
+    FutureProvider.family<Uint8List, ({String driverId, String documentId})>((ref, key) async {
+  return ref.read(apiClientProvider).getBytes(
+        '/api/admin/drivers/${key.driverId}/documents/${key.documentId}/file',
+      );
+});
 
 final driverBalancesProvider = FutureProvider<List<DriverBalanceRow>>((ref) async {
   final raw = await ref.read(apiClientProvider).getList('/api/admin/reports/driver-balances');

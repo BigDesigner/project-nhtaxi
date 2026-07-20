@@ -1,6 +1,8 @@
 /// Admin-side models. Each mirrors a schema in packages/contract.
 library;
 
+import 'driver_document.dart';
+
 /// A driver as the office sees them (GET /api/admin/drivers).
 class AdminDriver {
   const AdminDriver({
@@ -60,6 +62,30 @@ class AdminDriver {
         vehicleModel: json['vehicleModel'] as String?,
         vehiclePlate: json['vehiclePlate'] as String?,
         rating: (json['rating'] as num?)?.toDouble(),
+      );
+}
+
+/// A driver plus their documents (GET /api/admin/drivers/{driverId}).
+///
+/// Separate from [AdminDriver] because the list endpoint deliberately omits
+/// documents — fetching every driver's paperwork to render a list would be
+/// wasteful, and it is only ever needed on one driver at a time.
+class AdminDriverDetail {
+  const AdminDriverDetail({required this.driver, required this.documents});
+
+  final AdminDriver driver;
+  final List<DriverDocument> documents;
+
+  /// The office cannot honestly approve anyone whose licence and background
+  /// check it has not looked at and approved.
+  bool get hasAllRequiredApproved => requiredDocumentTypes
+      .every((type) => documents.any((d) => d.type == type && d.isApproved));
+
+  factory AdminDriverDetail.fromJson(Map<String, dynamic> json) => AdminDriverDetail(
+        driver: AdminDriver.fromJson(json),
+        documents: ((json['documents'] as List<dynamic>?) ?? const [])
+            .map((e) => DriverDocument.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 }
 

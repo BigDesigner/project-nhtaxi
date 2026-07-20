@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../models/driver_billing.dart';
+import '../../models/driver_document.dart';
 import '../../models/driver_profile.dart';
 import '../../models/trip.dart';
 
@@ -151,6 +152,19 @@ final driverBalanceProvider = FutureProvider<DriverBalance>((ref) async {
   final json = await ref.read(apiClientProvider).get('/api/driver/balance');
   return DriverBalance.fromJson(json);
 });
+
+/// The driver's own document statuses — never the bytes. Those are
+/// envelope-encrypted and only an admin can read them back.
+final driverDocumentsProvider = FutureProvider<List<DriverDocument>>((ref) async {
+  final raw = await ref.read(apiClientProvider).getList('/api/driver/documents');
+  return raw.map((e) => DriverDocument.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+/// Uploads an identity document. The server encrypts it before it is stored.
+Future<void> uploadDriverDocument(WidgetRef ref, String type, Uint8List bytes, String contentType) async {
+  await ref.read(apiClientProvider).postBytes('/api/driver/documents/$type', bytes, contentType);
+  ref.invalidate(driverDocumentsProvider);
+}
 
 final driverSessionsProvider = FutureProvider<List<DriverSession>>((ref) async {
   final raw = await ref.read(apiClientProvider).getList('/api/driver/sessions');
