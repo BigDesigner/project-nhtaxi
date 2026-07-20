@@ -128,6 +128,54 @@ class _TripCardState extends ConsumerState<_TripCard> {
     }
   }
 
+  Future<void> _reassign() async {
+    final drivers = await ref.read(adminDriversProvider.future);
+    // Only approved drivers can be given work at all, so offering the rest
+    // would just produce a rejection from the API.
+    final eligible = drivers.where((d) => d.isVerified).toList();
+    if (!mounted) return;
+
+    if (eligible.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No approved drivers to give this to.')),
+      );
+      return;
+    }
+
+    final driverId = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Give this job to'),
+            ),
+            for (final d in eligible)
+              ListTile(
+                title: Text(d.fullName),
+                subtitle: Text(
+                  [d.status.toLowerCase(), if (d.vehicleDescription != null) d.vehicleDescription!].join(' · '),
+                ),
+                onTap: () => Navigator.pop(context, d.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (driverId == null) return;
+
+    setState(() => _busy = true);
+    try {
+      await reassignTrip(ref, widget.trip.tripId, driverId);
+    } on ApiException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final trip = widget.trip;
@@ -172,11 +220,17 @@ class _TripCardState extends ConsumerState<_TripCard> {
                 ),
                 if (_busy)
                   const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                else if (canChange)
-                  TextButton(
-                    onPressed: _toggleReferral,
-                    child: Text(trip.isReferred ? 'Not referred' : 'Mark referred'),
-                  ),
+                else ...[
+                  // The "needs attention" heading tells the office to assign
+                  // someone directly; this is the button that does it.
+                  if (trip.needsAttention)
+                    TextButton(onPressed: _reassign, child: const Text('Give to a driver')),
+                  if (canChange)
+                    TextButton(
+                      onPressed: _toggleReferral,
+                      child: Text(trip.isReferred ? 'Not referred' : 'Mark referred'),
+                    ),
+                ],
               ],
             ),
           ),

@@ -95,7 +95,14 @@ void main() {
     });
 
     test('protected routes stay protected', () {
-      for (final path in ['/home', '/home/book', '/home/drivers', '/home/trip/abc']) {
+      for (final path in [
+        '/home',
+        '/home/book',
+        '/home/drivers',
+        '/home/trip/abc',
+        '/home/people',
+        '/home/activity',
+      ]) {
         expect(isPreLoginRoute(path), isFalse, reason: path);
       }
     });

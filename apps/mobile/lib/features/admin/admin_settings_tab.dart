@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
 import '../../models/admin.dart';
@@ -123,6 +124,27 @@ class _PricingFormState extends ConsumerState<_PricingForm> {
                 : const Text('Save pricing'),
           ),
           const SizedBox(height: 32),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.people_outline),
+                  title: const Text('People'),
+                  subtitle: const Text('Add office staff, deactivate accounts'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.go('/home/people'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.history),
+                  title: const Text('Activity log'),
+                  subtitle: const Text('Who changed what, and when'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.go('/home/activity'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           Card(
             child: ListTile(
               leading: const Icon(Icons.lock_outline),

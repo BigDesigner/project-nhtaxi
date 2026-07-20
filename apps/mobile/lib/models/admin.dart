@@ -247,3 +247,106 @@ class AdminTripRow {
         currency: json['currency'] as String? ?? 'USD',
       );
 }
+
+/// A user row in the office's people list (GET /api/admin/users).
+class AdminUser {
+  const AdminUser({
+    required this.id,
+    required this.email,
+    required this.firstName,
+    required this.lastName,
+    required this.role,
+    required this.isActive,
+    required this.createdAt,
+    this.phone,
+  });
+
+  final String id;
+  final String email;
+  final String firstName;
+  final String lastName;
+
+  /// admin / driver / customer
+  final String role;
+
+  /// A deactivated account can still sign in nowhere — login returns 403.
+  final bool isActive;
+
+  final DateTime createdAt;
+  final String? phone;
+
+  String get fullName => '$firstName $lastName';
+
+  factory AdminUser.fromJson(Map<String, dynamic> json) => AdminUser(
+        id: json['id'] as String,
+        email: json['email'] as String,
+        firstName: json['firstName'] as String,
+        lastName: json['lastName'] as String,
+        role: json['role'] as String,
+        isActive: json['isActive'] as bool? ?? true,
+        createdAt: DateTime.parse(json['createdAt'] as String),
+        phone: json['phone'] as String?,
+      );
+}
+
+/// One line of the audit trail (GET /api/admin/audit-logs).
+///
+/// Everything money- or status-changing writes one of these. They were being
+/// recorded from the very first phase and had no way to be read until now,
+/// which made them useless exactly when they would matter — in a dispute.
+class AuditEntry {
+  const AuditEntry({
+    required this.id,
+    required this.entity,
+    required this.action,
+    required this.createdAt,
+    this.entityId,
+    this.actorId,
+    this.actorRole,
+    this.metadata,
+    this.ipAddress,
+  });
+
+  final String id;
+  final String entity;
+  final String action;
+  final DateTime createdAt;
+  final String? entityId;
+  final String? actorId;
+  final String? actorRole;
+  final Map<String, dynamic>? metadata;
+  final String? ipAddress;
+
+  /// Turns TRIP_REFERRAL_CHANGED into "Trip referral changed" rather than
+  /// making the office read database constants.
+  String get actionLabel {
+    final words = action.toLowerCase().split('_');
+    if (words.isEmpty) return action;
+    return words.first[0].toUpperCase() + words.first.substring(1) + (words.length > 1 ? ' ${words.skip(1).join(' ')}' : '');
+  }
+
+  /// The entries worth noticing: money moving, or someone's ability to work
+  /// changing.
+  bool get isSignificant => const {
+        'TRIP_REFERRAL_CHANGED',
+        'DRIVER_VERIFIED',
+        'DRIVER_UNVERIFIED',
+        'CASH_COLLECTED',
+        'PRICING_UPDATED',
+        'COMMISSION_CHARGED',
+        'PASSWORD_CHANGED',
+        'USER_ROLE_CHANGED',
+      }.contains(action);
+
+  factory AuditEntry.fromJson(Map<String, dynamic> json) => AuditEntry(
+        id: json['id'] as String,
+        entity: json['entity'] as String,
+        action: json['action'] as String,
+        createdAt: DateTime.parse(json['createdAt'] as String),
+        entityId: json['entityId'] as String?,
+        actorId: json['actorId'] as String?,
+        actorRole: json['actorRole'] as String?,
+        metadata: json['metadata'] as Map<String, dynamic>?,
+        ipAddress: json['ipAddress'] as String?,
+      );
+}

@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import 'features/auth/auth_controller.dart';
 import 'features/admin/admin_assign_trip_screen.dart';
+import 'features/admin/admin_audit_screen.dart';
+import 'features/admin/admin_people_screen.dart';
 import 'features/admin/admin_driver_screen.dart';
 import 'features/admin/admin_shell.dart';
 import 'features/auth/driver_signup_screen.dart';
@@ -64,6 +66,8 @@ List<RouteBase> appRoutes() => [
             builder: (_, state) => AdminDriverScreen(driverId: state.pathParameters['driverId']!),
           ),
           GoRoute(path: 'assign', builder: (_, _) => const AdminAssignTripScreen()),
+          GoRoute(path: 'people', builder: (_, _) => const AdminPeopleScreen()),
+          GoRoute(path: 'activity', builder: (_, _) => const AdminAuditScreen()),
         ],
       ),
     ];

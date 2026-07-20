@@ -127,6 +127,69 @@ Future<void> setTripReferral(WidgetRef ref, String tripId, bool referred) async 
   ref.invalidate(driverBalancesProvider);
 }
 
+final adminUsersProvider = FutureProvider<List<AdminUser>>((ref) async {
+  final raw = await ref.read(apiClientProvider).getList('/api/admin/users');
+  return raw.map((e) => AdminUser.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+/// Creates any role directly — including another admin, which is otherwise
+/// impossible: bootstrap locks itself after the first one.
+Future<void> createAdminUser(
+  WidgetRef ref, {
+  required String firstName,
+  required String lastName,
+  required String email,
+  required String password,
+  required String role,
+  String? phone,
+}) async {
+  await ref.read(apiClientProvider).post(
+    '/api/admin/users',
+    body: {
+      'firstName': firstName,
+      'lastName': lastName,
+      'email': email,
+      'password': password,
+      'role': role,
+      'phone': ?phone,
+    },
+  );
+  ref.invalidate(adminUsersProvider);
+  ref.invalidate(adminDriversProvider);
+}
+
+/// Deactivating is the closest thing to deleting an account: login starts
+/// returning 403 while the trip history stays intact for the books.
+Future<void> updateAdminUser(
+  WidgetRef ref,
+  String userId, {
+  bool? isActive,
+  String? role,
+}) async {
+  await ref.read(apiClientProvider).put(
+    '/api/admin/users/$userId',
+    body: {'isActive': ?isActive, 'role': ?role},
+  );
+  ref.invalidate(adminUsersProvider);
+  ref.invalidate(adminDriversProvider);
+}
+
+/// Hands a stuck job to a different driver. The Trips tab tells the office to
+/// do this; until now there was no button.
+Future<void> reassignTrip(WidgetRef ref, String tripId, String driverId) async {
+  await ref.read(apiClientProvider).put(
+    '/api/admin/trips/$tripId/reassign',
+    body: {'driverId': driverId},
+  );
+  ref.invalidate(adminTripsProvider);
+  ref.invalidate(adminDriversProvider);
+}
+
+final auditLogProvider = FutureProvider<List<AuditEntry>>((ref) async {
+  final raw = await ref.read(apiClientProvider).getList('/api/admin/audit-logs', query: {'limit': 100});
+  return raw.map((e) => AuditEntry.fromJson(e as Map<String, dynamic>)).toList();
+});
+
 final pricingConfigProvider = FutureProvider<PricingConfig>((ref) async {
   final json = await ref.read(apiClientProvider).get('/api/admin/pricing');
   return PricingConfig.fromJson(json);
