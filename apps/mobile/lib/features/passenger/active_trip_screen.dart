@@ -1,10 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../core/api_client.dart';
 import '../../core/fare_range.dart';
+import '../../core/live_driver_position.dart';
 import '../../core/providers.dart';
 import '../../models/trip.dart';
 import '../../widgets/app_back_button.dart';
@@ -14,12 +17,16 @@ import '../../widgets/map_markers.dart';
 import '../../widgets/search_countdown.dart';
 import '../../widgets/trip_timeline.dart';
 
-/// Polls one trip.
+/// Polls one trip's status.
 ///
-/// Polling is deliberate for this wave: it's a handful of requests over a
-/// trip's lifetime, well inside the free tier, and it gets the screen working
-/// without the WebSocket plumbing. Wave 3 swaps this for the LocationHub
-/// socket, which also brings the driver's live position.
+/// Still polling rather than pushed: a handful of requests over a trip's
+/// lifetime is well inside the free tier, and status changes (assigned,
+/// arrived, started, completed) are infrequent enough that a socket buys
+/// little here. What *is* worth pushing is the driver's position, which
+/// changes every few seconds while they're moving — that part now comes over
+/// LocationHub's WebSocket instead (see `_LiveTripMap` below and
+/// `core/live_driver_position.dart`), layered on top of this poll rather than
+/// replacing it.
 class TripController extends AsyncNotifier<Trip> {
   TripController(this.tripId);
 
@@ -177,6 +184,13 @@ class _TripDetail extends ConsumerWidget {
                   ),
           ),
         ),
+        // A driver only exists to watch move once one is actually matched —
+        // before that there is nothing at trip.driverId to ask LocationHub
+        // for, and after a driver is released the hub simply stops sending.
+        if (trip.isMatched && trip.driverId != null) ...[
+          const SizedBox(height: 16),
+          _LiveTripMap(trip: trip, driverId: trip.driverId!),
+        ],
         const SizedBox(height: 16),
         Card(
           child: Padding(
@@ -263,6 +277,107 @@ class _TripDetail extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
+  }
+}
+
+/// The driver moving, live, over LocationHub's WebSocket — replacing the
+/// 10-second trip-status poll's static picture with something a passenger
+/// can actually watch. The trip poll itself keeps running for status
+/// changes; this is purely the driver's position layered on top.
+class _LiveTripMap extends ConsumerStatefulWidget {
+  const _LiveTripMap({required this.trip, required this.driverId});
+
+  final Trip trip;
+  final String driverId;
+
+  @override
+  ConsumerState<_LiveTripMap> createState() => _LiveTripMapState();
+}
+
+class _LiveTripMapState extends ConsumerState<_LiveTripMap> {
+  final _mapController = MapController();
+  bool _centered = false;
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final trip = widget.trip;
+    final position = ref.watch(driverLivePositionProvider(widget.driverId));
+
+    // Centre on the driver the moment their first position arrives, then
+    // leave the view alone — recentring on every update would fight a
+    // passenger who pinched or panned to look at something else.
+    ref.listen(driverLivePositionProvider(widget.driverId), (_, next) {
+      final point = next.value;
+      if (point != null && !_centered) {
+        _centered = true;
+        _mapController.move(point, 15);
+      }
+    });
+
+    final pickup = LatLng(trip.pickupLat ?? 0, trip.pickupLng ?? 0);
+    final hasDropoff = trip.dropoffLat != null && trip.dropoffLng != null;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        height: 220,
+        child: FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(initialCenter: pickup, initialZoom: 14),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.gnncab.gnncab',
+            ),
+            MarkerLayer(
+              markers: [
+                Marker(point: pickup, width: 32, height: 32, child: const TripPointMarker.pickup()),
+                if (hasDropoff)
+                  Marker(
+                    point: LatLng(trip.dropoffLat!, trip.dropoffLng!),
+                    width: 32,
+                    height: 32,
+                    child: const TripPointMarker.destination(),
+                  ),
+                if (position.value != null)
+                  Marker(
+                    point: position.value!,
+                    width: 36,
+                    height: 36,
+                    child: const _DriverPositionMarker(),
+                  ),
+              ],
+            ),
+            const RichAttributionWidget(
+              attributions: [TextSourceAttribution('OpenStreetMap contributors')],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DriverPositionMarker extends StatelessWidget {
+  const _DriverPositionMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 2.5),
+        boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 5, offset: Offset(0, 1))],
+      ),
+      child: const Icon(Icons.local_taxi, color: Colors.white, size: 20),
+    );
   }
 }
 

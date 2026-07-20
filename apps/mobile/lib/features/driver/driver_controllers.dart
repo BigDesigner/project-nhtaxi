@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
+import '../../core/driver_location_broadcaster.dart';
 import '../../core/providers.dart';
 import '../../core/trip_path_recorder.dart';
 import '../../models/driver_billing.dart';
@@ -41,6 +42,15 @@ class DriverProfileController extends AsyncNotifier<DriverProfile> {
           body: {'status': online ? 'AVAILABLE' : 'OFFLINE'},
         );
     state = AsyncData(DriverProfile.fromJson(json));
+    // Dispatch and the passenger's driver map both go blind for this driver
+    // the moment nobody is sending a position — see the broadcaster's own
+    // header for why that isn't just a cosmetic gap.
+    final broadcaster = ref.read(driverLocationBroadcasterProvider);
+    if (online) {
+      broadcaster.start();
+    } else {
+      broadcaster.stop();
+    }
     // The balance starts or stops moving at exactly this point.
     ref.invalidate(driverBalanceProvider);
     ref.invalidate(driverSessionsProvider);

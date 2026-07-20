@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/driver_location_broadcaster.dart';
 import 'driver_controllers.dart';
 import 'driver_earnings_tab.dart';
 import 'driver_home_tab.dart';
@@ -25,9 +26,16 @@ class _DriverShellState extends ConsumerState<DriverShell> {
     // Arriving here means coming from somewhere else — app start, or back
     // from a job. Re-read so the online toggle and job list can't show a
     // state the driver already saw change.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(driverProfileProvider.notifier).refresh();
-      ref.read(driverTripsProvider.notifier).refresh();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ref.read(driverProfileProvider.notifier).refresh();
+      await ref.read(driverTripsProvider.notifier).refresh();
+      // The broadcaster is normally started from setOnline(), but the app can
+      // be killed and relaunched while a driver is still online mid-shift —
+      // that path never calls setOnline(), so it needs its own check here.
+      final profile = ref.read(driverProfileProvider).value;
+      if (profile != null && profile.isOnline) {
+        ref.read(driverLocationBroadcasterProvider).start();
+      }
     });
   }
 

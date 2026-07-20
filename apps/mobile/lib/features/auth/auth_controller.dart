@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
 import '../../core/config.dart';
+import '../../core/location_socket.dart';
 import '../../core/providers.dart';
 import '../../core/push_tokens.dart';
 import '../../legal/terms.dart';
@@ -140,6 +141,11 @@ class AuthController extends AsyncNotifier<AppUser?> {
       // Ignore — local logout below is what the user asked for.
     }
     await tokenStore.clear();
+    // An authenticated LocationHub connection must not outlive the session it
+    // was opened for. Invalidating rather than calling disconnect() directly
+    // also means a later login gets a brand new socket instead of a
+    // permanently-closed one.
+    ref.invalidate(locationSocketProvider);
     state = const AsyncData(null);
   }
 

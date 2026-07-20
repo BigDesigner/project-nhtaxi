@@ -14,6 +14,7 @@ class Trip {
     this.estimatedFare,
     this.finalFare,
     required this.currency,
+    this.driverId,
     this.completedAt,
     this.searchAttempts = 0,
     this.nextSearchAt,
@@ -40,6 +41,10 @@ class Trip {
   final String currency;
   final DateTime requestedAt;
   final DateTime? completedAt;
+
+  /// Set once a driver is matched. Used to filter the live-position stream
+  /// from LocationHub down to the one driver this trip actually cares about.
+  final String? driverId;
 
   /// Driver-search progress, driven entirely by the server's Alarm loop. The
   /// UI counts down to [nextSearchAt] rather than running its own timer, so
@@ -188,6 +193,7 @@ class Trip {
         estimatedFare: (json['estimatedFare'] as num?)?.toDouble(),
         finalFare: (json['finalFare'] as num?)?.toDouble(),
         currency: json['currency'] as String? ?? 'USD',
+        driverId: json['driverId'] as String?,
         requestedAt: DateTime.parse(json['requestedAt'] as String),
         completedAt: json['completedAt'] == null ? null : DateTime.parse(json['completedAt'] as String),
         searchAttempts: (json['searchAttempts'] as num?)?.toInt() ?? 0,
