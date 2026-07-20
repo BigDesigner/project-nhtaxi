@@ -147,8 +147,18 @@ class _SettingsTab extends ConsumerWidget {
               ),
               const ListTile(
                 leading: Icon(Icons.place_outlined),
-                title: Text('Service area'),
-                subtitle: Text('North Conway, NH'),
+                title: Text('Where we drive'),
+                // Based in North Conway but the business runs long-distance
+                // work — Boston runs are routine and New York happens. Saying
+                // "North Conway, NH" made it look like a village-only service
+                // and left passengers guessing whether to even ask.
+                subtitle: Text(
+                  'Based in North Conway, NH. We cover all of New England '
+                  '(NH, ME, VT, MA, RI, CT) and run long-distance trips across '
+                  'the wider Northeast, including New York and Pennsylvania — '
+                  'airport runs to Boston and Portland are routine. Going '
+                  'somewhere else? Call us and ask.',
+                ),
               ),
               ListTile(
                 leading: const Icon(Icons.map_outlined),
@@ -160,6 +170,14 @@ class _SettingsTab extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         const HelpCard(),
+        const SizedBox(height: 16),
+        // Also reachable from Profile. Settings is where people go looking for
+        // it, so it lives in both rather than only the less obvious one.
+        OutlinedButton.icon(
+          onPressed: () => confirmSignOut(context, ref),
+          icon: const Icon(Icons.logout),
+          label: const Text('Sign out'),
+        ),
       ],
     );
   }

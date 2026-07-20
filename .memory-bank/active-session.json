@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.1.0",
+  "session_id": "63be256b-19c0-49c2-8700-a42f10ffe6ec",
+  "status": "ACTIVE",
+  "mode": "Interactive",
+  "preferred_language": "Türkçe",
+  "timestamp": "2026-07-19T09:36:00+03:00",
+  "active_branch": "main",
+  "last_commit": "41dc8696ea5daa174b3a9b08bb0d447b3ca8ccab",
+  "git_history_available": true,
+  "worktree_status": "clean",
+  "current_sprint": {
+    "sprint_id": "v0.1.0-alpha",
+    "active_tasks": []
+  },
+  "tracked_memory_areas": {
+    "adr": ".memory-bank/adr/",
+    "changelog": ".memory-bank/changelog/",
+    "audits": ".memory-bank/audits/",
+    "bugs": ".memory-bank/bugs/",
+    "tasks": ".tasks/",
+    "archive": ".archive/docs-migration/"
+  }
+}

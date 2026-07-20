@@ -41,6 +41,21 @@ class Trip {
   final DateTime? nextSearchAt;
   final int maxSearchAttempts;
 
+  /// What to call this trip in a list: its destination, or its pickup for an
+  /// admin-assigned trip that doesn't have one yet.
+  ///
+  /// Falls back to a plain description when the stored value is bare
+  /// coordinates. That happens when reverse geocoding couldn't name the spot
+  /// — pin_picker_screen retries before settling for coordinates — and
+  /// "44.05672, -71.12734" tells a passenger nothing about which trip this is.
+  String get destinationLabel {
+    final label = dropoffAddress ?? pickupAddress;
+    return _looksLikeCoordinates(label) ? 'Dropped pin' : label;
+  }
+
+  static bool _looksLikeCoordinates(String value) =>
+      RegExp(r'^-?\d{1,3}\.\d+,\s*-?\d{1,3}\.\d+$').hasMatch(value.trim());
+
   /// Still looking for a driver — no one has taken it yet.
   bool get isSearching => status == 'REQUESTED' || status == 'DRIVER_NO_RESPONSE' || status == 'DRIVER_REJECTED';
 

@@ -7,7 +7,10 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/geocoding.dart';
 import '../../../core/location_service.dart';
 import '../../../core/providers.dart';
+import '../../../core/fare_range.dart';
+import '../../../widgets/app_back_button.dart';
 import '../../../widgets/error_banner.dart';
+import '../../../widgets/map_markers.dart';
 import 'address_search_sheet.dart';
 import 'booking_controller.dart';
 import 'pin_picker_screen.dart';
@@ -120,6 +123,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
     final confirmed = await _confirmOnMap(
       place.point,
       title: isPickup ? 'Confirm pickup' : 'Confirm destination',
+      isPickup: isPickup,
       address: place.displayName,
     );
     if (confirmed == null || !mounted) return;
@@ -131,15 +135,29 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
     final start = (isPickup ? state.pickup?.point : state.dropoff?.point) ??
         state.pickup?.point ??
         _serviceAreaCenter;
-    final picked = await _confirmOnMap(start, title: isPickup ? 'Set pickup' : 'Set destination');
+    final picked = await _confirmOnMap(
+      start,
+      title: isPickup ? 'Set pickup' : 'Set destination',
+      isPickup: isPickup,
+    );
     if (picked == null || !mounted) return;
     _apply(picked, isPickup: isPickup);
   }
 
-  Future<GeoPlace?> _confirmOnMap(LatLng point, {required String title, String? address}) {
+  Future<GeoPlace?> _confirmOnMap(
+    LatLng point, {
+    required String title,
+    required bool isPickup,
+    String? address,
+  }) {
     return Navigator.of(context).push<GeoPlace>(
       MaterialPageRoute(
-        builder: (_) => PinPickerScreen(title: title, initial: point, initialAddress: address),
+        builder: (_) => PinPickerScreen(
+          title: title,
+          initial: point,
+          isPickup: isPickup,
+          initialAddress: address,
+        ),
       ),
     );
   }
@@ -172,7 +190,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
     final trip = await ref.read(bookingControllerProvider.notifier).submit();
     if (trip == null || !mounted) return;
     ref.read(bookingControllerProvider.notifier).reset();
-    context.go('/trip/${trip.id}');
+    context.go('/home/trip/${trip.id}');
   }
 
   @override
@@ -180,7 +198,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
     final state = ref.watch(bookingControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Request a trip')),
+      appBar: AppBar(title: const Text('Request a trip'), leading: const AppBackButton()),
       body: Column(
         children: [
           Expanded(
@@ -200,16 +218,21 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                         if (state.pickup != null)
                           Marker(
                             point: state.pickup!.point,
-                            width: 40,
-                            height: 40,
-                            child: const Icon(Icons.trip_origin, color: Colors.green, size: 32),
+                            // Matches PickupMarker's own size, or the halo
+                            // gets clipped at its widest.
+                            width: 56,
+                            height: 56,
+                            child: const PickupMarker(),
                           ),
                         if (state.dropoff != null)
                           Marker(
                             point: state.dropoff!.point,
-                            width: 40,
-                            height: 40,
-                            child: const Icon(Icons.place, color: Colors.red, size: 36),
+                            width: 48,
+                            height: 48,
+                            // Anchored so the pin's tip lands on the
+                            // coordinate rather than its centre.
+                            alignment: Alignment.topCenter,
+                            child: const DestinationMarker(),
                           ),
                       ],
                     ),
@@ -303,8 +326,7 @@ class _BookingPanel extends StatelessWidget {
                 const SizedBox(height: 8),
               ],
               _AddressRow(
-                icon: Icons.trip_origin,
-                iconColor: Colors.green,
+                isPickup: true,
                 label: 'Pickup',
                 value: locating ? 'Finding your location…' : state.pickup?.shortName,
                 onTap: onPickPickup,
@@ -323,8 +345,7 @@ class _BookingPanel extends StatelessWidget {
                 ),
               const Divider(height: 8),
               _AddressRow(
-                icon: Icons.place,
-                iconColor: Colors.red,
+                isPickup: false,
                 label: 'Destination',
                 value: state.dropoff?.shortName,
                 onTap: onPickDropoff,
@@ -350,7 +371,10 @@ class _BookingPanel extends StatelessWidget {
                     children: [
                       Text('${state.estimate!.distanceMiles.toStringAsFixed(1)} mi'),
                       Text(
-                        '\$${state.estimate!.estimatedFare.toStringAsFixed(2)}',
+                        formatFareRange(
+                          state.estimate!.estimatedFare,
+                          currency: state.estimate!.currency,
+                        ),
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -358,7 +382,8 @@ class _BookingPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Estimated fare · pay the driver in cash',
+                  'Estimated range · the final fare depends on the route your driver '
+                  'takes, and traffic or closures can change it. Pay the driver in cash.',
                   style: Theme.of(context).textTheme.bodySmall,
                   textAlign: TextAlign.center,
                 ),
@@ -381,16 +406,15 @@ class _BookingPanel extends StatelessWidget {
 
 class _AddressRow extends StatelessWidget {
   const _AddressRow({
-    required this.icon,
-    required this.iconColor,
+    required this.isPickup,
     required this.label,
     required this.value,
     required this.onTap,
     this.trailing,
   });
 
-  final IconData icon;
-  final Color iconColor;
+  /// Drives the marker shown, so the row matches its pin on the map above.
+  final bool isPickup;
   final String label;
   final String? value;
   final VoidCallback onTap;
@@ -404,7 +428,7 @@ class _AddressRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           children: [
-            Icon(icon, color: iconColor, size: 20),
+            SizedBox(width: 20, child: Center(child: LegendDot(isPickup: isPickup))),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

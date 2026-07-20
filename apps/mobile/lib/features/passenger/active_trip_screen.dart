@@ -2,13 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/fare_range.dart';
 import '../../core/providers.dart';
 import '../../models/trip.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/error_banner.dart';
 import '../../widgets/help_card.dart';
+import '../../widgets/map_markers.dart';
 import '../../widgets/search_countdown.dart';
 
 /// Polls one trip.
@@ -84,7 +86,7 @@ class ActiveTripScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Your trip'),
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/home')),
+        leading: const AppBackButton(),
       ),
       body: switch (trip) {
         AsyncLoading() => const Center(child: CircularProgressIndicator()),
@@ -180,9 +182,9 @@ class _TripDetail extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                _Row(icon: Icons.trip_origin, color: Colors.green, text: trip.pickupAddress),
+                _Row(isPickup: true, text: trip.pickupAddress),
                 const SizedBox(height: 12),
-                _Row(icon: Icons.place, color: Colors.red, text: trip.dropoffAddress ?? 'Destination not set yet'),
+                _Row(isPickup: false, text: trip.dropoffAddress ?? 'Destination not set yet'),
                 if (trip.distanceMiles != null || fare != null) ...[
                   const Divider(height: 24),
                   Row(
@@ -191,18 +193,21 @@ class _TripDetail extends ConsumerWidget {
                       Text(trip.distanceMiles == null ? '' : '${trip.distanceMiles!.toStringAsFixed(1)} mi'),
                       if (fare != null)
                         Text(
-                          '\$${fare.toStringAsFixed(2)}',
+                          trip.finalFare != null
+                              ? formatFare(fare, currency: trip.currency)
+                              : formatFareRange(fare, currency: trip.currency),
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                         ),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      trip.finalFare != null ? 'Final fare · pay in cash' : 'Estimated · pay in cash',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                  Text(
+                    trip.finalFare != null
+                        ? 'Final fare · pay in cash'
+                        : 'Estimated range · the route your driver takes, traffic and closures '
+                            'can move the final fare within this band. Pay in cash.',
+                    textAlign: TextAlign.right,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
               ],
@@ -245,10 +250,9 @@ class _TripDetail extends ConsumerWidget {
 }
 
 class _Row extends StatelessWidget {
-  const _Row({required this.icon, required this.color, required this.text});
+  const _Row({required this.isPickup, required this.text});
 
-  final IconData icon;
-  final Color color;
+  final bool isPickup;
   final String text;
 
   @override
@@ -256,7 +260,9 @@ class _Row extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: color, size: 20),
+        // Same markers as the booking map, so the two screens describe the
+        // same trip in the same visual language.
+        SizedBox(width: 20, child: Center(child: LegendDot(isPickup: isPickup))),
         const SizedBox(width: 12),
         Expanded(child: Text(text)),
       ],

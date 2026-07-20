@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../core/providers.dart';
 import '../../../models/directory_driver.dart';
+import '../../../widgets/app_back_button.dart';
 import '../../../widgets/error_banner.dart';
 import '../booking/booking_controller.dart';
 import 'drivers_controller.dart';
@@ -64,7 +65,7 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
           // Booking still needs a destination, so we carry the choice into
           // the normal booking flow rather than trying to book from here.
           ref.read(bookingControllerProvider.notifier).setPreferredDriver(driver);
-          context.go('/book');
+          context.go('/home/book');
         },
       ),
     );
@@ -77,6 +78,7 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Drivers'),
+        leading: const AppBackButton(),
         actions: [
           IconButton(
             tooltip: 'Refresh',

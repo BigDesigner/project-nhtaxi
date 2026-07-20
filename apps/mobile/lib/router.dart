@@ -10,6 +10,37 @@ import 'features/passenger/booking/booking_screen.dart';
 import 'features/passenger/drivers/drivers_screen.dart';
 import 'features/passenger/passenger_shell.dart';
 
+/// The app's route table.
+///
+/// Exposed separately from [routerProvider] so `router_test.dart` can assert
+/// its shape without needing a ProviderScope or a live auth state — the test
+/// reads *this* list, so a route added here can't slip past the guard.
+///
+/// **Every passenger screen outside the bottom-nav shell must be a child of
+/// `/home`.** Navigating with `context.go` replaces the stack rather than
+/// growing it, so a detail screen declared as a sibling of `/home` leaves
+/// nothing beneath it and the passenger has no way back. Nesting guarantees
+/// home is always underneath. Pair it with `AppBackButton` as the screen's
+/// AppBar `leading`, which also covers a cold deep link (web reload) where
+/// there is genuinely no stack to pop.
+List<RouteBase> appRoutes() => [
+      GoRoute(path: '/', builder: (_, _) => const _SplashScreen()),
+      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/signup', builder: (_, _) => const SignupScreen()),
+      GoRoute(
+        path: '/home',
+        builder: (_, _) => const _RoleHome(),
+        routes: [
+          GoRoute(path: 'book', builder: (_, _) => const BookingScreen()),
+          GoRoute(path: 'drivers', builder: (_, _) => const DriversScreen()),
+          GoRoute(
+            path: 'trip/:tripId',
+            builder: (_, state) => ActiveTripScreen(tripId: state.pathParameters['tripId']!),
+          ),
+        ],
+      ),
+    ];
+
 final routerProvider = Provider<GoRouter>((ref) {
   // go_router needs a plain Listenable to re-run redirects; this bridges
   // Riverpod's auth state onto one. Bumping the value is enough — the
@@ -37,18 +68,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (isAuthRoute || path == '/') return '/home';
       return null;
     },
-    routes: [
-      GoRoute(path: '/', builder: (_, _) => const _SplashScreen()),
-      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
-      GoRoute(path: '/signup', builder: (_, _) => const SignupScreen()),
-      GoRoute(path: '/home', builder: (_, _) => const _RoleHome()),
-      GoRoute(path: '/book', builder: (_, _) => const BookingScreen()),
-      GoRoute(path: '/drivers', builder: (_, _) => const DriversScreen()),
-      GoRoute(
-        path: '/trip/:tripId',
-        builder: (_, state) => ActiveTripScreen(tripId: state.pathParameters['tripId']!),
-      ),
-    ],
+    routes: appRoutes(),
   );
 });
 

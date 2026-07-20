@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/fare_range.dart';
 import '../../models/trip.dart';
 import '../../widgets/error_banner.dart';
 import '../../widgets/search_countdown.dart';
@@ -61,19 +62,52 @@ class PassengerHomeTab extends ConsumerWidget {
   }
 }
 
-class _RequestTripCard extends StatelessWidget {
-  const _RequestTripCard();
+/// The two entry points on the home screen. Both carry a filled, tinted icon
+/// rather than a bare outline — at a glance the cards were reading as plain
+/// text rows, and the icon is what tells them apart.
+class _ActionCard extends StatelessWidget {
+  const _ActionCard({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.destination,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final String destination;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: ListTile(
-        leading: const Icon(Icons.local_taxi),
-        title: const Text('Request a trip'),
-        subtitle: const Text('Pick your pickup and destination'),
+        leading: CircleAvatar(
+          backgroundColor: color.withValues(alpha: 0.15),
+          child: Icon(icon, color: color),
+        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () => context.go('/book'),
+        onTap: () => context.go(destination),
       ),
+    );
+  }
+}
+
+class _RequestTripCard extends StatelessWidget {
+  const _RequestTripCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _ActionCard(
+      icon: Icons.local_taxi,
+      color: Theme.of(context).colorScheme.primary,
+      title: 'Request a trip',
+      subtitle: 'Pick your pickup and destination',
+      destination: '/home/book',
     );
   }
 }
@@ -83,14 +117,12 @@ class _BrowseDriversCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: const Icon(Icons.people_outline),
-        title: const Text('See our drivers'),
-        subtitle: const Text('Find someone nearby and ask for them by name'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => context.go('/drivers'),
-      ),
+    return const _ActionCard(
+      icon: Icons.groups,
+      color: Colors.teal,
+      title: 'See our drivers',
+      subtitle: 'Find someone nearby and ask for them by name',
+      destination: '/home/drivers',
     );
   }
 }
@@ -113,6 +145,34 @@ class _EmptyTrips extends StatelessWidget {
   }
 }
 
+/// An unfinished trip only ever has an estimate, so it shows a range; a
+/// finished one shows the exact amount that was actually charged.
+class _FareLabel extends StatelessWidget {
+  const _FareLabel({required this.trip});
+
+  final Trip trip;
+
+  @override
+  Widget build(BuildContext context) {
+    final fare = trip.displayFare;
+    if (fare == null) return const SizedBox.shrink();
+
+    final isFinal = trip.finalFare != null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          isFinal ? formatFare(fare, currency: trip.currency) : formatFareRange(fare, currency: trip.currency),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        if (!isFinal)
+          Text('estimate', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).hintColor)),
+      ],
+    );
+  }
+}
+
 class _TripTile extends StatelessWidget {
   const _TripTile({required this.trip});
 
@@ -120,7 +180,6 @@ class _TripTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fare = trip.displayFare;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Column(
@@ -130,10 +189,12 @@ class _TripTile extends StatelessWidget {
             // it, green = a driver is on it or it's done, red = it isn't
             // happening.
             leading: Icon(_statusIcon(trip), color: _statusColor(trip)),
-            title: Text(trip.dropoffAddress ?? trip.pickupAddress),
+            title: Text(trip.destinationLabel, maxLines: 2, overflow: TextOverflow.ellipsis),
             subtitle: Text('${trip.statusLabel} · ${_formatDate(trip.requestedAt)}'),
-            trailing: fare == null ? null : Text('\$${fare.toStringAsFixed(2)}'),
-            onTap: () => context.go('/trip/${trip.id}'),
+            // A quote stays a range right up until the trip is finished and
+            // there's a real charged amount to show.
+            trailing: _FareLabel(trip: trip),
+            onTap: () => context.go('/home/trip/${trip.id}'),
           ),
           // The same countdown as the trip screen, so a passenger watching
           // the list can see the search is still running without opening it.
