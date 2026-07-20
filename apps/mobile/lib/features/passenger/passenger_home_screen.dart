@@ -163,11 +163,13 @@ class _FareLabel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Text(
-          isFinal ? formatFare(fare, currency: trip.currency) : formatFareRange(fare, currency: trip.currency),
+          formatFare(fare, currency: trip.currency),
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
-        if (!isFinal)
-          Text('estimate', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).hintColor)),
+        Text(
+          isFinal ? 'paid' : 'estimate',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).hintColor),
+        ),
       ],
     );
   }

@@ -222,17 +222,14 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                             // gets clipped at its widest.
                             width: 56,
                             height: 56,
-                            child: const PickupMarker(),
+                            child: const TripPointMarker.pickup(),
                           ),
                         if (state.dropoff != null)
                           Marker(
                             point: state.dropoff!.point,
-                            width: 48,
-                            height: 48,
-                            // Anchored so the pin's tip lands on the
-                            // coordinate rather than its centre.
-                            alignment: Alignment.topCenter,
-                            child: const DestinationMarker(),
+                            width: 56,
+                            height: 56,
+                            child: const TripPointMarker.destination(),
                           ),
                       ],
                     ),
@@ -370,11 +367,11 @@ class _BookingPanel extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('${state.estimate!.distanceMiles.toStringAsFixed(1)} mi'),
+                      // The quote leads, because that's what they'll actually
+                      // pay; the ceiling sits behind it as reassurance rather
+                      // than competing with it for attention.
                       Text(
-                        formatFareRange(
-                          state.estimate!.estimatedFare,
-                          currency: state.estimate!.currency,
-                        ),
+                        formatFare(state.estimate!.estimatedFare, currency: state.estimate!.currency),
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -382,8 +379,10 @@ class _BookingPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Estimated range · the final fare depends on the route your driver '
-                  'takes, and traffic or closures can change it. Pay the driver in cash.',
+                  'Pay the driver in cash — ${fareCeilingNote(
+                    state.estimate!.estimatedFare,
+                    currency: state.estimate!.currency,
+                  )}.',
                   style: Theme.of(context).textTheme.bodySmall,
                   textAlign: TextAlign.center,
                 ),

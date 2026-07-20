@@ -1,35 +1,40 @@
 /// How a quoted fare is presented to passengers.
 ///
-/// The estimate comes from straight-line distance against a rate card, so it
-/// can only ever be approximate: the driver may take a different route,
-/// traffic or a closure may force a detour, and the meter reflects what
-/// actually happened. Quoting a single exact figure ("$145") reads as a
-/// promise and turns every normal variation into an argument at the kerb.
+/// The quote is a **floor, not a midpoint**. It's priced off a drivable
+/// route estimate (see ROAD_DISTANCE_FACTOR in apps/api/src/lib/fare.ts), so
+/// a passenger pays that figure on any ordinary trip and only ever pays more
+/// — never less. Showing it as a symmetric band was wrong twice over: it
+/// dangled a lower price that can't happen, and on a $300 airport run a
+/// "$250 – $350" spread is wide enough to put someone off booking at all.
 ///
-/// So a booking quote is always shown as a band, and the passenger sees it
-/// before the trip starts. Once a trip is finished, `finalFare` is a real
-/// charged amount and is shown exactly — never as a range.
+/// So the quote leads with the actual expected price and carries a ceiling
+/// behind it. A completed trip has a real charged amount in `finalFare` and
+/// is shown exactly, with no ceiling at all.
 library;
 
-/// ±10% either side of the estimate. Wide enough to absorb an ordinary
-/// re-route, narrow enough to still be useful when deciding whether to book.
-const fareRangeTolerance = 0.10;
+/// Headroom above the quote for things the straight-line estimate can't see:
+/// a closure on Route 16, roadworks, or a driver taking a longer way round
+/// because the direct road is backed up.
+///
+/// 10% rather than 5% because rural New Hampshire detours are not small — the
+/// alternatives to a closed mountain road can be many extra miles. A ceiling
+/// that gets exceeded is worse than one that's slightly generous, since the
+/// whole point is that the passenger is never surprised upward at the kerb.
+const fareCeilingMargin = 0.10;
 
-/// Rounds to whole dollars: cent-precision on a number this uncertain is
-/// false precision, and "$135 – $160" is easier to read than "$134.55 –
-/// $164.45".
-String formatFareRange(double fare, {String currency = 'USD'}) {
-  final symbol = _symbolFor(currency);
-  final low = (fare * (1 - fareRangeTolerance)).floor();
-  final high = (fare * (1 + fareRangeTolerance)).ceil();
-  // Very short hops can collapse to the same dollar figure at both ends;
-  // showing "$8 – $8" would look broken, so fall back to a single number.
-  if (low >= high) return '$symbol$high';
-  return '$symbol$low – $symbol$high';
-}
-
-/// An exact, already-charged amount.
+/// The price a passenger should expect to pay, to the cent.
 String formatFare(double fare, {String currency = 'USD'}) =>
     '${_symbolFor(currency)}${fare.toStringAsFixed(2)}';
+
+/// The most this trip should cost if the route doesn't go to plan.
+///
+/// Rounded up to a whole dollar: cent precision on a ceiling implies a
+/// exactness it doesn't have.
+String formatFareCeiling(double fare, {String currency = 'USD'}) =>
+    '${_symbolFor(currency)}${(fare * (1 + fareCeilingMargin)).ceil()}';
+
+/// One-line explanation to sit under a quote.
+String fareCeilingNote(double fare, {String currency = 'USD'}) =>
+    'up to ${formatFareCeiling(fare, currency: currency)} if traffic or a closure forces a detour';
 
 String _symbolFor(String currency) => currency == 'USD' ? r'$' : '$currency ';

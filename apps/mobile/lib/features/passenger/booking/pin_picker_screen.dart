@@ -164,13 +164,10 @@ class _PinPickerScreenState extends ConsumerState<PinPickerScreen> {
                     ),
                   ],
                 ),
-                // Sits slightly above centre so the pin's tip, not its middle,
-                // marks the spot the map is centred on.
+                // Both markers are dots centred on their point, so this sits
+                // dead centre — no offset to compensate for a pin's tip.
                 IgnorePointer(
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 48),
-                    child: widget.isPickup ? const PickupMarker() : const DestinationMarker(),
-                  ),
+                  child: widget.isPickup ? const TripPointMarker.pickup() : const TripPointMarker.destination(),
                 ),
                 Positioned(
                   top: 12,

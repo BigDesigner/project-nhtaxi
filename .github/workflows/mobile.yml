@@ -100,9 +100,15 @@ jobs:
       # No --dart-define: the default in core/config.dart is production, which
       # is what the preview must talk to. gnncab.nhtaxi.com is already in the
       # API's production CORS allowlist (apps/api/src/app.ts).
+      # --no-tree-shake-icons: release builds subset the Material icon font to
+      # the glyphs the tree-shaker can prove are used, and it was dropping ones
+      # that are used — icons rendered as blank space on the deployed site
+      # while the same screens were fine in debug. Shipping the whole font
+      # costs a few hundred KB gzipped and makes "the icon vanished in
+      # production" impossible, which is worth more than the bytes here.
       - name: Build web
         if: steps.creds.outputs.configured == 'true'
-        run: flutter build web --release
+        run: flutter build web --release --no-tree-shake-icons
 
       # `pages deploy` does not create the project, and `project create` errors
       # if it already exists — so swallow that specific case to stay idempotent

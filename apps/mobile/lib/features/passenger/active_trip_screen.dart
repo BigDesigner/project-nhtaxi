@@ -193,22 +193,24 @@ class _TripDetail extends ConsumerWidget {
                       Text(trip.distanceMiles == null ? '' : '${trip.distanceMiles!.toStringAsFixed(1)} mi'),
                       if (fare != null)
                         Text(
-                          trip.finalFare != null
-                              ? formatFare(fare, currency: trip.currency)
-                              : formatFareRange(fare, currency: trip.currency),
+                          formatFare(fare, currency: trip.currency),
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                         ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    trip.finalFare != null
-                        ? 'Final fare · pay in cash'
-                        : 'Estimated range · the route your driver takes, traffic and closures '
-                            'can move the final fare within this band. Pay in cash.',
-                    textAlign: TextAlign.right,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                  // Only an estimate carries a ceiling; a final fare is a real
+                  // charged amount. This block also renders when we have a
+                  // distance but no fare at all, hence the null check.
+                  if (fare != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      trip.finalFare != null
+                          ? 'Final fare · pay in cash'
+                          : 'Pay in cash — ${fareCeilingNote(fare, currency: trip.currency)}.',
+                      textAlign: TextAlign.right,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ],
               ],
             ),
