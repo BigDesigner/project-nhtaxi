@@ -8,6 +8,7 @@ import {
   clearSearchSchedule,
   DISPATCH_TIMEOUT_MS,
   findNearestAvailableDriver,
+  findPreferredDriver,
   freeDriver,
   markDriverNoResponse,
   markTripTimeout,
@@ -36,6 +37,14 @@ interface DispatchState {
   triedDriverIds: string[];
   /** How many sweeps for a driver we've made (1-based once searching). */
   searchRound: number;
+  /**
+   * The driver the passenger picked off the map, if any. Consumed once: we
+   * offer them the trip first, and the moment they decline or go quiet this
+   * is cleared so the ordinary nearest-driver search takes over. Without the
+   * clearing step they'd be re-offered every sweep (triedDriverIds resets),
+   * and a passenger who picked someone now unreachable would never get a car.
+   */
+  preferredDriverId?: string;
   /**
    * What the pending Alarm means. Without this the single Alarm slot is
    * ambiguous — "the assigned driver went quiet" and "time to sweep again"
@@ -81,32 +90,43 @@ export class DispatchCoordinator extends DurableObject<Env> {
       return;
     }
 
-    const nearest = await findNearestAvailableDriver(db, trip.pickupLat, trip.pickupLng, state.triedDriverIds);
-    if (!nearest) {
+    // The passenger's pick gets the first offer; everything after is the
+    // ordinary nearest-first search. Clearing it here (not after a successful
+    // claim) means one shot either way — including when they're already gone,
+    // which is exactly when falling back matters most.
+    let candidate: { driverId: string; distanceMiles: number } | null = null;
+    if (state.preferredDriverId) {
+      candidate = await findPreferredDriver(db, state.preferredDriverId, trip.pickupLat, trip.pickupLng);
+      state.preferredDriverId = undefined;
+      await this.ctx.storage.put("dispatch", state);
+    }
+    candidate ??= await findNearestAvailableDriver(db, trip.pickupLat, trip.pickupLng, state.triedDriverIds);
+
+    if (!candidate) {
       await this.scheduleRetryOrGiveUp(state, "No available drivers in range");
       return;
     }
 
-    const claimed = await claimDriver(db, nearest.driverId);
+    const claimed = await claimDriver(db, candidate.driverId);
     if (!claimed) {
       // Lost the race to another dispatch attempt — exclude it and retry.
-      state.triedDriverIds.push(nearest.driverId);
+      state.triedDriverIds.push(candidate.driverId);
       await this.ctx.storage.put("dispatch", state);
       await this.tryAssignNext();
       return;
     }
 
-    state.triedDriverIds.push(nearest.driverId);
+    state.triedDriverIds.push(candidate.driverId);
     state.phase = "awaiting-driver";
     await this.ctx.storage.put("dispatch", state);
     await clearSearchSchedule(db, state.tripId);
-    await assignTripToDriver(db, state.tripId, nearest.driverId, nearest.distanceMiles);
+    await assignTripToDriver(db, state.tripId, candidate.driverId, candidate.distanceMiles);
     await this.ctx.storage.setAlarm(Date.now() + DISPATCH_TIMEOUT_MS);
 
     // Best-effort push, off the critical path (never throws either way, but
     // waitUntil also keeps the extra OAuth2+FCM round trip from delaying the
     // customer's trip-creation response, which awaits this DO's /dispatch call).
-    this.ctx.waitUntil(sendPushToDriver(db, this.env.FCM_SERVICE_ACCOUNT_KEY, nearest.driverId, NEW_TRIP_ASSIGNED_NOTIFICATION));
+    this.ctx.waitUntil(sendPushToDriver(db, this.env.FCM_SERVICE_ACCOUNT_KEY, candidate.driverId, NEW_TRIP_ASSIGNED_NOTIFICATION));
     if (trip.customerId) {
       const notification = customerTripNotification("DRIVER_ASSIGNED");
       if (notification) this.ctx.waitUntil(sendPushToUser(db, this.env.FCM_SERVICE_ACCOUNT_KEY, trip.customerId, notification));
@@ -146,12 +166,16 @@ export class DispatchCoordinator extends DurableObject<Env> {
     const url = new URL(request.url);
 
     if (request.method === "POST" && url.pathname === "/dispatch") {
-      const { tripId } = (await request.json()) as { tripId: string };
+      const { tripId, preferredDriverId } = (await request.json()) as {
+        tripId: string;
+        preferredDriverId?: string;
+      };
       await this.ctx.storage.put<DispatchState>("dispatch", {
         tripId,
         triedDriverIds: [],
         searchRound: 1,
         phase: "searching",
+        preferredDriverId,
       });
       await this.tryAssignNext();
       return new Response("ok");

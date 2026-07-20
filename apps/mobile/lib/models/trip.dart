@@ -47,10 +47,22 @@ class Trip {
   /// The search budget ran out; the passenger can restart it.
   bool get canRetrySearch => status == 'TIMEOUT';
 
-  /// Mirrors the API's rule: once the ride is under way or finished, calling
-  /// it off is a phone call, not a button. A timed-out trip stays cancellable
-  /// so it can be cleared out instead of lingering.
-  bool get canCancel => !const {'TRIP_STARTED', 'TRIP_COMPLETED', 'TRIP_CANCELLED'}.contains(status);
+  /// Mirrors the API's rule (routes/trips.ts): free to cancel right up to the
+  /// moment the driver sets off, because until then they've spent nothing but
+  /// a tap. From EN_ROUTE on it's a phone call, not a button — the driver is
+  /// already moving. A timed-out trip stays cancellable so it can be cleared
+  /// out instead of lingering.
+  bool get canCancel => !const {
+        'DRIVER_EN_ROUTE',
+        'DRIVER_ARRIVED',
+        'TRIP_STARTED',
+        'TRIP_COMPLETED',
+        'TRIP_CANCELLED',
+      }.contains(status);
+
+  /// Cancelling is off the table but the trip is still live — the passenger
+  /// needs the dispatch number rather than a dead button.
+  bool get mustCallToCancel => const {'DRIVER_EN_ROUTE', 'DRIVER_ARRIVED', 'TRIP_STARTED'}.contains(status);
 
   /// A driver is on this trip.
   bool get isMatched => const {

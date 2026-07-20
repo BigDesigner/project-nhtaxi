@@ -6,6 +6,7 @@ import adminRoutes from "./routes/admin";
 import authRoutes from "./routes/auth";
 import customerProfileRoutes from "./routes/customer_profile";
 import driverProfileRoutes from "./routes/driver_profile";
+import driversDirectoryRoutes from "./routes/drivers_directory";
 import health from "./routes/health";
 import pushTokenRoutes from "./routes/push_tokens";
 import tripRoutes from "./routes/trips";
@@ -44,6 +45,7 @@ app.route("/api/customer", customerProfileRoutes);
 app.route("/api/admin", adminRoutes);
 app.route("/api/trips", tripRoutes);
 app.route("/api/push-tokens", pushTokenRoutes);
+app.route("/api/drivers", driversDirectoryRoutes);
 
 // Faz 4: live tracking — single global LocationHub DO, every driver/
 // customer/admin WebSocket connects here (auth happens inside the DO

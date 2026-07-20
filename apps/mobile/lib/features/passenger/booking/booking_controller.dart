@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api_client.dart';
 import '../../../core/geocoding.dart';
 import '../../../core/providers.dart';
+import '../../../models/directory_driver.dart';
 import '../../../models/fare_estimate.dart';
 import '../../../models/trip.dart';
 
@@ -14,6 +15,7 @@ class BookingState {
     this.isEstimating = false,
     this.isSubmitting = false,
     this.error,
+    this.preferredDriver,
   });
 
   final GeoPlace? pickup;
@@ -22,6 +24,10 @@ class BookingState {
   final bool isEstimating;
   final bool isSubmitting;
   final String? error;
+
+  /// Set when the passenger picked someone off the driver map. Dispatch
+  /// treats it as a first offer, not a guarantee (see routes/trips.ts).
+  final DirectoryDriver? preferredDriver;
 
   bool get isComplete => pickup != null && dropoff != null;
   bool get canSubmit => isComplete && estimate != null && !isSubmitting;
@@ -33,8 +39,10 @@ class BookingState {
     bool? isEstimating,
     bool? isSubmitting,
     String? error,
+    DirectoryDriver? preferredDriver,
     bool clearEstimate = false,
     bool clearError = false,
+    bool clearPreferredDriver = false,
   }) {
     return BookingState(
       pickup: pickup ?? this.pickup,
@@ -43,6 +51,7 @@ class BookingState {
       isEstimating: isEstimating ?? this.isEstimating,
       isSubmitting: isSubmitting ?? this.isSubmitting,
       error: clearError ? null : (error ?? this.error),
+      preferredDriver: clearPreferredDriver ? null : (preferredDriver ?? this.preferredDriver),
     );
   }
 }
@@ -60,6 +69,10 @@ class BookingController extends Notifier<BookingState> {
     state = state.copyWith(dropoff: place, clearEstimate: true, clearError: true);
     _estimateIfReady();
   }
+
+  void setPreferredDriver(DirectoryDriver driver) => state = state.copyWith(preferredDriver: driver);
+
+  void clearPreferredDriver() => state = state.copyWith(clearPreferredDriver: true);
 
   void reset() => state = const BookingState();
 
@@ -106,6 +119,7 @@ class BookingController extends Notifier<BookingState> {
           'dropoffLng': dropoff.point.longitude,
           'dropoffAddress': dropoff.shortName,
           'paymentMethod': 'cash',
+          if (state.preferredDriver != null) 'preferredDriverId': state.preferredDriver!.driverId,
         },
       );
       state = state.copyWith(isSubmitting: false);

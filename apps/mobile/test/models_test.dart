@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gnncab/models/directory_driver.dart';
 import 'package:gnncab/models/fare_estimate.dart';
 import 'package:gnncab/models/trip.dart';
 
@@ -73,6 +74,29 @@ void main() {
       expect(Trip.fromJson(tripJson(status: 'REQUESTED')).canCancel, isTrue);
     });
 
+    test('cancelling stays open until the driver actually sets off', () {
+      // Accepting is just a tap — the passenger can still change their mind.
+      for (final status in ['REQUESTED', 'DRIVER_ASSIGNED', 'DRIVER_ACCEPTED']) {
+        final trip = Trip.fromJson(tripJson(status: status));
+        expect(trip.canCancel, isTrue, reason: status);
+        expect(trip.mustCallToCancel, isFalse, reason: status);
+      }
+      // From here the driver is moving, so it's a phone call. These must mirror
+      // CUSTOMER_NON_CANCELLABLE in routes/trips.ts or the app offers a button
+      // the API will refuse.
+      for (final status in ['DRIVER_EN_ROUTE', 'DRIVER_ARRIVED', 'TRIP_STARTED']) {
+        final trip = Trip.fromJson(tripJson(status: status));
+        expect(trip.canCancel, isFalse, reason: status);
+        expect(trip.mustCallToCancel, isTrue, reason: status);
+      }
+      // Already over — nothing to cancel and nobody to call about it.
+      for (final status in ['TRIP_COMPLETED', 'TRIP_CANCELLED']) {
+        final trip = Trip.fromJson(tripJson(status: status));
+        expect(trip.canCancel, isFalse, reason: status);
+        expect(trip.mustCallToCancel, isFalse, reason: status);
+      }
+    });
+
     test('parses the search-progress fields the countdown renders from', () {
       final trip = Trip.fromJson({
         ...tripJson(),
@@ -96,6 +120,59 @@ void main() {
         // A raw enum name leaking to the UI means we forgot to map one.
         expect(label, isNot(equals(status)), reason: status);
       }
+    });
+  });
+
+  group('DirectoryDriver', () {
+    Map<String, dynamic> driverJson({String status = 'AVAILABLE', Object? freeInMinutes}) => {
+          'driverId': 'd1',
+          'firstName': 'Dan',
+          'status': status,
+          'lat': 44.05,
+          'lng': -71.12,
+          'distanceMiles': 1.4,
+          'phone': '+16035550101',
+          'vehicleMake': 'Toyota',
+          'vehicleModel': 'Sienna',
+          'vehicleColor': 'Silver',
+          'vehiclePlate': 'NH-1234',
+          'photoUrl': null,
+          'freeInMinutes': freeInMinutes,
+        };
+
+    test('parses the wire shape and builds a map point', () {
+      final d = DirectoryDriver.fromJson(driverJson());
+      expect(d.driverId, 'd1');
+      expect(d.isAvailable, isTrue);
+      expect(d.vehiclePlate, 'NH-1234');
+      expect(d.point!.latitude, 44.05);
+    });
+
+    test('drops a driver off the map when the server has no position', () {
+      final d = DirectoryDriver.fromJson({...driverJson(), 'lat': null, 'lng': null});
+      expect(d.point, isNull);
+    });
+
+    test('describes the vehicle from whatever the driver has filled in', () {
+      expect(DirectoryDriver.fromJson(driverJson()).vehicleDescription, 'Silver Toyota Sienna');
+
+      final sparse = DirectoryDriver.fromJson({...driverJson(), 'vehicleColor': null, 'vehicleMake': null});
+      expect(sparse.vehicleDescription, 'Sienna');
+
+      final none = DirectoryDriver.fromJson(
+        {...driverJson(), 'vehicleColor': null, 'vehicleMake': null, 'vehicleModel': null},
+      );
+      expect(none.vehicleDescription, isNull);
+    });
+
+    test('only claims a free-in time when the server worked one out', () {
+      // The whole point of the null: a made-up ETA would have a passenger
+      // waiting on a driver who isn't coming.
+      final unknown = DirectoryDriver.fromJson(driverJson(status: 'BUSY'));
+      expect(unknown.availabilityDetail, 'On a trip');
+
+      final known = DirectoryDriver.fromJson(driverJson(status: 'BUSY', freeInMinutes: 20));
+      expect(known.availabilityDetail, contains('20'));
     });
   });
 

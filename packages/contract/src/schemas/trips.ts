@@ -47,6 +47,11 @@ export const CreateTripRequestSchema = z
     dropoffAddress: z.string().min(1).max(500),
     paymentMethod: z.enum(PAYMENT_METHODS).default("cash"),
     notes: z.string().max(1000).optional(),
+    // Faz 7 — the passenger picked this driver off the map. It's a
+    // preference, not a reservation: dispatch offers the trip to them first
+    // and falls back to the nearest available driver if they decline or
+    // don't answer, so a passenger is never left waiting on one person.
+    preferredDriverId: z.string().uuid().optional(),
   })
   .openapi("CreateTripRequest");
 

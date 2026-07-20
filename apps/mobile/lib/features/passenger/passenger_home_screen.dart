@@ -31,6 +31,8 @@ class PassengerHomeTab extends ConsumerWidget {
                 const SizedBox(height: 24),
               ],
               const _RequestTripCard(),
+              const SizedBox(height: 8),
+              const _BrowseDriversCard(),
               const SizedBox(height: 24),
               Text('Your trips', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
@@ -71,6 +73,23 @@ class _RequestTripCard extends StatelessWidget {
         subtitle: const Text('Pick your pickup and destination'),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => context.go('/book'),
+      ),
+    );
+  }
+}
+
+class _BrowseDriversCard extends StatelessWidget {
+  const _BrowseDriversCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.people_outline),
+        title: const Text('See our drivers'),
+        subtitle: const Text('Find someone nearby and ask for them by name'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => context.go('/drivers'),
       ),
     );
   }

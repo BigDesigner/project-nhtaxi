@@ -23,3 +23,11 @@ export const NEW_TRIP_ASSIGNED_NOTIFICATION: PushNotification = {
   title: "New trip request",
   body: "You have a new trip request — open the app to respond.",
 };
+
+// A passenger can cancel right up until the driver sets off, which may be
+// after the driver has already accepted and started moving. Without this
+// they'd only find out on arrival.
+export const TRIP_CANCELLED_NOTIFICATION: PushNotification = {
+  title: "Trip cancelled",
+  body: "The passenger cancelled this trip. You are free for the next job.",
+};

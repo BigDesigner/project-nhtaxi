@@ -220,6 +220,14 @@ class _TripDetail extends ConsumerWidget {
           OutlinedButton(
             onPressed: () => _confirmCancel(context, ref),
             child: Text(trip.canRetrySearch ? 'Close this request' : 'Cancel trip'),
+          )
+        // Past this point the driver is already moving, so cancelling goes
+        // through a person. Saying why — and offering the call — beats a
+        // greyed-out button with no explanation.
+        else if (trip.mustCallToCancel)
+          const HelpCard(
+            title: 'Need to cancel?',
+            message: 'Your driver is already on the way. Call dispatch and we will sort it out.',
           ),
       ],
     );

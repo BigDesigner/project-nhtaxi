@@ -10,7 +10,12 @@ const adminPhoneNumber = '+1 603-348-5234';
 const _dialableNumber = '+16033485234';
 
 class HelpCard extends StatelessWidget {
-  const HelpCard({super.key});
+  const HelpCard({super.key, this.title, this.message});
+
+  /// Overrides for the places where the reason to call is specific — e.g. a
+  /// trip that can no longer be cancelled in-app.
+  final String? title;
+  final String? message;
 
   Future<void> _call(BuildContext context) async {
     final uri = Uri(scheme: 'tel', path: _dialableNumber);
@@ -32,8 +37,8 @@ class HelpCard extends StatelessWidget {
     return Card(
       child: ListTile(
         leading: const Icon(Icons.support_agent),
-        title: const Text('Having trouble?'),
-        subtitle: const Text('Tap to call us at $adminPhoneNumber'),
+        title: Text(title ?? 'Having trouble?'),
+        subtitle: Text(message ?? 'Tap to call us at $adminPhoneNumber'),
         trailing: const Icon(Icons.phone),
         onTap: () => _call(context),
       ),

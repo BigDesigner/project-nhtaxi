@@ -225,6 +225,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
             state: state,
             locating: _locating,
             locationNotice: _locationNotice,
+            onClearPreferredDriver: () => ref.read(bookingControllerProvider.notifier).clearPreferredDriver(),
             onPickPickup: () => _pick(isPickup: true),
             onPickDropoff: () => _pick(isPickup: false),
             onUseCurrentLocation: () => _useCurrentLocation(),
@@ -245,6 +246,7 @@ class _BookingPanel extends StatelessWidget {
     required this.onPickDropoff,
     required this.onUseCurrentLocation,
     required this.onSubmit,
+    required this.onClearPreferredDriver,
   });
 
   final BookingState state;
@@ -254,9 +256,12 @@ class _BookingPanel extends StatelessWidget {
   final VoidCallback onPickDropoff;
   final VoidCallback onUseCurrentLocation;
   final VoidCallback onSubmit;
+  final VoidCallback onClearPreferredDriver;
 
   @override
   Widget build(BuildContext context) {
+    final preferred = state.preferredDriver;
+
     return Material(
       elevation: 8,
       child: SafeArea(
@@ -267,6 +272,36 @@ class _BookingPanel extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Carried over from the driver map. Says plainly that it's a
+              // first offer, so nobody is surprised when someone else turns
+              // up — and can be dropped without leaving the screen.
+              if (preferred != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.person_pin_circle, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Asking ${preferred.firstName} first — if they are busy we will find the nearest driver.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Any driver',
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: onClearPreferredDriver,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               _AddressRow(
                 icon: Icons.trip_origin,
                 iconColor: Colors.green,

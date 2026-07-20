@@ -24,9 +24,9 @@ import type { AppBindings } from "../env";
 import { AuditAction, logAudit } from "../lib/audit";
 import { MAX_SEARCH_ROUNDS } from "../lib/dispatch";
 import { estimateFare, haversineMiles } from "../lib/fare";
-import { sendPushToUser } from "../lib/fcm";
+import { sendPushToDriver, sendPushToUser } from "../lib/fcm";
 import { clientIp } from "../lib/request";
-import { customerTripNotification } from "../lib/trip-notifications";
+import { customerTripNotification, TRIP_CANCELLED_NOTIFICATION } from "../lib/trip-notifications";
 import { authenticate } from "../middlewares/auth";
 
 const trips = new OpenAPIHono<AppBindings>();
@@ -64,11 +64,23 @@ const ACTIVE_TRIP_STATUSES = [
   "DRIVER_ARRIVED",
   "TRIP_STARTED",
 ];
-// A passenger can't cancel a ride that's already under way — at that point
-// the driver is mid-job and cancellation is a phone call, not a button.
-// TIMEOUT is deliberately NOT here: a search that gave up is exactly the
-// state a passenger most wants to close out (and re-open, see /retry).
-const CUSTOMER_NON_CANCELLABLE = new Set(["TRIP_STARTED", "TRIP_COMPLETED", "TRIP_CANCELLED"]);
+// Cancelling is free right up to the moment a driver actually sets off:
+// plans change, and a driver who has only accepted has spent nothing but a
+// tap. Once they're EN_ROUTE they're burning fuel and turning down other
+// work, so from there it's a phone call (the dispatch number is on screen)
+// rather than a silent button — that keeps a real person in the loop instead
+// of stranding the passenger behind a driver who never answers an in-app
+// approval. Every cancellation is recorded either way, so patterns are
+// visible to the admin via GET /api/admin/reports/trips?status=TRIP_CANCELLED.
+// TIMEOUT is deliberately absent: a search that gave up is exactly the state
+// a passenger most wants to close out (and re-open, see /retry).
+const CUSTOMER_NON_CANCELLABLE = new Set([
+  "DRIVER_EN_ROUTE",
+  "DRIVER_ARRIVED",
+  "TRIP_STARTED",
+  "TRIP_COMPLETED",
+  "TRIP_CANCELLED",
+]);
 // Genuinely finished — nothing left to cancel. TIMEOUT stays cancellable so
 // the trip can be closed rather than lingering in the passenger's list.
 const TERMINAL_STATUSES = new Set(["TRIP_COMPLETED", "TRIP_CANCELLED"]);
@@ -211,7 +223,10 @@ trips.openapi(createTripRoute, async (c) => {
   const coordinator = c.env.DISPATCH_COORDINATOR.get(doId);
   await coordinator.fetch("http://dispatch-coordinator/dispatch", {
     method: "POST",
-    body: JSON.stringify({ tripId: trip.id }),
+    // The passenger's map pick, when they made one. Kept in the coordinator's
+    // own state rather than a trips column: it only matters for the first
+    // offer, and a retried search should start clean.
+    body: JSON.stringify({ tripId: trip.id, preferredDriverId: body.preferredDriverId }),
   });
 
   const [finalTrip] = await db.select().from(tripsTable).where(eq(tripsTable.id, trip.id)).limit(1);
@@ -580,7 +595,13 @@ trips.openapi(cancelTripRoute, async (c) => {
     return c.json({ error: "Forbidden", message: "You do not have access to this trip" }, 403);
   }
   if (authUser.role === "customer" && CUSTOMER_NON_CANCELLABLE.has(trip.status)) {
-    return c.json({ error: "InvalidState", message: "This trip can no longer be cancelled" }, 400);
+    return c.json(
+      {
+        error: "InvalidState",
+        message: "Your driver is already on the way — please call dispatch to cancel.",
+      },
+      400
+    );
   }
   if (TERMINAL_STATUSES.has(trip.status)) {
     return c.json({ error: "InvalidState", message: `Trip cannot be cancelled — current status is ${trip.status}` }, 400);
@@ -606,6 +627,14 @@ trips.openapi(cancelTripRoute, async (c) => {
     c.env.DISPATCH_COORDINATOR.get(cancelDoId)
       .fetch("http://dispatch-coordinator/cancelled", { method: "POST", body: JSON.stringify({ tripId }) })
   );
+
+  // A driver who was already assigned needs to know immediately — otherwise
+  // they keep heading to a pickup that no longer exists.
+  if (trip.driverId && authUser.role !== "driver") {
+    c.executionCtx.waitUntil(
+      sendPushToDriver(db, c.env.FCM_SERVICE_ACCOUNT_KEY, trip.driverId, TRIP_CANCELLED_NOTIFICATION)
+    );
+  }
 
   c.executionCtx.waitUntil(
     logAudit(db, {

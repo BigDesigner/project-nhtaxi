@@ -55,6 +55,33 @@ export async function findNearestAvailableDriver(
   return nearest;
 }
 
+/**
+ * Faz 7 — resolve a passenger's hand-picked driver into a dispatch candidate.
+ * Returns null when they're no longer available (someone else got them first,
+ * they went offline), which is the caller's cue to fall back to the nearest.
+ *
+ * The MAX_DISPATCH_RADIUS_MILES cap deliberately does *not* apply here: the
+ * passenger looked at the map and chose this person, so a deliberate request
+ * to a driver 12 miles out is a decision to respect, not a bug to correct.
+ */
+export async function findPreferredDriver(
+  db: Database,
+  driverId: string,
+  pickupLat: number,
+  pickupLng: number
+): Promise<{ driverId: string; distanceMiles: number } | null> {
+  const [driver] = await db
+    .select()
+    .from(driverProfilesTable)
+    .where(and(eq(driverProfilesTable.id, driverId), eq(driverProfilesTable.status, "AVAILABLE")))
+    .limit(1);
+  if (!driver || driver.currentLat == null || driver.currentLng == null) return null;
+  return {
+    driverId: driver.id,
+    distanceMiles: haversineMiles(pickupLat, pickupLng, driver.currentLat, driver.currentLng),
+  };
+}
+
 /** Atomic claim via conditional UPDATE (`WHERE status = 'AVAILABLE'`) — if
  * another dispatch attempt already grabbed this driver, `.returning()` comes
  * back empty and the caller should try the next candidate. */
