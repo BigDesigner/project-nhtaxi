@@ -295,8 +295,21 @@ commission" below for the full mechanism.
   LocationHub exists server-side; the Flutter client doesn't consume it yet,
   so the driver map is a static snapshot refreshed by pull/tap. Overlaps with
   breadcrumbs above — worth doing together.
-- **Firebase service-account key** not yet supplied — push notifications are
-  wired and deployed but silently no-op.
+- **Push notifications deliver nothing, and the missing piece is bigger than
+  it was recorded as.** This was previously noted as "waiting for the Firebase
+  service-account key", which understated it: the app had no push client at
+  all, so no device had ever registered a token and supplying the key alone
+  would still have delivered nothing. Everything that isn't Firebase now
+  exists (`core/push_tokens.dart` — register on sign-in and cold start,
+  unregister *before* logout tears down the session). Three steps remain, all
+  user-owned:
+  1. Create the Firebase project and run `flutterfire configure`.
+  2. Add `firebase_core`/`firebase_messaging` and replace
+     `deviceTokenSourceProvider` with one returning
+     `FirebaseMessaging.instance.getToken()`.
+  3. Set the `FCM_SERVICE_ACCOUNT_KEY` Worker secret.
+  The plugin is deliberately *not* added yet: without `google-services.json`
+  it fails the Android build in CI.
 - **Custom domain** `gnncab.nhtaxi.com` → `gnncab-preview.pages.dev` needs to
   be attached in the Cloudflare dashboard (user-owned step; CORS is already
   configured for it).

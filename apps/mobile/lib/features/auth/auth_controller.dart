@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
 import '../../core/config.dart';
 import '../../core/providers.dart';
+import '../../core/push_tokens.dart';
 import '../../legal/terms.dart';
 import '../../models/user.dart';
 
@@ -19,6 +22,9 @@ class AuthController extends AsyncNotifier<AppUser?> {
 
     try {
       final json = await ref.read(apiClientProvider).get('/api/auth/me');
+      // Cold start with a session already in place — the device may not be
+      // registered for push, or may have been issued a new token since.
+      unawaited(ref.read(pushTokenServiceProvider).register());
       return AppUser.fromJson(json);
     } on ApiException {
       // Token is present but no longer valid — treat as logged out.
@@ -116,6 +122,11 @@ class AuthController extends AsyncNotifier<AppUser?> {
   }
 
   Future<void> logout() async {
+    // Before anything else: the API identifies the token by who is asking, so
+    // this needs a live session. Otherwise a handed-on phone keeps getting the
+    // previous user's trip notifications.
+    await ref.read(pushTokenServiceProvider).unregister();
+
     final tokenStore = ref.read(tokenStoreProvider);
     final refreshToken = await tokenStore.readRefreshToken();
     try {
@@ -141,6 +152,9 @@ class AuthController extends AsyncNotifier<AppUser?> {
       throw ApiException('Server did not return a session token');
     }
     await ref.read(tokenStoreProvider).save(accessToken: accessToken, refreshToken: refreshToken);
+    // Every path that creates a session lands here, so registering once here
+    // covers login, passenger sign-up and driver sign-up alike.
+    unawaited(ref.read(pushTokenServiceProvider).register());
     return AppUser.fromJson(json['user'] as Map<String, dynamic>);
   }
 }

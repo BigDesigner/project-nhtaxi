@@ -70,6 +70,11 @@ class ApiClient {
   Future<Map<String, dynamic>> put(String path, {Object? body}) =>
       _send(() => _dio.put<dynamic>(path, data: body));
 
+  /// DELETE with a body — unregistering a push token identifies it by value,
+  /// not by a path segment.
+  Future<Map<String, dynamic>> delete(String path, {Object? body}) =>
+      _send(() => _dio.delete<dynamic>(path, data: body));
+
   /// Fetches raw bytes (images).
   ///
   /// Needed because the driver photo route is authenticated, and `NetworkImage`
