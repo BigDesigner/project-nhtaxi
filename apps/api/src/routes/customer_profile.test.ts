@@ -14,7 +14,7 @@ describe("customer profile", () => {
         lastName: "Passenger",
         email,
         phone: "+16035550001",
-        password: "correct horse battery staple",
+        acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "correct horse battery staple",
       }),
     });
     jar.applySetCookie(registerRes);
@@ -38,7 +38,7 @@ describe("customer profile", () => {
         email: uniqueEmail("driver"),
         phone: "+16035550002",
         password: "correct horse battery staple",
-        acceptedAgreement: true,
+        acceptedAgreement: true, acceptedTermsVersion: "2026-07-20",
       }),
     });
     jar.applySetCookie(registerRes);

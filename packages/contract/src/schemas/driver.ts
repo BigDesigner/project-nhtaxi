@@ -22,6 +22,10 @@ export const DriverRegisterRequestSchema = z
     vehiclePlate: z.string().max(20).optional(),
     licenseNumber: z.string().max(50).optional(),
     acceptedAgreement: z.literal(true),
+    // Which version of the driver agreement was shown. Drivers accept a
+    // different document to passengers — it covers RSA 376-A eligibility,
+    // how their documents are stored, and what they owe GNN LLC.
+    acceptedTermsVersion: z.string().min(1).max(50),
     deviceInfo: z.string().max(200).optional(),
     platform: z.enum(CLIENT_PLATFORMS).default("web"),
   })

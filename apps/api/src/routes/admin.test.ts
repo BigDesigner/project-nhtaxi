@@ -23,7 +23,7 @@ async function createAdminSession() {
   const loginRes = await req("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password: ADMIN_PASSWORD }),
+    body: JSON.stringify({ email, acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: ADMIN_PASSWORD }),
   });
   jar.applySetCookie(loginRes);
   return { jar, email };
@@ -38,7 +38,7 @@ async function registerPassenger(email: string) {
       lastName: "Passenger",
       email,
       phone: "+16035550003",
-      password: "correct horse battery staple",
+      acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "correct horse battery staple",
     }),
   });
   return readJson(res);
@@ -55,7 +55,7 @@ async function registerDriver(email: string) {
       email,
       phone: "+16035550004",
       password: "correct horse battery staple",
-      acceptedAgreement: true,
+      acceptedAgreement: true, acceptedTermsVersion: "2026-07-20",
     }),
   });
   jar.applySetCookie(res);
@@ -80,7 +80,7 @@ describe("admin — user management", () => {
         firstName: "Manual",
         lastName: "Driver",
         email: uniqueEmail("manual-driver"),
-        password: "correct horse battery staple",
+        acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "correct horse battery staple",
         role: "driver",
         isVerified: true,
       }),
@@ -125,7 +125,7 @@ describe("admin — user management", () => {
         lastName: "Admin",
         email: uniqueEmail("not-admin"),
         phone: "+16035550005",
-        password: "correct horse battery staple",
+        acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "correct horse battery staple",
       }),
     });
     jar.applySetCookie(res0);

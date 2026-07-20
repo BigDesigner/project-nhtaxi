@@ -23,7 +23,7 @@ async function createAdminSession() {
   const loginRes = await req("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password: ADMIN_PASSWORD }),
+    body: JSON.stringify({ email, acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: ADMIN_PASSWORD }),
   });
   jar.applySetCookie(loginRes);
   return jar;
@@ -40,7 +40,7 @@ async function registerAvailableDriver(email: string) {
       email,
       phone: "+16035550090",
       password: "correct horse battery staple",
-      acceptedAgreement: true,
+      acceptedAgreement: true, acceptedTermsVersion: "2026-07-20",
     }),
   });
   jar.applySetCookie(res);
@@ -57,7 +57,7 @@ async function registerPassenger(email: string) {
   const res = await req("/api/auth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ firstName: "Pat", lastName: "Passenger", email, phone: "+16035550091", password: "correct horse battery staple" }),
+    body: JSON.stringify({ firstName: "Pat", lastName: "Passenger", email, phone: "+16035550091", acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "correct horse battery staple" }),
   });
   jar.applySetCookie(res);
   const db = createDb(env.DB);
@@ -101,7 +101,7 @@ describe("POST /api/admin/trips — admin-assigned trips", () => {
         email,
         phone: "+16035550092",
         password: "correct horse battery staple",
-        acceptedAgreement: true,
+        acceptedAgreement: true, acceptedTermsVersion: "2026-07-20",
       }),
     });
     jar.applySetCookie(res);

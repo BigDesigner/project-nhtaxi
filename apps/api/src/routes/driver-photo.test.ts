@@ -22,7 +22,7 @@ async function registerDriver(email: string) {
       email,
       phone: "+16035550400",
       password: "correct horse battery staple",
-      acceptedAgreement: true,
+      acceptedAgreement: true, acceptedTermsVersion: "2026-07-20",
     }),
   });
   jar.applySetCookie(res);
@@ -48,7 +48,7 @@ async function registerPassenger(email: string) {
       lastName: "Passenger",
       email,
       phone: "+16035550401",
-      password: "correct horse battery staple",
+      acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "correct horse battery staple",
     }),
   });
   jar.applySetCookie(res);

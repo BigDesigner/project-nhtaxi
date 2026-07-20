@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api_client.dart';
 import '../../core/config.dart';
 import '../../core/providers.dart';
+import '../../legal/terms.dart';
 import '../../models/user.dart';
 
 /// Holds the signed-in user, or null when logged out.
@@ -55,6 +56,10 @@ class AuthController extends AsyncNotifier<AppUser?> {
           'email': email,
           'phone': phone,
           'password': password,
+          // The API requires this to be literally true — there is no way to
+          // create an account without having accepted the terms.
+          'acceptedTerms': true,
+          'acceptedTermsVersion': termsVersion,
           'platform': AppConfig.authPlatform,
         },
         skipAuth: true,
@@ -95,6 +100,7 @@ class AuthController extends AsyncNotifier<AppUser?> {
           'phone': phone,
           'password': password,
           'acceptedAgreement': true,
+          'acceptedTermsVersion': termsVersion,
           if (vehicleMake != null && vehicleMake.isNotEmpty) 'vehicleMake': vehicleMake,
           if (vehicleModel != null && vehicleModel.isNotEmpty) 'vehicleModel': vehicleModel,
           if (vehicleColor != null && vehicleColor.isNotEmpty) 'vehicleColor': vehicleColor,

@@ -12,7 +12,7 @@ async function registerPassenger(email: string) {
   const res = await req("/api/auth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ firstName: "Pat", lastName: "Passenger", email, phone: "+16035550010", password: "correct horse battery staple" }),
+    body: JSON.stringify({ firstName: "Pat", lastName: "Passenger", email, phone: "+16035550010", acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "correct horse battery staple" }),
   });
   jar.applySetCookie(res);
   return jar;
@@ -25,7 +25,7 @@ async function registerAvailableNearbyDriver(email: string) {
   const res = await req("/api/driver/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ firstName: "Dan", lastName: "Driver", email, phone: "+16035550011", password: "correct horse battery staple", acceptedAgreement: true }),
+    body: JSON.stringify({ firstName: "Dan", lastName: "Driver", email, phone: "+16035550011", password: "correct horse battery staple", acceptedAgreement: true, acceptedTermsVersion: "2026-07-20" }),
   });
   jar.applySetCookie(res);
 

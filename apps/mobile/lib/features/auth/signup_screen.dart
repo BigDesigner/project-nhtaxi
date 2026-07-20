@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../widgets/error_banner.dart';
+import '../../legal/terms.dart';
+import '../../legal/terms_gate.dart';
 import 'auth_controller.dart';
 
 /// Passenger sign-up only — data-minimised to phone + email + password + name
@@ -33,8 +35,18 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     super.dispose();
   }
 
+  bool _acceptedTerms = false;
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    // The API refuses registration without acceptance too; this just gives a
+    // better answer than a 400 from the server.
+    if (!_acceptedTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please read and accept the Passenger Terms to continue.')),
+      );
+      return;
+    }
     await ref.read(authControllerProvider.notifier).register(
           firstName: _firstName.text.trim(),
           lastName: _lastName.text.trim(),
@@ -120,6 +132,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       ErrorBanner(message: auth.error.toString()),
                     ],
                     const SizedBox(height: 24),
+                    const SizedBox(height: 20),
+                    TermsGate(
+                      document: passengerTerms,
+                      accepted: _acceptedTerms,
+                      enabled: !isBusy,
+                      onChanged: (v) => setState(() => _acceptedTerms = v),
+                    ),
+                    const SizedBox(height: 16),
                     FilledButton(
                       onPressed: isBusy ? null : _submit,
                       style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),

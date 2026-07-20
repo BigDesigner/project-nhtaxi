@@ -16,7 +16,7 @@ async function registerDriver(email: string, lat: number, lng: number) {
       email,
       phone: "+16035550040",
       password: "correct horse battery staple",
-      acceptedAgreement: true,
+      acceptedAgreement: true, acceptedTermsVersion: "2026-07-20",
     }),
   });
   jar.applySetCookie(res);
@@ -42,7 +42,7 @@ async function registerPassenger(email: string) {
       lastName: "Passenger",
       email,
       phone: "+16035550041",
-      password: "correct horse battery staple",
+      acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "correct horse battery staple",
     }),
   });
   jar.applySetCookie(res);
@@ -54,7 +54,7 @@ async function registerAdmin(email: string) {
   const res = await req("/api/admin/bootstrap", {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Bootstrap-Token": env.ADMIN_BOOTSTRAP_TOKEN },
-    body: JSON.stringify({ firstName: "Ada", lastName: "Admin", email, password: "correct horse battery staple" }),
+    body: JSON.stringify({ firstName: "Ada", lastName: "Admin", email, acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "correct horse battery staple" }),
   });
   jar.applySetCookie(res);
   return jar;

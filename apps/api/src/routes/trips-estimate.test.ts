@@ -14,7 +14,7 @@ async function registerPassenger(email: string) {
       lastName: "Passenger",
       email,
       phone: "+16035550200",
-      password: "correct horse battery staple",
+      acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "correct horse battery staple",
     }),
   });
   jar.applySetCookie(res);

@@ -17,6 +17,11 @@ export const RegisterRequestSchema = z
     email: z.string().email().openapi({ example: "jane@example.com" }),
     phone: z.string().min(7).max(20).openapi({ example: "+16035551234" }),
     password: z.string().min(8).max(200),
+    // Must be literally true — there is no implicit consent, and no way to
+    // create an account without it. `acceptedTermsVersion` records *which*
+    // wording was shown, so a later dispute has an answer.
+    acceptedTerms: z.literal(true),
+    acceptedTermsVersion: z.string().min(1).max(50),
     deviceInfo: z.string().max(200).optional(),
     platform: z.enum(CLIENT_PLATFORMS).default("web"),
   })

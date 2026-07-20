@@ -84,6 +84,11 @@ driverProfile.openapi(registerRoute, async (c) => {
       firstName: body.firstName,
       lastName: body.lastName,
       phone: body.phone,
+      // Recorded at the moment of consent, with the version of the wording
+      // they were shown — "they agreed" is worth little in a dispute without
+      // saying what they agreed to.
+      termsAcceptedAt: new Date(),
+      termsVersion: body.acceptedTermsVersion,
       role: "driver",
     })
     .returning();

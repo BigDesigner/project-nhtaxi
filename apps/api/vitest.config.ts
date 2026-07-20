@@ -33,7 +33,10 @@ export default defineConfig(async () => {
       }),
     ],
     test: {
-      setupFiles: ["./test/apply-migrations.ts"],
+      // stub-routing must be listed: fares now come from a live routing
+      // lookup, and without it every trip test would hit a public community
+      // server — slow, flaky, and rude.
+      setupFiles: ["./test/apply-migrations.ts", "./test/install-routing-stub.ts"],
     },
   };
 });

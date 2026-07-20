@@ -46,6 +46,13 @@ crons = ["*/15 * * * *"]
 
 [vars]
 ENVIRONMENT = "production"
+# Routing engine used to price trips by real driving distance. Any
+# OSRM-compatible endpoint works, so swapping the public demo instance for a
+# self-hosted or commercial one is a change to this line and nothing else.
+# Do that before real volume: the public instance is not a production service
+# and can rate-limit us, at which point quoting fails closed (503) rather
+# than falling back to a wrong price.
+ROUTING_BASE_URL = "https://router.project-osrm.org"
 
 # Secrets (JWT_SECRET, STRIPE_*, FCM_*) are never set here — they are pushed
 # with `wrangler secret put <NAME>` and injected by CI from GitHub Secrets (L25).

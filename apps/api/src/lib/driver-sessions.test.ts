@@ -24,7 +24,7 @@ async function registerDriver(email: string): Promise<string> {
       email,
       phone: "+16035550070",
       password: "correct horse battery staple",
-      acceptedAgreement: true,
+      acceptedAgreement: true, acceptedTermsVersion: "2026-07-20",
     }),
   });
   jar.applySetCookie(res);

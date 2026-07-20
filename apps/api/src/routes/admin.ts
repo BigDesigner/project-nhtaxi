@@ -54,7 +54,8 @@ import { toCsv } from "../lib/csv";
 import { decryptDocument } from "../lib/document-encryption";
 import { driverProfileWithUserColumns } from "../lib/driver-queries";
 import { closeOpenSession, computeDriverBalance, getDriverUsageRates, toSessionResponse } from "../lib/driver-sessions";
-import { estimateFare, haversineMiles } from "../lib/fare";
+import { estimateFare } from "../lib/fare";
+import { RoutingUnavailableError, roadDistanceMiles } from "../lib/routing";
 import { sendPushToDriver, sendPushToUser } from "../lib/fcm";
 import { hashPassword } from "../lib/password";
 import { clientIp } from "../lib/request";
@@ -1294,8 +1295,11 @@ admin.openapi(adminCreateTripRoute, async (c) => {
   let estimatedFareCents: number | null = null;
   let currency = "USD";
   if (body.dropoffLat != null && body.dropoffLng != null) {
-    const straightLineMiles = haversineMiles(body.pickupLat, body.pickupLng, body.dropoffLat, body.dropoffLng);
-    const fare = await estimateFare(db, straightLineMiles);
+    const roadMiles = await roadDistanceMiles(c.env,
+      { lat: body.pickupLat, lng: body.pickupLng },
+      { lat: body.dropoffLat, lng: body.dropoffLng }
+    );
+    const fare = await estimateFare(db, roadMiles);
     distanceMiles = fare.distanceMiles;
     estimatedFareCents = fare.estimatedFareCents;
     currency = fare.currency;

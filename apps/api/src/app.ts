@@ -7,6 +7,7 @@ import authRoutes from "./routes/auth";
 import customerProfileRoutes from "./routes/customer_profile";
 import driverProfileRoutes from "./routes/driver_profile";
 import driversDirectoryRoutes from "./routes/drivers_directory";
+import { RoutingUnavailableError } from "./lib/routing";
 import health from "./routes/health";
 import pushTokenRoutes from "./routes/push_tokens";
 import tripRoutes from "./routes/trips";
@@ -67,6 +68,22 @@ app.doc("/api/openapi.json", {
 });
 
 app.onError((err, c) => {
+  // Routing being unavailable means we cannot work out what a journey will
+  // actually cost. Handled centrally so every pricing path reports it the
+  // same way, including any added later. It is deliberately an error rather
+  // than a fallback estimate: the final fare comes from this distance, so a
+  // guessed number is charged to the business on every mile of every trip.
+  if (err instanceof RoutingUnavailableError) {
+    console.error("[Routing]", err.message);
+    return c.json(
+      {
+        error: "RoutingUnavailable",
+        message: "We can't work out the distance for this trip right now. Please try again, or call dispatch.",
+      },
+      503
+    );
+  }
+
   console.error("[Error]", err);
   return c.json({ error: "InternalServerError", message: "An unexpected error occurred" }, 500);
 });

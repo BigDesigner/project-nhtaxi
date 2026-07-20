@@ -33,7 +33,7 @@ async function createAdminSession() {
   const loginRes = await req("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password: ADMIN_PASSWORD }),
+    body: JSON.stringify({ email, acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: ADMIN_PASSWORD }),
   });
   jar.applySetCookie(loginRes);
   return jar;
@@ -49,7 +49,7 @@ async function registerPassenger(email: string) {
       lastName: "Passenger",
       email,
       phone: "+16035550060",
-      password: "correct horse battery staple",
+      acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "correct horse battery staple",
     }),
   });
   jar.applySetCookie(res);
@@ -67,7 +67,7 @@ async function registerAvailableNearbyDriver(email: string, pickupLat: number, p
       email,
       phone: "+16035550061",
       password: "correct horse battery staple",
-      acceptedAgreement: true,
+      acceptedAgreement: true, acceptedTermsVersion: "2026-07-20",
     }),
   });
   jar.applySetCookie(res);

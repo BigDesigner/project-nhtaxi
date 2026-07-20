@@ -15,6 +15,15 @@ export const usersTable = sqliteTable(
     phone: text("phone"),
     role: text("role", { enum: USER_ROLES }).notNull().default("customer"),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    /**
+     * When this person accepted the terms, and which version they saw.
+     *
+     * Recording the version matters as much as the timestamp: "they agreed"
+     * is worth little in a dispute if we can't say what they agreed *to*.
+     * Both are null for the accounts that pre-date the in-app agreement.
+     */
+    termsAcceptedAt: integer("terms_accepted_at", { mode: "timestamp" }),
+    termsVersion: text("terms_version"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   },

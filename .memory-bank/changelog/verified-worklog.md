@@ -315,6 +315,62 @@ both are needed:
 fails if a screen is added outside `/home`, so this doesn't have to be
 re-checked by hand.
 
+### Distance is real driving distance — never a straight line
+**This is the single most load-bearing number in the system.** The final fare
+falls back to the estimate (`finalFareCents = estimatedFareCents`), so any
+error in the distance is charged to GNN LLC on every mile of every trip.
+
+`lib/routing.ts` asks an OSRM-compatible routing engine what the car will
+actually drive. Two rules it must keep:
+
+1. **No fallback to an approximation.** An earlier version multiplied
+   haversine (crow-flies) distance by 1.3. That is wrong by a different
+   amount on every route — a winding valley road and a highway run do not
+   share a factor — and it silently under- or over-charged. If routing is
+   unavailable the API returns 503 (`RoutingUnavailable`, handled centrally
+   in `app.ts`) and refuses to quote. A booking that can't be priced is an
+   inconvenience; a booking priced wrongly is a loss.
+2. **OSRM takes `lng,lat`**, the reverse of everything else in this codebase
+   and every map UI. Reversed, it still returns a confident distance — for a
+   completely different journey. There is a test pinning the order.
+
+Results are cached a month by rounded coordinates (taxi work repeats the same
+airport runs constantly). `ROUTING_BASE_URL` in `wrangler.toml` points at the
+public OSRM instance; **swap it for a self-hosted or paid endpoint before real
+volume** — the public one is a demo service and can rate-limit us, at which
+point quoting fails closed.
+
+`haversineMiles` survives in `lib/fare.ts` only for ranking nearby drivers
+during dispatch, where "roughly who is closest" is fine and no money depends
+on it.
+
+The test suite stubs global `fetch` (`test/stub-routing.ts`) so it never
+reaches the real router: it would be slow, flaky, non-deterministic, and rude
+to a free community server.
+
+### Sign-up requires accepting terms, and records which ones
+Passengers and drivers accept **different documents** (`lib/legal/terms.dart`)
+— a driver's RSA 376-A eligibility, document encryption and what they owe GNN
+LLC have no bearing on a passenger, and one combined document means neither
+party reads their part.
+
+Enforcement is server-side: both registration schemas require the acceptance
+flag as `z.literal(true)`, so sending `false` fails outright rather than
+quietly recording a "no". The account row stores `termsAcceptedAt` *and*
+`termsVersion` — "they agreed" is worth little in a dispute without being
+able to say what they agreed to. `CURRENT_TERMS_VERSION` in the contract
+package and `termsVersion` in the Flutter file must be changed together.
+
+The UI puts the text behind a tap and only enables "I accept" once it has
+been scrolled through; the checkbox cannot be ticked without opening the
+document.
+
+**The privacy sections state what the software actually does and deliberately
+do not claim data never leaves GNN LLC** — that would be false. Addresses go
+to OpenStreetMap for lookup and device tokens to Firebase for notifications.
+Overclaiming would be worse than saying nothing. If a third-party service is
+ever added, these documents need updating.
+
 ### Fare presentation
 Booking quotes come from straight-line distance against a rate card, so a
 single exact figure reads as a promise and turns any normal re-route or

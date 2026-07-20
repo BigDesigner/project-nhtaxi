@@ -23,7 +23,8 @@ import {
 import type { AppBindings } from "../env";
 import { AuditAction, logAudit } from "../lib/audit";
 import { MAX_SEARCH_ROUNDS } from "../lib/dispatch";
-import { estimateFare, haversineMiles } from "../lib/fare";
+import { estimateFare } from "../lib/fare";
+import { RoutingUnavailableError, roadDistanceMiles } from "../lib/routing";
 import { sendPushToDriver, sendPushToUser } from "../lib/fcm";
 import { clientIp } from "../lib/request";
 import { customerTripNotification, TRIP_CANCELLED_NOTIFICATION } from "../lib/trip-notifications";
@@ -178,8 +179,11 @@ trips.openapi(createTripRoute, async (c) => {
     if (row) return c.json({ error: "Conflict", message: "You already have an active trip" }, 409);
   }
 
-  const straightLineMiles = haversineMiles(body.pickupLat, body.pickupLng, body.dropoffLat, body.dropoffLng);
-  const { distanceMiles, estimatedFareCents, currency } = await estimateFare(db, straightLineMiles);
+  const roadMiles = await roadDistanceMiles(c.env, 
+    { lat: body.pickupLat, lng: body.pickupLng },
+    { lat: body.dropoffLat, lng: body.dropoffLng }
+  );
+  const { distanceMiles, estimatedFareCents, currency } = await estimateFare(db, roadMiles);
 
   const [trip] = await db
     .insert(tripsTable)
@@ -263,8 +267,11 @@ trips.openapi(estimateTripRoute, async (c) => {
   const body = c.req.valid("json");
   const db = createDb(c.env.DB);
 
-  const straightLineMiles = haversineMiles(body.pickupLat, body.pickupLng, body.dropoffLat, body.dropoffLng);
-  const { distanceMiles, estimatedFareCents, currency } = await estimateFare(db, straightLineMiles);
+  const roadMiles = await roadDistanceMiles(c.env, 
+    { lat: body.pickupLat, lng: body.pickupLng },
+    { lat: body.dropoffLat, lng: body.dropoffLng }
+  );
+  const { distanceMiles, estimatedFareCents, currency } = await estimateFare(db, roadMiles);
 
   return c.json({ distanceMiles, estimatedFare: estimatedFareCents / 100, currency }, 200);
 });
@@ -440,8 +447,11 @@ trips.openapi(updateStatusRoute, async (c) => {
       if (dropoffLat == null || dropoffLng == null || !dropoffAddress) {
         return c.json({ error: "ValidationError", message: "Dropoff location is required to start this trip" }, 400);
       }
-      const straightLineMiles = haversineMiles(trip.pickupLat, trip.pickupLng, dropoffLat, dropoffLng);
-      const fare = await estimateFare(db, straightLineMiles);
+      const roadMiles = await roadDistanceMiles(c.env,
+        { lat: trip.pickupLat, lng: trip.pickupLng },
+        { lat: dropoffLat, lng: dropoffLng }
+      );
+      const fare = await estimateFare(db, roadMiles);
       updates.dropoffLat = dropoffLat;
       updates.dropoffLng = dropoffLng;
       updates.dropoffAddress = dropoffAddress;

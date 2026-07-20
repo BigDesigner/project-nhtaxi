@@ -14,6 +14,14 @@ export type Env = {
   // yet" (lib/fcm.ts no-ops) rather than throwing, since it's provisioned
   // late in this phase's rollout.
   FCM_SERVICE_ACCOUNT_KEY: string;
+  /**
+   * Base URL of an OSRM-compatible routing service, used to price journeys
+   * by real driving distance (lib/routing.ts). Optional: defaults to the
+   * public OSRM instance, which is fine for this volume but is a demo
+   * service — moving to a self-hosted or paid OSRM endpoint is a change to
+   * this value alone, no code.
+   */
+  ROUTING_BASE_URL?: string;
   ENVIRONMENT: string;
 };
 

@@ -10,6 +10,9 @@ const BASE_REGISTER_BODY = {
   lastName: "User",
   phone: "+16035550000",
   password: "correct horse battery staple",
+  // Registration is refused without these — there is no implicit consent.
+  acceptedTerms: true as const,
+  acceptedTermsVersion: "2026-07-20",
 };
 
 describe("auth — web (cookie) flow", () => {
@@ -133,7 +136,7 @@ describe("auth — web (cookie) flow", () => {
     const res = await req("/api/auth/login", {
       method: "POST",
       headers,
-      body: JSON.stringify({ email, password: "wrong password" }),
+      body: JSON.stringify({ email, acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "wrong password" }),
     });
     expect(res.status).toBe(401);
   });
@@ -153,7 +156,7 @@ describe("auth — web (cookie) flow", () => {
     const res = await req("/api/auth/login", {
       method: "POST",
       headers,
-      body: JSON.stringify({ email, password: BASE_REGISTER_BODY.password }),
+      body: JSON.stringify({ email, acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: BASE_REGISTER_BODY.password }),
     });
     expect(res.status).toBe(403);
   });

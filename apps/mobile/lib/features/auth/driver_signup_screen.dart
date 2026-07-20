@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../legal/terms.dart';
+import '../../legal/terms_gate.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/error_banner.dart';
 import 'auth_controller.dart';
@@ -44,7 +46,7 @@ class _DriverSignupScreenState extends ConsumerState<DriverSignupScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (!_agreed) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please accept the driver agreement to continue.')),
+        const SnackBar(content: Text('Please read and accept the Driver Agreement to continue.')),
       );
       return;
     }
@@ -158,12 +160,11 @@ class _DriverSignupScreenState extends ConsumerState<DriverSignupScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              CheckboxListTile(
-                value: _agreed,
-                onChanged: isBusy ? null : (v) => setState(() => _agreed = v ?? false),
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-                title: const Text('I understand and accept the driver agreement'),
+              TermsGate(
+                document: driverTerms,
+                accepted: _agreed,
+                enabled: !isBusy,
+                onChanged: (v) => setState(() => _agreed = v),
               ),
               const SizedBox(height: 16),
               FilledButton(

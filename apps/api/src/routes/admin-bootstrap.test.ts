@@ -16,7 +16,7 @@ describe("admin bootstrap (sequential)", () => {
         firstName: "Ada",
         lastName: "Admin",
         email: uniqueEmail("bootstrap"),
-        password: "correct horse battery staple",
+        acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "correct horse battery staple",
       }),
     });
     expect(res.status).toBe(401);
@@ -27,7 +27,7 @@ describe("admin bootstrap (sequential)", () => {
     const res = await req("/api/admin/bootstrap", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Bootstrap-Token": env.ADMIN_BOOTSTRAP_TOKEN },
-      body: JSON.stringify({ firstName: "Ada", lastName: "Admin", email, password: "correct horse battery staple" }),
+      body: JSON.stringify({ firstName: "Ada", lastName: "Admin", email, acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "correct horse battery staple" }),
     });
     expect(res.status).toBe(201);
     const body = await readJson(res);
@@ -44,7 +44,7 @@ describe("admin bootstrap (sequential)", () => {
         firstName: "Second",
         lastName: "Admin",
         email: uniqueEmail("bootstrap"),
-        password: "correct horse battery staple",
+        acceptedTerms: true, acceptedTermsVersion: "2026-07-20", password: "correct horse battery staple",
       }),
     });
     expect(res.status).toBe(409);

@@ -16,6 +16,7 @@ const BASE_DRIVER_BODY = {
   vehiclePlate: "NH-1234",
   licenseNumber: "D123456",
   acceptedAgreement: true as const,
+  acceptedTermsVersion: "2026-07-20",
 };
 
 async function registerDriver(email: string) {
