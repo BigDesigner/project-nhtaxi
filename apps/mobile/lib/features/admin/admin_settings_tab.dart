@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/view_mode.dart';
 import '../../models/admin.dart';
 import '../../widgets/error_banner.dart';
+import '../auth/auth_controller.dart';
 import '../auth/change_password_sheet.dart';
 import '../passenger/passenger_shell.dart' show confirmSignOut;
 import 'admin_controllers.dart';
@@ -151,6 +153,18 @@ class _PricingFormState extends ConsumerState<_PricingForm> {
               ],
             ),
           ),
+          if (ref.watch(authControllerProvider).value?.canSwitchRoleView == true) ...[
+            const SizedBox(height: 16),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.directions_car_outlined),
+                title: const Text('Driver app'),
+                subtitle: const Text('Switch back to your driver screens'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => ref.read(viewModeProvider.notifier).set('driver'),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Card(
             child: ListTile(
@@ -214,6 +228,27 @@ class _CitiesDialogState extends ConsumerState<_CitiesDialog> {
     super.dispose();
   }
 
+  Future<void> _remove(BuildContext context, City city) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove this service area?'),
+        content: Text('"${city.label}" will no longer be listed.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await deleteCity(ref, city.id);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    }
+  }
+
   Future<void> _add() async {
     if (_name.text.trim().isEmpty) return;
 
@@ -270,6 +305,11 @@ class _CitiesDialogState extends ConsumerState<_CitiesDialog> {
                         leading: const Icon(Icons.place_outlined),
                         title: Text(c.label),
                         subtitle: Text(c.timezone, style: Theme.of(context).textTheme.bodySmall),
+                        trailing: IconButton(
+                          tooltip: 'Remove',
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          onPressed: () => _remove(context, c),
+                        ),
                       ),
                   ],
                 ),

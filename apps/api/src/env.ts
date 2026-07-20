@@ -37,6 +37,7 @@ export interface AuthUser {
   userId: string;
   email: string;
   role: string;
+  isAdmin: boolean;
 }
 
 export type Variables = {

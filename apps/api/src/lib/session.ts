@@ -12,6 +12,7 @@ export interface PublicUser {
   lastName: string;
   phone: string | null;
   role: "admin" | "driver" | "customer";
+  isAdmin: boolean;
 }
 
 export function toPublicUser(user: {
@@ -21,6 +22,7 @@ export function toPublicUser(user: {
   lastName: string;
   phone: string | null;
   role: string;
+  isAdmin: boolean;
 }): PublicUser {
   return {
     id: user.id,
@@ -29,6 +31,7 @@ export function toPublicUser(user: {
     lastName: user.lastName,
     phone: user.phone,
     role: user.role as PublicUser["role"],
+    isAdmin: user.isAdmin,
   };
 }
 
@@ -48,7 +51,10 @@ export async function issueSession(
   platform: "web" | "ios" | "android",
   deviceInfo?: string
 ) {
-  const accessToken = await signAccessToken({ id: user.id, email: user.email, role: user.role }, c.env.JWT_SECRET);
+  const accessToken = await signAccessToken(
+    { id: user.id, email: user.email, role: user.role, isAdmin: user.isAdmin },
+    c.env.JWT_SECRET
+  );
   const { rawToken: refreshToken, expiresAt } = await issueRefreshToken(db, user.id, deviceInfo);
   if (platform === "web") {
     setAuthCookies(c, { accessToken, refreshToken, refreshExpiresAt: expiresAt });

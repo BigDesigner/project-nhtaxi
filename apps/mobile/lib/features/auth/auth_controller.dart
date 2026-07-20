@@ -7,6 +7,7 @@ import '../../core/config.dart';
 import '../../core/location_socket.dart';
 import '../../core/providers.dart';
 import '../../core/push_tokens.dart';
+import '../../core/view_mode.dart';
 import '../../legal/terms.dart';
 import '../../models/user.dart';
 
@@ -146,6 +147,10 @@ class AuthController extends AsyncNotifier<AppUser?> {
     // also means a later login gets a brand new socket instead of a
     // permanently-closed one.
     ref.invalidate(locationSocketProvider);
+    // Otherwise a dual-role account that switched to the admin view would
+    // hand the next signed-in session — possibly a different account on the
+    // same device — straight into an admin shell it never asked to see.
+    ref.invalidate(viewModeProvider);
     state = const AsyncData(null);
   }
 

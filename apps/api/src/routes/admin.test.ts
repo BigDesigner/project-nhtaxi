@@ -214,6 +214,79 @@ describe("admin — cities & pricing", () => {
     expect(city.timezone).toBe("America/New_York");
   });
 
+  it("refuses to add the same service area twice", async () => {
+    const { jar } = await createAdminSession();
+    const body = JSON.stringify({ name: "Portland", state: "ME" });
+
+    const first = await req("/api/admin/cities", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...jar.csrfHeaders() },
+      body,
+    });
+    expect(first.status).toBe(201);
+
+    const second = await req("/api/admin/cities", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...jar.csrfHeaders() },
+      body,
+    });
+    expect(second.status).toBe(409);
+  });
+
+  it("treats the name case-insensitively, but a different state is a different area", async () => {
+    // "Portland" alone is genuinely ambiguous — ME and OR both exist — so
+    // state is part of what makes two entries the same one.
+    const { jar } = await createAdminSession();
+    await req("/api/admin/cities", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...jar.csrfHeaders() },
+      body: JSON.stringify({ name: "portsmouth", state: "NH" }),
+    });
+
+    const sameCasedDifferently = await req("/api/admin/cities", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...jar.csrfHeaders() },
+      body: JSON.stringify({ name: "Portsmouth", state: "NH" }),
+    });
+    expect(sameCasedDifferently.status).toBe(409);
+
+    const differentState = await req("/api/admin/cities", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...jar.csrfHeaders() },
+      body: JSON.stringify({ name: "Portsmouth", state: "VA" }),
+    });
+    expect(differentState.status).toBe(201);
+  });
+
+  it("deletes a service area", async () => {
+    const { jar } = await createAdminSession();
+    const created = await readJson(
+      await req("/api/admin/cities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...jar.csrfHeaders() },
+        body: JSON.stringify({ name: "Conway", state: "NH" }),
+      })
+    );
+
+    const res = await req(`/api/admin/cities/${created.id}`, {
+      method: "DELETE",
+      headers: jar.csrfHeaders(),
+    });
+    expect(res.status).toBe(200);
+
+    const list = await readJson(await req("/api/admin/cities", { headers: jar.csrfHeaders() }));
+    expect(list.some((c: { id: string }) => c.id === created.id)).toBe(false);
+  });
+
+  it("404s deleting a service area that doesn't exist", async () => {
+    const { jar } = await createAdminSession();
+    const res = await req("/api/admin/cities/00000000-0000-4000-8000-000000000000", {
+      method: "DELETE",
+      headers: jar.csrfHeaders(),
+    });
+    expect(res.status).toBe(404);
+  });
+
   it("reads default pricing then updates it (L8)", async () => {
     const { jar } = await createAdminSession();
 

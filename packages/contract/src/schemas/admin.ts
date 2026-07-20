@@ -12,6 +12,11 @@ export const AdminUserSchema = z
     phone: z.string().nullable(),
     role: z.enum(USER_ROLES),
     isActive: z.boolean(),
+    // Orthogonal to role — true only for the owner-operator account, which
+    // is why the admin panel needs to be able to see it: it's the only
+    // visible sign that an account with role "driver" also carries admin
+    // rights.
+    isAdmin: z.boolean(),
     createdAt: z.string(),
   })
   .openapi("AdminUser");

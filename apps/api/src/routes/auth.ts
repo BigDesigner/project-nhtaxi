@@ -204,7 +204,10 @@ auth.openapi(refreshRoute, async (c) => {
     return c.json({ error: "Unauthorized", message: "Account is no longer active" }, 401);
   }
 
-  const accessToken = await signAccessToken({ id: user.id, email: user.email, role: user.role }, c.env.JWT_SECRET);
+  const accessToken = await signAccessToken(
+    { id: user.id, email: user.email, role: user.role, isAdmin: user.isAdmin },
+    c.env.JWT_SECRET
+  );
   if (body.platform === "web") {
     setAuthCookies(c, { accessToken, refreshToken: rotated.rawToken, refreshExpiresAt: rotated.expiresAt });
   }

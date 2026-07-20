@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../auth/auth_controller.dart';
 import '../auth/change_password_sheet.dart';
 import '../../core/api_client.dart';
+import '../../core/view_mode.dart';
 import '../../models/driver_profile.dart';
 import '../../widgets/driver_avatar.dart';
 import '../../widgets/error_banner.dart';
@@ -259,6 +261,18 @@ class _ProfileBodyState extends ConsumerState<_ProfileBody> {
             ),
           ),
         ),
+        if (ref.watch(authControllerProvider).value?.canSwitchRoleView == true) ...[
+          const SizedBox(height: 16),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.admin_panel_settings_outlined),
+              title: const Text('Admin panel'),
+              subtitle: const Text('Switch to the office view'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => ref.read(viewModeProvider.notifier).set('admin'),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         Card(
           child: ListTile(

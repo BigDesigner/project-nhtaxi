@@ -212,6 +212,11 @@ Future<void> createCity(
   ref.invalidate(citiesProvider);
 }
 
+Future<void> deleteCity(WidgetRef ref, String cityId) async {
+  await ref.read(apiClientProvider).delete('/api/admin/cities/$cityId');
+  ref.invalidate(citiesProvider);
+}
+
 final pricingConfigProvider = FutureProvider<PricingConfig>((ref) async {
   final json = await ref.read(apiClientProvider).get('/api/admin/pricing');
   return PricingConfig.fromJson(json);

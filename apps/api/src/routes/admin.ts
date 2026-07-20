@@ -62,7 +62,7 @@ import { hashPassword } from "../lib/password";
 import { clientIp } from "../lib/request";
 import { issueSession, toPublicUser } from "../lib/session";
 import { customerTripNotification, NEW_TRIP_ASSIGNED_NOTIFICATION } from "../lib/trip-notifications";
-import { authenticate, requireRole } from "../middlewares/auth";
+import { authenticate, requireAdmin } from "../middlewares/auth";
 import { toDocumentResponse } from "./driver_profile";
 import { toTripResponse } from "./trips";
 
@@ -155,7 +155,7 @@ admin.openapi(bootstrapRoute, async (c) => {
 // Every OTHER route in this file is admin-only (L16) — registered after
 // bootstrap so the wildcard doesn't shadow that one public route (same
 // pattern as driver_profile.ts's public /register).
-admin.use("*", authenticate, requireRole("admin"));
+admin.use("*", authenticate, requireAdmin());
 
 function toAdminUser(user: {
   id: string;
@@ -165,6 +165,7 @@ function toAdminUser(user: {
   phone: string | null;
   role: string;
   isActive: boolean;
+  isAdmin: boolean;
   createdAt: Date;
 }) {
   return {
@@ -175,6 +176,7 @@ function toAdminUser(user: {
     phone: user.phone,
     role: user.role as (typeof USER_ROLES)[number],
     isActive: user.isActive,
+    isAdmin: user.isAdmin,
     createdAt: user.createdAt.toISOString(),
   };
 }
@@ -225,6 +227,7 @@ const createUserRoute = createRoute({
   request: { body: { required: true, content: { "application/json": { schema: AdminCreateUserRequestSchema } } } },
   responses: {
     201: { description: "Created", content: { "application/json": { schema: AdminUserSchema } } },
+    403: { description: "Cannot create an admin", content: { "application/json": { schema: ErrorResponseSchema } } },
     409: { description: "Email already exists", content: { "application/json": { schema: ErrorResponseSchema } } },
   },
 });
@@ -233,6 +236,15 @@ admin.openapi(createUserRoute, async (c) => {
   const body = c.req.valid("json");
   const db = createDb(c.env.DB);
   const authUser = c.get("user")!;
+
+  // There is deliberately no API path that mints an admin. The one that
+  // exists (bootstrap) is self-locking to a single account; every other
+  // admin, if one is ever needed, is a direct database change — never
+  // something reachable by calling an endpoint, including this one by an
+  // already-authenticated admin.
+  if (body.role === "admin") {
+    return c.json({ error: "Forbidden", message: "Admin accounts cannot be created through the API" }, 403);
+  }
 
   const [existing] = await db
     .select({ id: usersTable.id })
@@ -294,6 +306,7 @@ const updateUserRoute = createRoute({
   },
   responses: {
     200: { description: "Updated", content: { "application/json": { schema: AdminUserSchema } } },
+    403: { description: "Cannot promote to admin", content: { "application/json": { schema: ErrorResponseSchema } } },
     404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } },
   },
 });
@@ -303,6 +316,12 @@ admin.openapi(updateUserRoute, async (c) => {
   const body = c.req.valid("json");
   const db = createDb(c.env.DB);
   const authUser = c.get("user")!;
+
+  // Same rule as user creation: nothing reachable through the API can mint
+  // an admin, including reassigning an existing account's role to one.
+  if (body.role === "admin") {
+    return c.json({ error: "Forbidden", message: "A user cannot be promoted to admin through the API" }, 403);
+  }
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
   if (!user) {
@@ -625,13 +644,33 @@ const createCityRoute = createRoute({
   tags: ["admin"],
   summary: "Create a city",
   request: { body: { required: true, content: { "application/json": { schema: CreateCityRequestSchema } } } },
-  responses: { 201: { description: "Created", content: { "application/json": { schema: CitySchema } } } },
+  responses: {
+    201: { description: "Created", content: { "application/json": { schema: CitySchema } } },
+    409: { description: "Already exists", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
 });
 
 admin.openapi(createCityRoute, async (c) => {
   const body = c.req.valid("json");
   const db = createDb(c.env.DB);
   const authUser = c.get("user")!;
+
+  // Name+state, not name alone: "Portland" is a real ambiguity here (ME and
+  // OR both exist), and the office's own settings copy already promises
+  // coverage across several states.
+  const [existing] = await db
+    .select({ id: citiesTable.id })
+    .from(citiesTable)
+    .where(
+      and(
+        sql`lower(${citiesTable.name}) = lower(${body.name})`,
+        body.state ? sql`lower(${citiesTable.state}) = lower(${body.state})` : isNull(citiesTable.state)
+      )
+    )
+    .limit(1);
+  if (existing) {
+    return c.json({ error: "Conflict", message: "This service area has already been added" }, 409);
+  }
 
   const [city] = await db.insert(citiesTable).values(body).returning();
   if (!city) throw new Error("Insert into cities returned no row");
@@ -648,6 +687,54 @@ admin.openapi(createCityRoute, async (c) => {
   );
 
   return c.json(city, 201);
+});
+
+// ─── DELETE /cities/{cityId} ────────────────────────────────────────────────
+const deleteCityRoute = createRoute({
+  method: "delete",
+  path: "/cities/{cityId}",
+  tags: ["admin"],
+  summary: "Remove a service area",
+  request: { params: z.object({ cityId: z.string().uuid() }) },
+  responses: {
+    200: { description: "Deleted", content: { "application/json": { schema: z.object({ success: z.literal(true) }) } } },
+    404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } },
+    409: { description: "Still referenced elsewhere", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+admin.openapi(deleteCityRoute, async (c) => {
+  const { cityId } = c.req.valid("param");
+  const db = createDb(c.env.DB);
+  const authUser = c.get("user")!;
+
+  const [city] = await db.select({ id: citiesTable.id }).from(citiesTable).where(eq(citiesTable.id, cityId)).limit(1);
+  if (!city) return c.json({ error: "NotFound", message: "Service area not found" }, 404);
+
+  try {
+    await db.delete(citiesTable).where(eq(citiesTable.id, cityId));
+  } catch {
+    // A trip, pricing row, or zone still references it (FOREIGN KEY, no
+    // cascade) — nothing today actually sets a trip's cityId, but a stale
+    // reference is a real possibility once city-specific pricing is used.
+    return c.json(
+      { error: "Conflict", message: "This service area is still referenced by existing trips or pricing and cannot be removed" },
+      409
+    );
+  }
+
+  c.executionCtx.waitUntil(
+    logAudit(db, {
+      entity: "city",
+      entityId: cityId,
+      action: AuditAction.CITY_DELETED,
+      actorId: authUser.userId,
+      actorRole: "admin",
+      ipAddress: clientIp(c),
+    })
+  );
+
+  return c.json({ success: true as const }, 200);
 });
 
 // ─── GET/PUT /pricing — admin-editable fare config (L8) ────────────────────

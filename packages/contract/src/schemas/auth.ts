@@ -66,6 +66,10 @@ export const AuthUserSchema = z
     lastName: z.string(),
     phone: z.string().nullable(),
     role: z.enum(["admin", "driver", "customer"]),
+    // Orthogonal to role — see packages/db/src/schema/users.ts. True only for
+    // the owner-operator account; every other user gets false regardless of
+    // role.
+    isAdmin: z.boolean(),
   })
   .openapi("AuthUser");
 

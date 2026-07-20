@@ -16,6 +16,23 @@ export const usersTable = sqliteTable(
     role: text("role", { enum: USER_ROLES }).notNull().default("customer"),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     /**
+     * An extra permission bit, orthogonal to `role` — grants full admin
+     * access regardless of what `role` says.
+     *
+     * This exists for exactly one situation: the owner-operator who both
+     * runs the office *and* drives. `role` stays their real functional
+     * identity (`'driver'`, in that case) so every existing driver-side check
+     * in this codebase — dispatch, `driver_profiles`, the whole driver app —
+     * needs zero changes to keep working for that account. `isAdmin` is what
+     * additionally unlocks the admin panel on top of it.
+     *
+     * There is deliberately no API path that sets this to `true` (see the
+     * `role === "admin"` guards in routes/admin.ts). It is flipped by direct
+     * database access only — the same one-admin discipline `role`'s own
+     * bootstrap-then-lock already enforces, extended to cover this column too.
+     */
+    isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
+    /**
      * When this person accepted the terms, and which version they saw.
      *
      * Recording the version matters as much as the timestamp: "they agreed"

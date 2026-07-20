@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/view_mode.dart';
 import 'features/auth/auth_controller.dart';
 import 'features/admin/admin_assign_trip_screen.dart';
 import 'features/admin/admin_audit_screen.dart';
@@ -134,6 +135,13 @@ class _RoleHome extends ConsumerWidget {
     final user = ref.watch(authControllerProvider).value;
     if (user == null) return const _SplashScreen();
     if (user.isCustomer) return const PassengerShell();
+    // The owner-operator: a driver account that can also switch into the
+    // admin panel. Which one is on screen is a pure UI choice
+    // (viewModeProvider) — the account can reach both at all times either
+    // way, so this decides *presentation*, not permission.
+    if (user.canSwitchRoleView) {
+      return ref.watch(viewModeProvider) == 'admin' ? const AdminShell() : const DriverShell();
+    }
     if (user.role == 'driver') return const DriverShell();
     if (user.role == 'admin') return const AdminShell();
     return _ComingSoonScreen(role: user.role);
