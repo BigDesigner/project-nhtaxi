@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { except } from "hono/combine";
 import {
   AuthResponseSchema,
   DriverDocumentSchema,
@@ -116,12 +117,17 @@ driverProfile.openapi(registerRoute, async (c) => {
   return c.json(session, 201);
 });
 
-driverProfile.use("/profile", authenticate, requireRole("driver"));
-driverProfile.use("/documents", authenticate, requireRole("driver"));
-driverProfile.use("/documents/:type", authenticate, requireRole("driver"));
-driverProfile.use("/earnings", authenticate, requireRole("driver"));
-driverProfile.use("/balance", authenticate, requireRole("driver"));
-driverProfile.use("/sessions", authenticate, requireRole("driver"));
+// Everything in this router is driver-only except sign-up, which by
+// definition has no session yet.
+//
+// This deliberately guards "*" and carves out the one public path, rather
+// than listing each protected route. The previous per-route list meant a new
+// endpoint shipped **unauthenticated by default** — adding /photo silently
+// exposed it until a test caught the crash, and a handler that didn't happen
+// to dereference `user` would have simply worked for anyone on the internet.
+// Protected-by-default is the only version of this that's safe to extend.
+// `driver-auth.test.ts` asserts every route here rejects an anonymous caller.
+driverProfile.use("*", except("/api/driver/register", authenticate, requireRole("driver")));
 
 // ─── GET /profile — own driver profile ─────────────────────────────────────
 const getProfileRoute = createRoute({
@@ -318,6 +324,88 @@ driverProfile.openapi(uploadDocumentRoute, async (c) => {
   );
 
   return c.json(toDocumentResponse(doc), 201);
+});
+
+// ─── POST /photo — the driver's own profile picture ──────────────────────
+//
+// Kept entirely separate from the /documents pipeline above, which handles
+// identity papers: those are envelope-encrypted and only an admin can ever
+// read them. A profile photo is the opposite — it exists to be shown to
+// passengers picking a driver — so it's stored in the clear under an
+// `avatars/` prefix and served by the route below, which never reads any
+// other prefix.
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+
+// Photographic formats only. SVG is deliberately absent: it can carry script,
+// and this file gets served back to browsers.
+const ALLOWED_AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+const uploadPhotoRoute = createRoute({
+  method: "post",
+  path: "/photo",
+  tags: ["driver"],
+  summary: "Upload my profile photo (shown to passengers on the driver map)",
+  request: { body: { content: { "image/*": { schema: z.string() } } } },
+  responses: {
+    200: { description: "Uploaded", content: { "application/json": { schema: DriverProfileResponseSchema } } },
+    400: { description: "Empty, too large, or not an image", content: { "application/json": { schema: ErrorResponseSchema } } },
+    404: { description: "Driver profile not found", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+driverProfile.openapi(uploadPhotoRoute, async (c) => {
+  const authUser = c.get("user")!;
+  const db = createDb(c.env.DB);
+
+  const [profile] = await db
+    .select({ id: driverProfilesTable.id, photoKey: driverProfilesTable.photoKey })
+    .from(driverProfilesTable)
+    .where(eq(driverProfilesTable.userId, authUser.userId))
+    .limit(1);
+  if (!profile) {
+    return c.json({ error: "NotFound", message: "Driver profile not found" }, 404);
+  }
+
+  const contentType = (c.req.header("Content-Type") ?? "").split(";")[0]!.trim().toLowerCase();
+  if (!ALLOWED_AVATAR_TYPES.has(contentType)) {
+    return c.json({ error: "ValidationError", message: "Upload a JPEG, PNG or WebP image" }, 400);
+  }
+
+  const declaredLength = Number(c.req.header("Content-Length") ?? "0");
+  if (declaredLength > MAX_AVATAR_BYTES) {
+    return c.json({ error: "ValidationError", message: "Photo too large (max 2 MB)" }, 400);
+  }
+
+  const bytes = await c.req.arrayBuffer();
+  if (bytes.byteLength === 0) {
+    return c.json({ error: "ValidationError", message: "Empty file" }, 400);
+  }
+  if (bytes.byteLength > MAX_AVATAR_BYTES) {
+    return c.json({ error: "ValidationError", message: "Photo too large (max 2 MB)" }, 400);
+  }
+
+  // A fresh key each time, so a replaced photo can't be served from a cache
+  // keyed on the old URL.
+  const r2Key = `avatars/${profile.id}/${crypto.randomUUID()}`;
+  await c.env.DOCS.put(r2Key, bytes, { httpMetadata: { contentType } });
+
+  await db
+    .update(driverProfilesTable)
+    .set({ photoKey: r2Key, updatedAt: new Date() })
+    .where(eq(driverProfilesTable.id, profile.id));
+
+  // Best effort: the profile row already points at the new object, so a
+  // failure here leaves an orphan rather than a broken photo.
+  if (profile.photoKey) c.executionCtx.waitUntil(c.env.DOCS.delete(profile.photoKey));
+
+  const [updated] = await db
+    .select(driverProfileWithUserColumns())
+    .from(driverProfilesTable)
+    .innerJoin(usersTable, eq(driverProfilesTable.userId, usersTable.id))
+    .where(eq(driverProfilesTable.id, profile.id))
+    .limit(1);
+
+  return c.json(updated!, 200);
 });
 
 // ─── GET /documents — own document statuses (no file bytes, L17) ─────────

@@ -22,6 +22,15 @@ export const driverProfilesTable = sqliteTable(
     vehiclePlate: text("vehicle_plate"),
     status: text("status", { enum: DRIVER_STATUSES }).notNull().default("OFFLINE"),
     isVerified: integer("is_verified", { mode: "boolean" }).notNull().default(false),
+    /**
+     * R2 object key for the driver's profile photo, under the `avatars/`
+     * prefix. Deliberately *not* stored the way driver_documents are: those
+     * are identity papers, envelope-encrypted and admin-only. This one is
+     * shown to passengers choosing a driver, so it's stored unencrypted and
+     * served through an authenticated route that only ever reads `avatars/`.
+     * Null until the driver uploads one.
+     */
+    photoKey: text("photo_key"),
     currentLat: real("current_lat"),
     currentLng: real("current_lng"),
     lastSeen: integer("last_seen", { mode: "timestamp" }),

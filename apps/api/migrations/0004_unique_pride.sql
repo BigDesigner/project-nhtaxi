@@ -1,0 +1,1 @@
+ALTER TABLE `driver_profiles` ADD `photo_key` text;

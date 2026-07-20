@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import 'config.dart';
@@ -67,6 +69,33 @@ class ApiClient {
 
   Future<Map<String, dynamic>> put(String path, {Object? body}) =>
       _send(() => _dio.put<dynamic>(path, data: body));
+
+  /// Fetches raw bytes (images).
+  ///
+  /// Needed because the driver photo route is authenticated, and `NetworkImage`
+  /// can't carry a Bearer token — on the web build the browser owns the
+  /// headers entirely. Going through Dio keeps the interceptor, and with it
+  /// the token and the refresh-on-401 retry.
+  Future<Uint8List> getBytes(String path) async {
+    final response = await _raw(
+      () => _dio.get<List<int>>(path, options: Options(responseType: ResponseType.bytes)),
+    );
+    final data = response.data;
+    if (data == null) throw ApiException('No image data from $path');
+    return Uint8List.fromList(data);
+  }
+
+  /// Uploads raw bytes with an explicit content type (image upload).
+  Future<Map<String, dynamic>> postBytes(String path, Uint8List bytes, String contentType) => _send(
+        () => _dio.post<dynamic>(
+          path,
+          data: Stream.fromIterable([bytes]),
+          options: Options(
+            contentType: contentType,
+            headers: {'Content-Length': bytes.length},
+          ),
+        ),
+      );
 
   Future<List<dynamic>> getList(String path, {Map<String, dynamic>? query}) async {
     final response = await _raw(() => _dio.get<dynamic>(path, queryParameters: query));

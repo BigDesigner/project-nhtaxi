@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -46,6 +47,12 @@ class DriverProfileController extends AsyncNotifier<DriverProfile> {
   /// Vehicle details, which the passenger-facing driver map renders.
   Future<void> updateVehicle(Map<String, dynamic> fields) async {
     final json = await ref.read(apiClientProvider).put('/api/driver/profile', body: fields);
+    state = AsyncData(DriverProfile.fromJson(json));
+  }
+
+  /// Profile photo, shown to passengers picking a driver.
+  Future<void> uploadPhoto(Uint8List bytes, String contentType) async {
+    final json = await ref.read(apiClientProvider).postBytes('/api/driver/photo', bytes, contentType);
     state = AsyncData(DriverProfile.fromJson(json));
   }
 }

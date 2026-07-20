@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/api_client.dart';
 import '../../models/driver_profile.dart';
+import '../../widgets/driver_avatar.dart';
 import '../../widgets/error_banner.dart';
 import '../../widgets/help_card.dart';
 import '../passenger/passenger_shell.dart' show confirmSignOut;
@@ -44,6 +46,48 @@ class _ProfileBodyState extends ConsumerState<_ProfileBody> {
   late final _plate = TextEditingController(text: widget.profile.vehiclePlate ?? '');
   late final _year = TextEditingController(text: widget.profile.vehicleYear?.toString() ?? '');
   bool _saving = false;
+  bool _uploading = false;
+
+  /// Bumped after an upload to force the avatar to re-fetch. The provider is
+  /// keyed on the URL, which doesn't change when the photo behind it does.
+  int _photoVersion = 0;
+
+  Future<void> _pickPhoto() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      // Resized before upload: a modern phone camera produces several MB, the
+      // API caps at 2, and it's only ever rendered as a small circle.
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 85,
+    );
+    if (picked == null || !mounted) return;
+
+    setState(() => _uploading = true);
+    try {
+      final bytes = await picked.readAsBytes();
+      // image_picker reports the MIME type on web but not always on native;
+      // fall back to the extension, and to JPEG since that's what the resize
+      // above produces.
+      final contentType = picked.mimeType ?? _mimeFromName(picked.name);
+      await ref.read(driverProfileProvider.notifier).uploadPhoto(bytes, contentType);
+      if (mounted) {
+        setState(() => _photoVersion++);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo updated')));
+      }
+    } on ApiException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  String _mimeFromName(String name) {
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
+  }
 
   @override
   void dispose() {
@@ -85,12 +129,38 @@ class _ProfileBodyState extends ConsumerState<_ProfileBody> {
       padding: const EdgeInsets.all(16),
       children: [
         Center(
-          child: CircleAvatar(
-            radius: 36,
-            child: Text(
-              p.firstName.isNotEmpty ? p.firstName[0].toUpperCase() : '?',
-              style: const TextStyle(fontSize: 28),
-            ),
+          child: Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              DriverAvatar(
+                name: p.firstName,
+                // Own photo, via the same authenticated route passengers use.
+                photoUrl: '/api/drivers/${p.id}/photo',
+                radius: 44,
+                key: ValueKey(_photoVersion),
+              ),
+              Material(
+                color: Theme.of(context).colorScheme.primary,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: _uploading ? null : _pickPhoto,
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: _uploading
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : Icon(Icons.photo_camera, size: 16, color: Theme.of(context).colorScheme.onPrimary),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: Text(
+            'Passengers see this photo when they choose a driver.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
         const SizedBox(height: 12),

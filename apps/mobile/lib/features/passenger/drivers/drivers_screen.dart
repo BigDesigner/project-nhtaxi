@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/providers.dart';
 import '../../../models/directory_driver.dart';
 import '../../../widgets/app_back_button.dart';
+import '../../../widgets/driver_avatar.dart';
 import '../../../widgets/error_banner.dart';
 import '../booking/booking_controller.dart';
 import 'drivers_controller.dart';
@@ -166,11 +167,7 @@ class _DriversBody extends StatelessWidget {
               final d = drivers[i];
               final m = _marker(d);
               return ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: m.color.withValues(alpha: 0.15),
-                  foregroundImage: d.photoUrl == null ? null : NetworkImage(d.photoUrl!),
-                  child: Icon(m.icon, color: m.color),
-                ),
+                leading: DriverAvatar(name: d.firstName, photoUrl: d.photoUrl, color: m.color),
                 title: Text(d.firstName),
                 subtitle: Text(
                   [d.availabilityDetail, if (d.vehicleDescription != null) d.vehicleDescription!].join(' · '),
@@ -227,14 +224,11 @@ class _DriverSheet extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(
+                DriverAvatar(
+                  name: driver.firstName,
+                  photoUrl: driver.photoUrl,
                   radius: 32,
-                  backgroundColor: m.color.withValues(alpha: 0.15),
-                  foregroundImage: driver.photoUrl == null ? null : NetworkImage(driver.photoUrl!),
-                  child: Text(
-                    driver.firstName.isNotEmpty ? driver.firstName[0].toUpperCase() : '?',
-                    style: TextStyle(fontSize: 24, color: m.color),
-                  ),
+                  color: m.color,
                 ),
                 const SizedBox(width: 16),
                 Expanded(
