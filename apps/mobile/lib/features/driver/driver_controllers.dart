@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
 import '../../core/providers.dart';
+import '../../core/trip_path_recorder.dart';
 import '../../models/driver_billing.dart';
 import '../../models/driver_document.dart';
 import '../../models/driver_profile.dart';
@@ -124,6 +125,17 @@ class DriverTripsController extends AsyncNotifier<List<Trip>> {
       // it clear a referral the office already set.
       body: {'status': status, 'gnnReferred': ?gnnReferred},
     );
+    // The path is recorded only while a passenger is actually in the car —
+    // not from the moment a job is accepted. Where a driver drove *before*
+    // picking someone up is nobody's business, and recording it would collect
+    // location data with no purpose to justify keeping it.
+    final recorder = ref.read(tripPathRecorderProvider);
+    if (status == 'TRIP_STARTED') {
+      recorder.start(tripId);
+    } else if (status == 'TRIP_COMPLETED' || status == 'TRIP_CANCELLED') {
+      await recorder.stop();
+    }
+
     await refresh();
     // Accepting or finishing a job moves the driver between AVAILABLE and
     // BUSY, and finishing an admin-assigned one books a commission charge.

@@ -32,10 +32,14 @@ export const CLIENT_SETTABLE_TRIP_STATUSES = [
 // reversible by widening this array again when Stripe returns).
 export const PAYMENT_METHODS = ["cash"] as const;
 
-// Faz 5c — CUSTOMER_APP is the existing passenger-requested/auto-dispatch
-// flow; ADMIN_ASSIGNED is a trip an admin hand-picks a driver for directly,
-// which owes GNN LLC a commission (see commissionPercent below).
-export const TRIP_ORIGINS = ["CUSTOMER_APP", "ADMIN_ASSIGNED"] as const;
+// How the trip came into being. CUSTOMER_APP is the passenger-requested
+// auto-dispatch flow; ADMIN_ASSIGNED is a trip an admin hand-picks a driver
+// for directly; DRIVER_REFERRAL is one the driver opened at the kerb, from
+// their own GPS, for a passenger the office sent them by phone with no
+// booking behind it.
+//
+// Note this says nothing about commission — see referralSource for that.
+export const TRIP_ORIGINS = ["CUSTOMER_APP", "ADMIN_ASSIGNED", "DRIVER_REFERRAL"] as const;
 
 // What decides whether a trip owes GNN LLC commission. See REFERRAL_SOURCES
 // in packages/db for the full reasoning — in short, drivers pay rent for time

@@ -2,9 +2,12 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
+  BreadcrumbResponseSchema,
   CancelTripRequestSchema,
   CreateTripRequestSchema,
   ErrorResponseSchema,
+  RecordBreadcrumbsRequestSchema,
+  RecordBreadcrumbsResponseSchema,
   EstimateTripRequestSchema,
   EstimateTripResponseSchema,
   TripEventResponseSchema,
@@ -17,6 +20,7 @@ import {
   driverProfilesTable,
   driverTripCommissionsTable,
   paymentsTable,
+  tripBreadcrumbsTable,
   tripEventsTable,
   tripsTable,
 } from "@gnncab/db";
@@ -737,6 +741,110 @@ trips.openapi(retryTripRoute, async (c) => {
 
   const [updated] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId)).limit(1);
   return c.json(toTripResponse(updated!), 200);
+});
+
+// ─── POST /{tripId}/breadcrumbs — where the car actually went ─────────────
+// Written by the driver's app every ~30s while a passenger is aboard.
+//
+// This is evidence, not billing. The fare is priced from a routing engine
+// asked what the journey *should* cost, and that stays true no matter what
+// arrives here: summing raw GPS would let jitter and a wandering route both
+// inflate the charge, and would make the price depend on the quality of a
+// phone's signal. What breadcrumbs answer is the question routing cannot —
+// where was this car, and when — which is what matters when a passenger
+// disputes a trip or the office needs to know why a job took an hour.
+const recordBreadcrumbsRoute = createRoute({
+  method: "post",
+  path: "/{tripId}/breadcrumbs",
+  tags: ["trips"],
+  summary: "Record the driver's positions during a trip",
+  request: {
+    params: z.object({ tripId: z.string().uuid() }),
+    body: { required: true, content: { "application/json": { schema: RecordBreadcrumbsRequestSchema } } },
+  },
+  responses: {
+    201: { description: "Recorded", content: { "application/json": { schema: RecordBreadcrumbsResponseSchema } } },
+    400: { description: "Trip not in progress", content: { "application/json": { schema: ErrorResponseSchema } } },
+    403: { description: "Forbidden", content: { "application/json": { schema: ErrorResponseSchema } } },
+    404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+trips.openapi(recordBreadcrumbsRoute, async (c) => {
+  const authUser = c.get("user")!;
+  const { tripId } = c.req.valid("param");
+  const { points } = c.req.valid("json");
+  const db = createDb(c.env.DB);
+
+  if (authUser.role !== "driver") {
+    return c.json({ error: "Forbidden", message: "Only the assigned driver records a trip's path" }, 403);
+  }
+
+  const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId)).limit(1);
+  if (!trip) return c.json({ error: "NotFound", message: "Trip not found" }, 404);
+  if (!(await assertOwnsTrip(db, trip, authUser))) {
+    return c.json({ error: "Forbidden", message: "You are not the assigned driver for this trip" }, 403);
+  }
+  // A finished trip's path is a record, so it stops accepting new points —
+  // otherwise a phone uploading a stale backlog hours later could append to
+  // the very trip the office is looking at to settle a dispute. TERMINAL is
+  // the line rather than "not TRIP_STARTED": a backlog that arrives a few
+  // seconds after a pickup still belongs to this trip.
+  if (TERMINAL_STATUSES.has(trip.status)) {
+    return c.json({ error: "InvalidState", message: `Trip is ${trip.status} — its path is closed` }, 400);
+  }
+
+  await db.insert(tripBreadcrumbsTable).values(
+    points.map((p) => ({
+      tripId,
+      lat: p.lat,
+      lng: p.lng,
+      recordedAt: new Date(p.recordedAt),
+    }))
+  );
+
+  return c.json({ recorded: points.length }, 201);
+});
+
+// ─── GET /{tripId}/breadcrumbs ─────────────────────────────────────────────
+// Same access rule as the trip itself: the admin reviewing a complaint, the
+// driver who drove it, and the passenger who rode it. Ordered by when the
+// device recorded each point, not when the server received it, so a backlog
+// uploaded after a dead spot still draws the route in the order it was driven.
+const listBreadcrumbsRoute = createRoute({
+  method: "get",
+  path: "/{tripId}/breadcrumbs",
+  tags: ["trips"],
+  summary: "Get the path a trip actually took",
+  request: { params: z.object({ tripId: z.string().uuid() }) },
+  responses: {
+    200: { description: "Path", content: { "application/json": { schema: z.array(BreadcrumbResponseSchema) } } },
+    403: { description: "Forbidden", content: { "application/json": { schema: ErrorResponseSchema } } },
+    404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+trips.openapi(listBreadcrumbsRoute, async (c) => {
+  const authUser = c.get("user")!;
+  const { tripId } = c.req.valid("param");
+  const db = createDb(c.env.DB);
+
+  const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId)).limit(1);
+  if (!trip) return c.json({ error: "NotFound", message: "Trip not found" }, 404);
+  if (!(await assertOwnsTrip(db, trip, authUser))) {
+    return c.json({ error: "Forbidden", message: "You do not have access to this trip" }, 403);
+  }
+
+  const rows = await db
+    .select()
+    .from(tripBreadcrumbsTable)
+    .where(eq(tripBreadcrumbsTable.tripId, tripId))
+    .orderBy(tripBreadcrumbsTable.recordedAt);
+
+  return c.json(
+    rows.map((r) => ({ id: r.id, lat: r.lat, lng: r.lng, recordedAt: r.recordedAt.toISOString() })),
+    200
+  );
 });
 
 export default trips;

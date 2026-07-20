@@ -16,3 +16,4 @@ export * from "./schemas/admin-trips";
 export * from "./schemas/push-tokens";
 export * from "./schemas/drivers-directory";
 export * from "./schemas/legal";
+export * from "./schemas/referral-trips";

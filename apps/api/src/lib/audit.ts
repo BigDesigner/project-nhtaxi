@@ -34,6 +34,13 @@ export const AuditAction = {
   TRIP_REASSIGNED: "TRIP_REASSIGNED",
   TRIP_REFERRAL_CHANGED: "TRIP_REFERRAL_CHANGED",
   DRIVER_COMMISSION_CHARGED: "DRIVER_COMMISSION_CHARGED",
+  // A trip the driver opened at the kerb for a passenger with no booking,
+  // both ends captured from the phone's GPS. These two carry the coordinates
+  // in their metadata: a referral trip has no passenger account behind it to
+  // corroborate what happened, so the audit log is the only independent record
+  // of where the driver said they were when they started and finished.
+  TRIP_REFERRAL_STARTED: "TRIP_REFERRAL_STARTED",
+  TRIP_REFERRAL_COMPLETED: "TRIP_REFERRAL_COMPLETED",
 } as const;
 
 export interface LogAuditInput {

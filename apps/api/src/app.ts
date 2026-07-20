@@ -10,6 +10,7 @@ import driversDirectoryRoutes from "./routes/drivers_directory";
 import { RoutingUnavailableError } from "./lib/routing";
 import health from "./routes/health";
 import pushTokenRoutes from "./routes/push_tokens";
+import referralTripRoutes from "./routes/referral_trips";
 import tripRoutes from "./routes/trips";
 
 const app = new OpenAPIHono<AppBindings>();
@@ -45,6 +46,10 @@ app.route("/api/driver", driverProfileRoutes);
 app.route("/api/customer", customerProfileRoutes);
 app.route("/api/admin", adminRoutes);
 app.route("/api/trips", tripRoutes);
+// Mounted outside /api/driver on purpose: that path is owned by
+// driver_profile's router, whose `use("*")` middleware would run first and
+// make the ordering of two mounted routers load-bearing.
+app.route("/api/referral-trips", referralTripRoutes);
 app.route("/api/push-tokens", pushTokenRoutes);
 app.route("/api/drivers", driversDirectoryRoutes);
 

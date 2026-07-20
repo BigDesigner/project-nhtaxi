@@ -230,6 +230,14 @@ class _TripCardState extends ConsumerState<_TripCard> {
                       onPressed: _toggleReferral,
                       child: Text(trip.isReferred ? 'Not referred' : 'Mark referred'),
                     ),
+                  // The route is what settles "the driver took the long way
+                  // round". Only worth offering once the car has actually
+                  // moved — before pickup there is nothing recorded.
+                  IconButton(
+                    tooltip: 'See the route',
+                    icon: const Icon(Icons.route_outlined, size: 20),
+                    onPressed: () => context.go('/home/trip-path/${trip.tripId}'),
+                  ),
                 ],
               ],
             ),

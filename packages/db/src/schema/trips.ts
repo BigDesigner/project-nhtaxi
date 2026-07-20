@@ -30,13 +30,12 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 // flow; ADMIN_ASSIGNED is a trip an admin hand-picks a driver for directly
 // (e.g. a phoned-in booking), which owes GNN LLC a commission (see
 // commissionPercent below) instead of the flat usage-time fee alone.
-// DRIVER_REFERRAL (a job the driver opens at the kerb for an off-app
-// passenger) lands here in the next wave. It is held back deliberately:
-// widening this list means rewriting the CHECK constraint below, which in
-// SQLite means rebuilding the whole trips table — the exact operation that
-// failed twice against the remote D1 and had to be hand-repaired. It gets
-// done on its own, with its own migration and nothing else riding on it.
-export const TRIP_ORIGINS = ["CUSTOMER_APP", "ADMIN_ASSIGNED"] as const;
+// DRIVER_REFERRAL is a job the driver opens at the kerb for a passenger who
+// isn't in the app at all — the office rang them directly and said "collect
+// this person here". It has no booking, so pickup and dropoff are captured
+// from the driver's own GPS as it happens rather than being typed in
+// afterwards, which is what keeps the fare computed rather than declared.
+export const TRIP_ORIGINS = ["CUSTOMER_APP", "ADMIN_ASSIGNED", "DRIVER_REFERRAL"] as const;
 export type TripOrigin = (typeof TRIP_ORIGINS)[number];
 
 /**
@@ -124,7 +123,7 @@ export const tripsTable = sqliteTable(
       sql`${table.status} in ('REQUESTED','DRIVER_ASSIGNED','DRIVER_ACCEPTED','DRIVER_REJECTED','DRIVER_EN_ROUTE','DRIVER_ARRIVED','TRIP_STARTED','TRIP_COMPLETED','TRIP_CANCELLED','DRIVER_NO_RESPONSE','TIMEOUT')`
     ),
     check("chk_trips_payment_method", sql`${table.paymentMethod} in ('cash','card','online')`),
-    check("chk_trips_origin", sql`${table.origin} in ('CUSTOMER_APP','ADMIN_ASSIGNED')`),
+    check("chk_trips_origin", sql`${table.origin} in ('CUSTOMER_APP','ADMIN_ASSIGNED','DRIVER_REFERRAL')`),
   ]
 );
 
@@ -150,3 +149,40 @@ export const tripEventsTable = sqliteTable(
 
 export type TripEvent = typeof tripEventsTable.$inferSelect;
 export type InsertTripEvent = typeof tripEventsTable.$inferInsert;
+
+/**
+ * Where the car actually went during a trip.
+ *
+ * Written roughly every 30 seconds between "passenger is in the car" and
+ * "dropped off". At ~15 drivers doing ~10 jobs a day this is a few thousand
+ * rows daily against a 5-million-row daily write allowance, so the free tier
+ * is not the constraint here.
+ *
+ * This is **evidence, not billing**. The fare is priced from a routing engine
+ * asked what the journey should cost; summing raw GPS points would inflate it
+ * with jitter and would let a wandering route charge more. What breadcrumbs
+ * answer is the question routing cannot: where was this car, and when — which
+ * is what matters if a trip is ever disputed or a passenger complains.
+ */
+export const tripBreadcrumbsTable = sqliteTable(
+  "trip_breadcrumbs",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    tripId: text("trip_id")
+      .notNull()
+      .references(() => tripsTable.id, { onDelete: "cascade" }),
+    lat: real("lat").notNull(),
+    lng: real("lng").notNull(),
+    /**
+     * When the device recorded it, not when the server received it — a phone
+     * that loses signal in the mountains uploads a backlog later, and the
+     * order that matters is the order it was driven.
+     */
+    recordedAt: integer("recorded_at", { mode: "timestamp" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => [index("idx_trip_breadcrumbs_trip_id").on(table.tripId)]
+);
+
+export type TripBreadcrumb = typeof tripBreadcrumbsTable.$inferSelect;
+export type InsertTripBreadcrumb = typeof tripBreadcrumbsTable.$inferInsert;

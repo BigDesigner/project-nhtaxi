@@ -8,6 +8,7 @@ import 'features/admin/admin_audit_screen.dart';
 import 'features/admin/admin_people_screen.dart';
 import 'features/admin/admin_driver_screen.dart';
 import 'features/admin/admin_shell.dart';
+import 'features/admin/admin_trip_path_screen.dart';
 import 'features/auth/driver_signup_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/signup_screen.dart';
@@ -64,6 +65,10 @@ List<RouteBase> appRoutes() => [
           GoRoute(
             path: 'driver/:driverId',
             builder: (_, state) => AdminDriverScreen(driverId: state.pathParameters['driverId']!),
+          ),
+          GoRoute(
+            path: 'trip-path/:tripId',
+            builder: (_, state) => AdminTripPathScreen(tripId: state.pathParameters['tripId']!),
           ),
           GoRoute(path: 'assign', builder: (_, _) => const AdminAssignTripScreen()),
           GoRoute(path: 'people', builder: (_, _) => const AdminPeopleScreen()),

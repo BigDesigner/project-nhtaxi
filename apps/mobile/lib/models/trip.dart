@@ -48,9 +48,20 @@ class Trip {
   final DateTime? nextSearchAt;
   final int maxSearchAttempts;
 
-  /// CUSTOMER_APP for an ordinary booking, ADMIN_ASSIGNED when an admin
-  /// hand-picked the driver — the latter owes GNN LLC a cut of the fare.
+  /// How the trip came into being: CUSTOMER_APP for an ordinary booking,
+  /// ADMIN_ASSIGNED when an admin hand-picked the driver, DRIVER_REFERRAL when
+  /// the driver opened it at the kerb from their own GPS.
+  ///
+  /// Note this says nothing about commission on its own — see [isReferred].
   final String origin;
+
+  /// A job the driver opened at the kerb for a passenger with no booking.
+  ///
+  /// It has no passenger app to drive it, so it never passes through the
+  /// accept/en-route/arrived states: it begins in progress and ends when the
+  /// driver taps Dropped off. That is why the driver UI treats it separately
+  /// from every other job.
+  bool get isReferralJob => origin == 'DRIVER_REFERRAL';
 
   /// Whether GNN LLC referred this job — and so whether commission is owed.
   /// NONE / ADMIN_ASSIGNED / DRIVER_DECLARED / ADMIN_MARKED.

@@ -11,6 +11,7 @@ import '../../widgets/error_banner.dart';
 import '../../widgets/map_markers.dart';
 import 'driver_controllers.dart';
 import 'job_actions.dart';
+import 'referral_job_card.dart';
 
 class DriverHomeTab extends ConsumerWidget {
   const DriverHomeTab({super.key});
@@ -40,7 +41,15 @@ class DriverHomeTab extends ConsumerWidget {
           },
           if (job != null) ...[
             const SizedBox(height: 16),
-            _CurrentJobCard(job: job),
+            // A referral job has no accept/on-my-way/arrived states to show,
+            // so it gets its own card with the single action it actually has.
+            if (job.isReferralJob) ActiveReferralCard(job: job) else _CurrentJobCard(job: job),
+          ]
+          // Only offered when the driver is genuinely free and approved: this
+          // opens a real, billable job the moment it is tapped.
+          else if (profile.value?.isOnline == true && profile.value?.isVerified == true) ...[
+            const SizedBox(height: 16),
+            const StartReferralCard(),
           ],
           const SizedBox(height: 24),
           Text('Recent jobs', style: Theme.of(context).textTheme.titleMedium),
