@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../auth/change_password_sheet.dart';
 import '../../core/api_client.dart';
 import '../../models/driver_profile.dart';
 import '../../widgets/driver_avatar.dart';
@@ -253,6 +254,16 @@ class _ProfileBodyState extends ConsumerState<_ProfileBody> {
                 ],
               ),
             ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.lock_outline),
+            title: const Text('Change password'),
+            subtitle: const Text('Signs you out on other devices'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => showChangePasswordSheet(context, ref),
           ),
         ),
         const SizedBox(height: 16),

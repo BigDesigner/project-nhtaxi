@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api_client.dart';
 import '../../models/admin.dart';
 import '../../widgets/error_banner.dart';
+import '../auth/change_password_sheet.dart';
 import '../passenger/passenger_shell.dart' show confirmSignOut;
 import 'admin_controllers.dart';
 
@@ -84,8 +85,8 @@ class _PricingFormState extends ConsumerState<_PricingForm> {
           Text('What passengers pay', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
-            'Quotes are worked out from an estimated road distance, then shown to the '
-            'passenger as this figure with a 10% ceiling above it.',
+            'Quotes are worked out from the real driving distance for the route, then '
+            'shown to the passenger as that figure with a 10% ceiling above it.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
@@ -122,6 +123,16 @@ class _PricingFormState extends ConsumerState<_PricingForm> {
                 : const Text('Save pricing'),
           ),
           const SizedBox(height: 32),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.lock_outline),
+              title: const Text('Change password'),
+              subtitle: const Text('Signs you out on other devices'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => showChangePasswordSheet(context, ref),
+            ),
+          ),
+          const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: () => confirmSignOut(context, ref),
             icon: const Icon(Icons.logout),

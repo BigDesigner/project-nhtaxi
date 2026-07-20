@@ -37,7 +37,9 @@ found something worth remembering on their own.
   undefined without a checked-in `.dev.vars`.
 - Added a self-locking `POST /api/admin/bootstrap` endpoint so the very first
   admin account can be created without a chicken-and-egg problem, then locks
-  itself once an admin exists.
+  itself once an admin exists. **It was used during Faz 2 and is now locked** —
+  the production admin (`info@nhtaxi.com`) exists and works. Any further admin
+  accounts are created by that admin via `POST /api/admin/users`.
 
 ### Faz 2 — Profiles & Admin
 - Added contract schemas for driver/customer profiles, admin actions, and
@@ -218,11 +220,12 @@ backend work.
   distance really travelled (from LocationHub's position stream), or both.
   The passenger-side quote is already presented as a floor with a +10%
   ceiling precisely so this can move without breaking a promise.
-- **No admin account exists in production yet.** `POST /api/admin/bootstrap`
-  creates the first one and then locks itself, but it requires the
-  `ADMIN_BOOTSTRAP_TOKEN` Worker secret. This is a user-owned step and it
-  blocks end-to-end testing entirely: without an admin, no driver can be
-  verified, and an unverified driver cannot go online.
+- **No way to change a password.** There is no change-password or
+  password-reset endpoint anywhere. A compromised or shared password can only
+  be rotated by editing the database by hand. This matters now: the
+  production admin password was generated in-session during Faz 2 and has
+  been sitting in plain text in chat transcripts and personal notes ever
+  since, with no way to rotate it.
 - **Phase 7 Wave 3 / live tracking** — see below.
 - **Phase 7 Wave 3**: WebSocket live driver-position updates in the app
   (LocationHub DO already exists server-side; the Flutter client doesn't

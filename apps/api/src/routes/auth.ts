@@ -1,14 +1,15 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import {
   AuthResponseSchema,
   AuthUserSchema,
+  ChangePasswordRequestSchema,
   ErrorResponseSchema,
   LoginRequestSchema,
   RefreshRequestSchema,
   RegisterRequestSchema,
 } from "@gnncab/contract";
-import { createDb, customerProfilesTable, usersTable } from "@gnncab/db";
+import { createDb, customerProfilesTable, refreshTokensTable, usersTable } from "@gnncab/db";
 import type { AppBindings } from "../env";
 import { AuditAction, logAudit } from "../lib/audit";
 import { clearAuthCookies, getRefreshTokenCookie, setAuthCookies } from "../lib/auth-cookie";
@@ -290,6 +291,96 @@ auth.openapi(meRoute, async (c) => {
   }
 
   return c.json(toPublicUser(user), 200);
+});
+
+// ─── PUT /password — change your own password ─────────────────────────────
+//
+// Until this existed there was no way to rotate a password at all: a
+// credential that leaked could only be changed by editing the database by
+// hand. That is not a theoretical gap — the production admin password was
+// generated in a chat session and had no rotation path.
+const changePasswordRoute = createRoute({
+  method: "put",
+  path: "/password",
+  tags: ["auth"],
+  summary: "Change my own password",
+  request: {
+    body: { required: true, content: { "application/json": { schema: ChangePasswordRequestSchema } } },
+  },
+  responses: {
+    200: { description: "Changed", content: { "application/json": { schema: AuthResponseSchema } } },
+    400: { description: "Invalid request", content: { "application/json": { schema: ErrorResponseSchema } } },
+    401: { description: "Current password is wrong", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+auth.use("/password", authenticate);
+auth.openapi(changePasswordRoute, async (c) => {
+  const authUser = c.get("user");
+  if (!authUser) {
+    return c.json({ error: "Unauthorized", message: "Not authenticated" }, 401);
+  }
+
+  const body = c.req.valid("json");
+  const db = createDb(c.env.DB);
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, authUser.userId)).limit(1);
+  if (!user) {
+    return c.json({ error: "Unauthorized", message: "Account no longer exists" }, 401);
+  }
+
+  // Required despite the caller already holding a valid token: otherwise a
+  // phone left unlocked on a table is enough to take someone's account.
+  if (!(await verifyPassword(body.currentPassword, user.passwordHash))) {
+    c.executionCtx.waitUntil(
+      logAudit(db, {
+        entity: "user",
+        entityId: user.id,
+        action: AuditAction.LOGIN_FAILURE,
+        actorId: user.id,
+        actorRole: user.role,
+        metadata: { reason: "wrong current password on change" },
+        ipAddress: clientIp(c),
+      })
+    );
+    return c.json({ error: "Unauthorized", message: "Your current password is not correct" }, 401);
+  }
+
+  if (body.newPassword === body.currentPassword) {
+    return c.json({ error: "ValidationError", message: "Choose a password you have not used here before" }, 400);
+  }
+
+  const passwordHash = await hashPassword(body.newPassword);
+
+  // Every existing refresh token is revoked, including this device's. The
+  // usual reason to change a password is that someone else might have it, so
+  // leaving their sessions alive would defeat the exercise. A fresh session
+  // is issued below so the person doing it isn't logged out of their own app.
+  await db.batch([
+    db.update(usersTable).set({ passwordHash, updatedAt: new Date() }).where(eq(usersTable.id, user.id)),
+    db
+      .update(refreshTokensTable)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(refreshTokensTable.userId, user.id), isNull(refreshTokensTable.revokedAt))),
+  ]);
+
+  // toPublicUser only reads identity fields, so the pre-update row is fine
+  // here — the new hash is already committed above.
+  const platform = c.req.header("X-Client-Platform") === "web" ? "web" : "android";
+  const session = await issueSession(c, db, toPublicUser(user), platform);
+
+  c.executionCtx.waitUntil(
+    logAudit(db, {
+      entity: "user",
+      entityId: user.id,
+      action: AuditAction.PASSWORD_CHANGED,
+      actorId: user.id,
+      actorRole: user.role,
+      ipAddress: clientIp(c),
+    })
+  );
+
+  return c.json(session, 200);
 });
 
 export default auth;

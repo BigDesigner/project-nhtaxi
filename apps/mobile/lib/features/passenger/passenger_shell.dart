@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../auth/change_password_sheet.dart';
 import '../../widgets/help_card.dart';
 import '../auth/auth_controller.dart';
 import 'passenger_home_screen.dart';
@@ -166,6 +167,16 @@ class _SettingsTab extends ConsumerWidget {
                 subtitle: Text('OpenStreetMap', style: Theme.of(context).textTheme.bodySmall),
               ),
             ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.lock_outline),
+            title: const Text('Change password'),
+            subtitle: const Text('Signs you out on other devices'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => showChangePasswordSheet(context, ref),
           ),
         ),
         const SizedBox(height: 16),

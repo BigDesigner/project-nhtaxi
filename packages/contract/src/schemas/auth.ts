@@ -47,6 +47,17 @@ export const RefreshRequestSchema = z
   })
   .openapi("RefreshRequest");
 
+// Changing your own password. The current one is required even though the
+// caller is already authenticated: a token left behind on an unlocked or
+// stolen device must not be enough to lock the real owner out of their
+// account.
+export const ChangePasswordRequestSchema = z
+  .object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(8).max(200),
+  })
+  .openapi("ChangePasswordRequest");
+
 export const AuthUserSchema = z
   .object({
     id: z.string(),

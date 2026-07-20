@@ -103,6 +103,35 @@ function expectMessage(ws: WebSocket): Promise<any> {
   ]);
 }
 
+/**
+ * Waits for a message of a particular type, ignoring anything that arrives
+ * first.
+ *
+ * [expectMessage] takes whatever the next frame happens to be, which makes
+ * any test using it order-dependent and flaky: it passed alone and failed
+ * under full-suite load, where the socket is slower and other frames can
+ * arrive first. Waiting for the frame the test actually cares about removes
+ * both problems.
+ */
+function expectMessageOfType(ws: WebSocket, type: string, timeoutMs = 5000): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      ws.removeEventListener("message", handler);
+      reject(new Error(`timed out waiting for a ${type} message`));
+    }, timeoutMs);
+
+    function handler(evt: MessageEvent) {
+      const msg = JSON.parse(evt.data as string);
+      if (msg.type !== type) return;
+      clearTimeout(timer);
+      ws.removeEventListener("message", handler);
+      resolve(msg);
+    }
+
+    ws.addEventListener("message", handler);
+  });
+}
+
 async function expectNoMessage(ws: WebSocket, ms = 300): Promise<void> {
   const sentinel = Symbol("no-message");
   const result = await Promise.race([onceMessage(ws), new Promise((resolve) => setTimeout(() => resolve(sentinel), ms))]);
@@ -196,8 +225,10 @@ describe("LocationHub — live tracking WebSocket", () => {
         ws.send(JSON.stringify({ type: "LOCATION_UPDATE", lat: 44.07, lng: -71.1 }));
       }
       ws.send(JSON.stringify({ type: "LOCATION_UPDATE", lat: 44.07, lng: -71.1 }));
-      const msg = await expectMessage(ws);
-      expect(msg.type).toBe("RATE_LIMITED");
+      // Waits specifically for RATE_LIMITED rather than "the next frame":
+      // thirty sends in flight means the ordering is not something a test
+      // should depend on.
+      await expectMessageOfType(ws, "RATE_LIMITED");
     } finally {
       ws.close();
     }
