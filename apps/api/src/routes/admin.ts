@@ -714,9 +714,9 @@ admin.openapi(deleteCityRoute, async (c) => {
   try {
     await db.delete(citiesTable).where(eq(citiesTable.id, cityId));
   } catch {
-    // A trip, pricing row, or zone still references it (FOREIGN KEY, no
-    // cascade) — nothing today actually sets a trip's cityId, but a stale
-    // reference is a real possibility once city-specific pricing is used.
+    // A trip or pricing row still references it (FOREIGN KEY, no cascade) —
+    // nothing today actually sets a trip's cityId, but a stale reference is a
+    // real possibility once city-specific pricing is used.
     return c.json(
       { error: "Conflict", message: "This service area is still referenced by existing trips or pricing and cannot be removed" },
       409

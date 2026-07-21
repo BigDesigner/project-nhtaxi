@@ -541,13 +541,15 @@ This category was surfaced late — a fair complaint. It tracks schema/columns
 defined since an early phase that nothing at runtime actually writes or reads,
 so a stub can't masquerade as a finished feature again.
 
-- **`driver_profiles.rating`** — dead since Faz 0 (read into a projection,
+- **`driver_profiles.rating`** — was dead since Faz 0 (read into a projection,
   never written; always null). **Resolved by the ratings feature above.**
-- **`zones` + `driver_zone_assignments` tables** — zero runtime references.
-  A whole geofence / zone-assignment layer, defined and never wired to
-  anything. Single-market, so unused by design. Left inert (user had no
-  preference on deleting); a future multi-city build would use it, and until
-  then it's harmless weight. **Delete candidate if the churn is ever wanted.**
+- **`zones` + `driver_zone_assignments` tables** — **DELETED (migration 0011).**
+  A polygon-geofence / zone-assignment layer copied faithfully from the
+  original project's SRS, which itself marked it "Optional / Admin", and never
+  wired to anything here. Dropped once the user confirmed, rather than left as
+  a stub that reads as a working feature. The original design is preserved in
+  `.archive/docs-migration/2026-07-19/srs_architecture_doc.md` if a future
+  multi-city build ever wants it back.
 - **Per-city columns** (`trips.city_id`, `driver_profiles.city_id`,
   `pricing_config.city_id`): trips are created with a null city, drivers never
   get one, and pricing always reads the global (`city_id IS NULL`) row.

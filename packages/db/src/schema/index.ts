@@ -2,8 +2,6 @@ export * from "./users";
 export * from "./drivers";
 export * from "./customers";
 export * from "./cities";
-export * from "./zones";
-export * from "./driver_zones";
 export * from "./trips";
 export * from "./payments";
 export * from "./audit";
