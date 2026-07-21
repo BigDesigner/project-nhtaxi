@@ -203,9 +203,9 @@ class _BalanceSectionState extends ConsumerState<_BalanceSection> {
               Text('Currently online — still climbing.', style: Theme.of(context).textTheme.bodySmall),
             if (b != null) ...[
               const Divider(height: 28),
-              _Line(label: 'Time on the app', amount: b.usageFeeCharged),
+              _Line(label: 'App usage fee', amount: b.usageFeeCharged),
               const SizedBox(height: 6),
-              _Line(label: 'Commission', amount: b.commissionCharged),
+              _Line(label: 'Commission on office jobs', amount: b.commissionCharged),
               const SizedBox(height: 6),
               _Line(label: 'Cash already received', amount: b.totalCollected),
             ],

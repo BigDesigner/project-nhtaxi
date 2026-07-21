@@ -109,13 +109,37 @@ class _BalanceCard extends StatelessWidget {
             else if (!owes)
               Text('All settled up.', style: Theme.of(context).textTheme.bodySmall),
             const Divider(height: 28),
-            _Line(label: 'Time on the app', amount: balance.usageFeeCharged),
-            const SizedBox(height: 6),
-            _Line(label: 'Commission on office jobs', amount: balance.commissionCharged),
-            const SizedBox(height: 6),
+            Text('How this adds up', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 12),
+            // The two things that grow the debt, each said plainly. Neither is
+            // money the driver hands over from a trip — trip cash is theirs and
+            // never enters this card (see _EarningsCard).
+            _Line(
+              label: 'App usage fee',
+              subtitle: 'Every minute you are online, job or no job',
+              amount: balance.usageFeeCharged,
+            ),
+            const SizedBox(height: 10),
+            _Line(
+              label: 'Commission on office jobs',
+              subtitle: 'Only on jobs GNN LLC referred to you',
+              amount: balance.commissionCharged,
+            ),
+            const SizedBox(height: 10),
             _Line(label: 'Charged in total', amount: balance.totalCharged, bold: true),
-            const SizedBox(height: 6),
-            _Line(label: 'Cash you have handed over', amount: -balance.totalCollected),
+            const SizedBox(height: 10),
+            // What the office has already collected against that total. The
+            // driver never records this — it's the office's own log of cash
+            // handed back on a settle-up, shown here so the top figure adds up.
+            _Line(
+              label: 'Paid to GNN LLC so far',
+              subtitle: 'Cash the office has recorded receiving',
+              amount: -balance.totalCollected,
+            ),
+            const Divider(height: 24),
+            // The same number as the headline above, closing the arithmetic:
+            // charges − paid = what's still owed.
+            _Line(label: 'Still owed', amount: balance.pendingBalance, bold: true),
           ],
         ),
       ),
@@ -160,9 +184,10 @@ class _EarningsCard extends StatelessWidget {
 }
 
 class _Line extends StatelessWidget {
-  const _Line({required this.label, required this.amount, this.bold = false});
+  const _Line({required this.label, required this.amount, this.subtitle, this.bold = false});
 
   final String label;
+  final String? subtitle;
   final double amount;
   final bool bold;
 
@@ -171,12 +196,25 @@ class _Line extends StatelessWidget {
     final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
           fontWeight: bold ? FontWeight.bold : null,
         );
-    final text = amount < 0
-        ? '− ${formatFare(amount.abs())}'
-        : formatFare(amount);
+    // Negative amounts are the ones that reduce the debt (cash paid back), so
+    // they carry an explicit minus; everything else adds to it.
+    final text = amount < 0 ? '− ${formatFare(amount.abs())}' : formatFare(amount);
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [Text(label, style: style), Text(text, style: style)],
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: style),
+              if (subtitle != null)
+                Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(text, style: style),
+      ],
     );
   }
 }

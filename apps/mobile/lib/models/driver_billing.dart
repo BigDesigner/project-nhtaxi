@@ -15,7 +15,9 @@ class DriverBalance {
   /// Charged per minute of being online, whether or not any trip happened.
   final double usageFeeCharged;
 
-  /// A cut of the fare on trips an admin hand-assigned.
+  /// A cut of the fare on jobs GNN LLC referred — whether the office assigned
+  /// them in the panel, the driver ticked the referral box on accept, or the
+  /// office marked it after the fact. Ordinary dispatch work carries none.
   final double commissionCharged;
 
   final double totalCharged;
