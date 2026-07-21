@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/providers.dart';
 import '../../../models/directory_driver.dart';
 import '../../../widgets/app_back_button.dart';
+import '../../../widgets/car_marker.dart';
 import '../../../widgets/driver_avatar.dart';
 import '../../../widgets/error_banner.dart';
 import '../../../widgets/star_rating.dart';
@@ -207,16 +208,10 @@ class _MarkerPin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final m = _marker(driver);
-    return Container(
-      decoration: BoxDecoration(
-        color: m.color,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
-      ),
-      child: Icon(m.icon, color: Colors.white, size: 22),
-    );
+    // This is a snapshot list, not a live feed, so there's no heading to aim
+    // by — the car points up. The status colour is what it carries here; the
+    // list row and sheet say the status in words.
+    return CarMarker(color: _marker(driver).color, size: 40);
   }
 }
 

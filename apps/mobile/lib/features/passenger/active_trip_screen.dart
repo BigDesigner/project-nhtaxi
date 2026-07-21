@@ -11,6 +11,7 @@ import '../../core/live_driver_position.dart';
 import '../../core/providers.dart';
 import '../../models/trip.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/car_marker.dart';
 import '../../widgets/error_banner.dart';
 import '../../widgets/help_card.dart';
 import '../../widgets/map_markers.dart';
@@ -322,7 +323,7 @@ class _LiveTripMapState extends ConsumerState<_LiveTripMap> {
     // leave the view alone — recentring on every update would fight a
     // passenger who pinched or panned to look at something else.
     ref.listen(driverLivePositionProvider(widget.driverId), (_, next) {
-      final point = next.value;
+      final point = next.value?.point;
       if (point != null && !_centered) {
         _centered = true;
         _mapController.move(point, 15);
@@ -356,10 +357,13 @@ class _LiveTripMapState extends ConsumerState<_LiveTripMap> {
                   ),
                 if (position.value != null)
                   Marker(
-                    point: position.value!,
-                    width: 36,
-                    height: 36,
-                    child: const _DriverPositionMarker(),
+                    point: position.value!.point,
+                    width: 40,
+                    height: 40,
+                    child: CarMarker(
+                      color: Theme.of(context).colorScheme.primary,
+                      headingDegrees: position.value!.heading,
+                    ),
                   ),
               ],
             ),
@@ -369,23 +373,6 @@ class _LiveTripMapState extends ConsumerState<_LiveTripMap> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _DriverPositionMarker extends StatelessWidget {
-  const _DriverPositionMarker();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2.5),
-        boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 5, offset: Offset(0, 1))],
-      ),
-      child: const Icon(Icons.local_taxi, color: Colors.white, size: 20),
     );
   }
 }

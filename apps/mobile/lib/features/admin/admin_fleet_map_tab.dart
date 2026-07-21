@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../core/live_driver_position.dart';
 import '../../models/admin.dart';
+import '../../widgets/car_marker.dart';
 import '../../widgets/error_banner.dart';
 import 'admin_controllers.dart';
 
@@ -43,7 +44,7 @@ class _FleetMap extends StatelessWidget {
   const _FleetMap({required this.drivers, required this.positions});
 
   final List<AdminDriver> drivers;
-  final Map<String, LatLng> positions;
+  final Map<String, LiveDriverPosition> positions;
 
   @override
   Widget build(BuildContext context) {
@@ -67,10 +68,10 @@ class _FleetMap extends StatelessWidget {
                 markers: [
                   for (final entry in located)
                     Marker(
-                      point: entry.value,
-                      width: 44,
-                      height: 44,
-                      child: _FleetMarker(driver: byId[entry.key]!),
+                      point: entry.value.point,
+                      width: 46,
+                      height: 46,
+                      child: _FleetMarker(driver: byId[entry.key]!, heading: entry.value.heading),
                     ),
                 ],
               ),
@@ -103,9 +104,10 @@ class _FleetMap extends StatelessWidget {
 }
 
 class _FleetMarker extends StatelessWidget {
-  const _FleetMarker({required this.driver});
+  const _FleetMarker({required this.driver, this.heading});
 
   final AdminDriver driver;
+  final double? heading;
 
   @override
   Widget build(BuildContext context) {
@@ -118,15 +120,7 @@ class _FleetMarker extends StatelessWidget {
 
     return Tooltip(
       message: '${driver.fullName} · ${driver.status.toLowerCase()}',
-      child: Container(
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
-          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
-        ),
-        child: const Icon(Icons.local_taxi, color: Colors.white, size: 22),
-      ),
+      child: CarMarker(color: color, headingDegrees: heading, size: 40),
     );
   }
 }

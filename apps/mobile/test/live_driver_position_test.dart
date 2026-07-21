@@ -44,7 +44,7 @@ void main() {
       transport.deliver('{"type":"DRIVER_LOCATION","driverId":"d1","lat":44.1,"lng":-71.2}');
       await Future<void>.delayed(Duration.zero);
 
-      expect(container.read(driverLivePositionProvider('d1')).value, const LatLng(44.1, -71.2));
+      expect(container.read(driverLivePositionProvider('d1')).value?.point, const LatLng(44.1, -71.2));
       sub.close();
     });
 
@@ -85,10 +85,9 @@ void main() {
       transport.deliver('{"type":"DRIVER_LOCATION","driverId":"d2","lat":3.0,"lng":4.0}');
       await Future<void>.delayed(Duration.zero);
 
-      expect(container.read(fleetLivePositionsProvider).value, {
-        'd1': const LatLng(1.0, 2.0),
-        'd2': const LatLng(3.0, 4.0),
-      });
+      final snapshot = container.read(fleetLivePositionsProvider).value!;
+      expect(snapshot['d1']!.point, const LatLng(1.0, 2.0));
+      expect(snapshot['d2']!.point, const LatLng(3.0, 4.0));
       sub.close();
     });
 
@@ -107,7 +106,57 @@ void main() {
       transport.deliver('{"type":"DRIVER_LOCATION","driverId":"d1","lat":9.0,"lng":9.0}');
       await Future<void>.delayed(Duration.zero);
 
-      expect(container.read(fleetLivePositionsProvider).value, {'d1': const LatLng(9.0, 9.0)});
+      expect(container.read(fleetLivePositionsProvider).value!['d1']!.point, const LatLng(9.0, 9.0));
+      sub.close();
+    });
+  });
+
+  group('heading (which way to point the car)', () {
+    test('a due-north move reads as ~0°, a due-east move as ~90°', () {
+      // Straight up in latitude with the same longitude is north.
+      expect(bearingDegrees(const LatLng(44.0, -71.0), const LatLng(44.1, -71.0)), closeTo(0, 1));
+      // Straight east in longitude at the same latitude.
+      expect(bearingDegrees(const LatLng(44.0, -71.0), const LatLng(44.0, -70.9)), closeTo(90, 1));
+    });
+
+    test('holds the last heading while the driver sits still (GPS jitter, not travel)', () async {
+      // Two points a few metres apart — below the movement threshold — must
+      // not spin the car; it keeps facing the way it last actually drove.
+      final transport = _ControllableTransport();
+      final container = ProviderContainer(
+        overrides: [locationSocketProvider.overrideWithValue(LocationSocket(() async => transport))],
+      );
+      addTearDown(container.dispose);
+      final sub = container.listen(driverLivePositionProvider('d1'), (_, _) {});
+      await Future<void>.delayed(Duration.zero);
+
+      // Drives clearly east → establishes a ~90° heading.
+      transport.deliver('{"type":"DRIVER_LOCATION","driverId":"d1","lat":44.00,"lng":-71.00}');
+      transport.deliver('{"type":"DRIVER_LOCATION","driverId":"d1","lat":44.00,"lng":-70.99}');
+      await Future<void>.delayed(Duration.zero);
+      final moving = container.read(driverLivePositionProvider('d1')).value!;
+      expect(moving.heading, closeTo(90, 1));
+
+      // Now a tiny jitter (~1–2 m). Heading must be unchanged, not recomputed
+      // toward the noise.
+      transport.deliver('{"type":"DRIVER_LOCATION","driverId":"d1","lat":44.00001,"lng":-70.99}');
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(driverLivePositionProvider('d1')).value!.heading, closeTo(90, 1));
+      sub.close();
+    });
+
+    test('the very first fix has no heading yet — the car points up until there is movement', () async {
+      final transport = _ControllableTransport();
+      final container = ProviderContainer(
+        overrides: [locationSocketProvider.overrideWithValue(LocationSocket(() async => transport))],
+      );
+      addTearDown(container.dispose);
+      final sub = container.listen(driverLivePositionProvider('d1'), (_, _) {});
+      await Future<void>.delayed(Duration.zero);
+
+      transport.deliver('{"type":"DRIVER_LOCATION","driverId":"d1","lat":44.0,"lng":-71.0}');
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(driverLivePositionProvider('d1')).value!.heading, isNull);
       sub.close();
     });
   });
