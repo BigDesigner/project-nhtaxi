@@ -1,11 +1,12 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import {
   DirectoryDriverListResponseSchema,
   DirectoryDriverQuerySchema,
+  DriverReviewsResponseSchema,
   ErrorResponseSchema,
 } from "@gnncab/contract";
-import { createDb, driverProfilesTable, tripsTable, usersTable } from "@gnncab/db";
+import { createDb, driverProfilesTable, tripRatingsTable, tripsTable, usersTable } from "@gnncab/db";
 import type { AppBindings } from "../env";
 import { haversineMiles } from "../lib/fare";
 import { authenticate } from "../middlewares/auth";
@@ -62,6 +63,8 @@ driversDirectory.openapi(listRoute, async (c) => {
       vehicleModel: driverProfilesTable.vehicleModel,
       vehicleColor: driverProfilesTable.vehicleColor,
       vehiclePlate: driverProfilesTable.vehiclePlate,
+      rating: driverProfilesTable.rating,
+      ratingCount: driverProfilesTable.ratingCount,
       firstName: usersTable.firstName,
       phone: usersTable.phone,
     })
@@ -127,6 +130,8 @@ driversDirectory.openapi(listRoute, async (c) => {
       photoUrl: r.photoKey ? `/api/drivers/${r.driverId}/photo` : null,
       freeInMinutes,
       lastSeen: r.lastSeen?.toISOString() ?? null,
+      rating: r.rating,
+      ratingCount: r.ratingCount,
     };
   });
 
@@ -137,6 +142,72 @@ driversDirectory.openapi(listRoute, async (c) => {
   }
 
   return c.json({ drivers }, 200);
+});
+
+// ─── GET /{driverId}/reviews — a driver's rating summary + recent comments ─
+// Any signed-in user can read this — same reasoning as the directory itself:
+// a passenger choosing a cab is exactly who this is for. It carries no
+// reviewer identity, so it says how a driver is rated without exposing who
+// said what.
+const reviewsRoute = createRoute({
+  method: "get",
+  path: "/{driverId}/reviews",
+  tags: ["drivers"],
+  summary: "A driver's rating summary and recent comments",
+  request: {
+    params: z.object({ driverId: z.string() }),
+    query: z.object({ limit: z.coerce.number().int().min(1).max(50).default(10) }),
+  },
+  responses: {
+    200: { description: "Reviews", content: { "application/json": { schema: DriverReviewsResponseSchema } } },
+    404: { description: "No such driver", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+driversDirectory.openapi(reviewsRoute, async (c) => {
+  const { driverId } = c.req.valid("param");
+  const { limit } = c.req.valid("query");
+  const db = createDb(c.env.DB);
+
+  const [driver] = await db
+    .select({ rating: driverProfilesTable.rating, ratingCount: driverProfilesTable.ratingCount })
+    .from(driverProfilesTable)
+    .where(eq(driverProfilesTable.id, driverId))
+    .limit(1);
+  if (!driver) return c.json({ error: "NotFound", message: "Driver not found" }, 404);
+
+  // Per-question averages, so "which part is weak" is answerable — null when
+  // there are no ratings yet rather than a misleading zero.
+  const [avg] = await db
+    .select({
+      courtesy: sql<number | null>`round(avg(${tripRatingsTable.courtesy}), 2)`,
+      safety: sql<number | null>`round(avg(${tripRatingsTable.safety}), 2)`,
+      punctuality: sql<number | null>`round(avg(${tripRatingsTable.punctuality}), 2)`,
+      communication: sql<number | null>`round(avg(${tripRatingsTable.communication}), 2)`,
+      cleanliness: sql<number | null>`round(avg(${tripRatingsTable.cleanliness}), 2)`,
+    })
+    .from(tripRatingsTable)
+    .where(eq(tripRatingsTable.driverId, driverId));
+
+  // Only ratings that actually carry a written comment are worth listing —
+  // a bare star score has already been folded into the averages above.
+  const recent = await db
+    .select({ overall: tripRatingsTable.overall, comment: tripRatingsTable.comment, createdAt: tripRatingsTable.createdAt })
+    .from(tripRatingsTable)
+    .where(and(eq(tripRatingsTable.driverId, driverId), sql`${tripRatingsTable.comment} is not null and ${tripRatingsTable.comment} != ''`))
+    .orderBy(desc(tripRatingsTable.createdAt))
+    .limit(limit);
+
+  return c.json(
+    {
+      driverId,
+      rating: driver.rating,
+      ratingCount: driver.ratingCount,
+      averages: driver.ratingCount > 0 && avg ? avg : null,
+      recent: recent.map((r) => ({ overall: r.overall, comment: r.comment, createdAt: r.createdAt.toISOString() })),
+    },
+    200
+  );
 });
 
 // ─── GET /{driverId}/photo — the driver's picture ─────────────────────────

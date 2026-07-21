@@ -104,9 +104,13 @@ describe("GET /api/drivers", () => {
     expect(drivers.length).toBeGreaterThan(0);
     for (const d of drivers) {
       expect(d).not.toHaveProperty("licenseNumber");
-      expect(d).not.toHaveProperty("rating");
       expect(d).not.toHaveProperty("isVerified");
       expect(d).not.toHaveProperty("lastName");
+      // rating IS exposed now, on purpose — a passenger choosing a cab is
+      // exactly who the star average is for. It's the reviewer identity that
+      // stays private (see the reviews endpoint), not the score.
+      expect(d).toHaveProperty("rating");
+      expect(d).toHaveProperty("ratingCount");
     }
   });
 

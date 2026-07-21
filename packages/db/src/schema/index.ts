@@ -13,3 +13,4 @@ export * from "./pricing";
 export * from "./driver_sessions";
 export * from "./driver_cash_collections";
 export * from "./driver_trip_commissions";
+export * from "./trip_ratings";

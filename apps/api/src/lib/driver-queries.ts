@@ -21,6 +21,7 @@ export function driverProfileWithUserColumns() {
     isVerified: driverProfilesTable.isVerified,
     cityId: driverProfilesTable.cityId,
     rating: driverProfilesTable.rating,
+    ratingCount: driverProfilesTable.ratingCount,
     totalTrips: driverProfilesTable.totalTrips,
   };
 }

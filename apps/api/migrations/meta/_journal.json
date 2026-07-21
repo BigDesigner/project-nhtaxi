@@ -71,6 +71,13 @@
       "when": 1784582536939,
       "tag": "0009_square_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1784637060566,
+      "tag": "0010_numerous_gorilla_man",
+      "breakpoints": true
     }
   ]
 }

@@ -17,6 +17,7 @@ class DriverProfile {
     this.vehicleColor,
     this.vehiclePlate,
     this.rating,
+    this.ratingCount = 0,
   });
 
   final String id;
@@ -39,6 +40,7 @@ class DriverProfile {
   final String? vehicleColor;
   final String? vehiclePlate;
   final double? rating;
+  final int ratingCount;
 
   /// The driver is clocked on and billable, whether or not they're mid-job.
   bool get isOnline => status != 'OFFLINE';
@@ -89,5 +91,6 @@ class DriverProfile {
         vehicleColor: json['vehicleColor'] as String?,
         vehiclePlate: json['vehiclePlate'] as String?,
         rating: (json['rating'] as num?)?.toDouble(),
+        ratingCount: (json['ratingCount'] as num?)?.toInt() ?? 0,
       );
 }

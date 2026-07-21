@@ -10,8 +10,11 @@ import {
   RecordBreadcrumbsResponseSchema,
   EstimateTripRequestSchema,
   EstimateTripResponseSchema,
+  SubmitRatingRequestSchema,
   TripEventResponseSchema,
   TripPathVerificationResponseSchema,
+  TripRatingResponseSchema,
+  TripRatingStatusSchema,
   TripResponseSchema,
   UpdateTripStatusRequestSchema,
 } from "@gnncab/contract";
@@ -23,6 +26,7 @@ import {
   paymentsTable,
   tripBreadcrumbsTable,
   tripEventsTable,
+  tripRatingsTable,
   tripsTable,
 } from "@gnncab/db";
 import type { AppBindings } from "../env";
@@ -36,6 +40,7 @@ import { clientIp } from "../lib/request";
 import { customerTripNotification, TRIP_CANCELLED_NOTIFICATION } from "../lib/trip-notifications";
 import { sendTripCompletedEmails } from "../lib/trip-emails";
 import { recordTripPathVerification } from "../lib/path-verification";
+import { overallOf, recomputeDriverRatingStatement } from "../lib/ratings";
 import { authenticate } from "../middlewares/auth";
 
 const trips = new OpenAPIHono<AppBindings>();
@@ -908,6 +913,129 @@ trips.openapi(getPathVerificationRoute, async (c) => {
   }
 
   return c.json({ status: trip.pathVerification, deviationMiles: trip.pathDeviationMiles }, 200);
+});
+
+function toRatingResponse(r: typeof tripRatingsTable.$inferSelect) {
+  return {
+    id: r.id,
+    tripId: r.tripId,
+    courtesy: r.courtesy,
+    safety: r.safety,
+    punctuality: r.punctuality,
+    communication: r.communication,
+    cleanliness: r.cleanliness,
+    overall: r.overall,
+    comment: r.comment,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+// ─── POST /{tripId}/rating — the passenger rates their completed trip ───────
+const submitRatingRoute = createRoute({
+  method: "post",
+  path: "/{tripId}/rating",
+  tags: ["trips"],
+  summary: "Rate a completed trip (passenger only)",
+  request: {
+    params: z.object({ tripId: z.string().uuid() }),
+    body: { required: true, content: { "application/json": { schema: SubmitRatingRequestSchema } } },
+  },
+  responses: {
+    201: { description: "Rated", content: { "application/json": { schema: TripRatingResponseSchema } } },
+    400: { description: "Trip is not in a rateable state", content: { "application/json": { schema: ErrorResponseSchema } } },
+    403: { description: "Forbidden", content: { "application/json": { schema: ErrorResponseSchema } } },
+    404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } },
+    409: { description: "Already rated", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+trips.openapi(submitRatingRoute, async (c) => {
+  const authUser = c.get("user")!;
+  const { tripId } = c.req.valid("param");
+  const body = c.req.valid("json");
+  const db = createDb(c.env.DB);
+
+  const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId)).limit(1);
+  if (!trip) return c.json({ error: "NotFound", message: "Trip not found" }, 404);
+
+  // Only the passenger who took the trip rates it — not the driver, not an
+  // admin, and not a passenger who merely knows the trip id.
+  if (authUser.role !== "customer" || trip.customerId !== authUser.userId) {
+    return c.json({ error: "Forbidden", message: "Only the passenger on this trip can rate it" }, 403);
+  }
+  if (trip.status !== "TRIP_COMPLETED") {
+    return c.json({ error: "InvalidState", message: "You can only rate a completed trip" }, 400);
+  }
+  // A trip can end without a driver (a timed-out search the passenger closed
+  // out) — there is nobody to rate there.
+  if (!trip.driverId) {
+    return c.json({ error: "InvalidState", message: "This trip had no driver to rate" }, 400);
+  }
+
+  const [existing] = await db
+    .select({ id: tripRatingsTable.id })
+    .from(tripRatingsTable)
+    .where(eq(tripRatingsTable.tripId, tripId))
+    .limit(1);
+  if (existing) {
+    return c.json({ error: "Conflict", message: "You have already rated this trip" }, 409);
+  }
+
+  const overall = overallOf(body);
+
+  // The insert and the recomputed driver average must land together — a rating
+  // that counted but didn't move the average, or vice versa, would leave the
+  // headline figure wrong. batch() is the only atomicity primitive on D1.
+  const [inserted] = (await db.batch([
+    db
+      .insert(tripRatingsTable)
+      .values({
+        tripId,
+        driverId: trip.driverId,
+        customerId: authUser.userId,
+        courtesy: body.courtesy,
+        safety: body.safety,
+        punctuality: body.punctuality,
+        communication: body.communication,
+        cleanliness: body.cleanliness,
+        overall,
+        comment: body.comment ?? null,
+      })
+      .returning(),
+    recomputeDriverRatingStatement(db, trip.driverId),
+  ]))[0] as (typeof tripRatingsTable.$inferSelect)[];
+
+  return c.json(toRatingResponse(inserted!), 201);
+});
+
+// ─── GET /{tripId}/rating — has this trip been rated? ──────────────────────
+const getRatingRoute = createRoute({
+  method: "get",
+  path: "/{tripId}/rating",
+  tags: ["trips"],
+  summary: "Whether a trip has been rated, and the rating if so",
+  request: { params: z.object({ tripId: z.string().uuid() }) },
+  responses: {
+    200: { description: "Status", content: { "application/json": { schema: TripRatingStatusSchema } } },
+    403: { description: "Forbidden", content: { "application/json": { schema: ErrorResponseSchema } } },
+    404: { description: "Not found", content: { "application/json": { schema: ErrorResponseSchema } } },
+  },
+});
+
+trips.openapi(getRatingRoute, async (c) => {
+  const authUser = c.get("user")!;
+  const { tripId } = c.req.valid("param");
+  const db = createDb(c.env.DB);
+
+  const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId)).limit(1);
+  if (!trip) return c.json({ error: "NotFound", message: "Trip not found" }, 404);
+  // Same access rule as the trip itself — the passenger, the driver, or admin.
+  if (!(await assertOwnsTrip(db, trip, authUser))) {
+    return c.json({ error: "Forbidden", message: "You do not have access to this trip" }, 403);
+  }
+
+  const [rating] = await db.select().from(tripRatingsTable).where(eq(tripRatingsTable.tripId, tripId)).limit(1);
+  return c.json({ rated: rating != null, rating: rating ? toRatingResponse(rating) : null }, 200);
 });
 
 export default trips;

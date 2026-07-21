@@ -49,6 +49,7 @@ export const DriverProfileResponseSchema = z
     isVerified: z.boolean(),
     cityId: z.string().nullable(),
     rating: z.number().nullable(),
+    ratingCount: z.number().int(),
     totalTrips: z.number().int(),
   })
   .openapi("DriverProfileResponse");

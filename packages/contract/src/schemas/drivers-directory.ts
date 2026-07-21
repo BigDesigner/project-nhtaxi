@@ -33,6 +33,10 @@ export const DirectoryDriverSchema = z
      */
     freeInMinutes: z.number().int().nullable(),
     lastSeen: z.string().nullable(),
+    /** Headline star average, null until the driver has been rated at least once. */
+    rating: z.number().nullable(),
+    /** How many ratings the average is over — shown as "4.6 (23)". */
+    ratingCount: z.number().int(),
   })
   .openapi("DirectoryDriver");
 

@@ -9,7 +9,9 @@ import '../../../models/directory_driver.dart';
 import '../../../widgets/app_back_button.dart';
 import '../../../widgets/driver_avatar.dart';
 import '../../../widgets/error_banner.dart';
+import '../../../widgets/star_rating.dart';
 import '../booking/booking_controller.dart';
+import '../rating/rating_controller.dart';
 import 'drivers_controller.dart';
 
 /// North Conway, NH — the single service area (L21).
@@ -170,7 +172,13 @@ class _DriversBody extends StatelessWidget {
                     final m = _marker(d);
                     return ListTile(
                       leading: DriverAvatar(name: d.firstName, photoUrl: d.photoUrl, color: m.color),
-                      title: Text(d.firstName),
+                      title: Row(
+                        children: [
+                          Flexible(child: Text(d.firstName, overflow: TextOverflow.ellipsis)),
+                          const SizedBox(width: 8),
+                          RatingChip(rating: d.rating, count: d.ratingCount),
+                        ],
+                      ),
                       subtitle: Text(
                         [
                           d.availabilityDetail,
@@ -212,18 +220,18 @@ class _MarkerPin extends StatelessWidget {
   }
 }
 
-class _DriverSheet extends StatelessWidget {
+class _DriverSheet extends ConsumerWidget {
   const _DriverSheet({required this.driver, required this.onRequest});
 
   final DirectoryDriver driver;
   final VoidCallback onRequest;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final m = _marker(driver);
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -237,7 +245,13 @@ class _DriverSheet extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(driver.firstName, style: Theme.of(context).textTheme.titleLarge),
+                      Row(
+                        children: [
+                          Flexible(child: Text(driver.firstName, style: Theme.of(context).textTheme.titleLarge)),
+                          const SizedBox(width: 8),
+                          RatingChip(rating: driver.rating, count: driver.ratingCount),
+                        ],
+                      ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
@@ -272,6 +286,7 @@ class _DriverSheet extends StatelessWidget {
                 label: 'Distance',
                 value: '${driver.distanceMiles!.toStringAsFixed(1)} miles away',
               ),
+            _DriverReviewsSection(driverId: driver.driverId),
             const SizedBox(height: 24),
             if (driver.isAvailable)
               FilledButton.icon(
@@ -292,6 +307,67 @@ class _DriverSheet extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Per-question averages and recent comments for the driver, loaded on demand
+/// when the sheet opens. Stays quiet (nothing rendered) until it has something
+/// real to show — a driver with no ratings gets no empty "Reviews" heading.
+class _DriverReviewsSection extends ConsumerWidget {
+  const _DriverReviewsSection({required this.driverId});
+
+  final String driverId;
+
+  static const _labels = {
+    'courtesy': 'Courtesy',
+    'safety': 'Safe driving',
+    'punctuality': 'On time',
+    'communication': 'Kept me informed',
+    'cleanliness': 'Clean vehicle',
+  };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reviews = ref.watch(driverReviewsProvider(driverId));
+    final value = reviews.value;
+    if (value == null || value.ratingCount == 0) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Ratings', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          if (value.averages != null)
+            for (final entry in _labels.entries)
+              if (value.averages![entry.key] != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(entry.value, style: Theme.of(context).textTheme.bodyMedium)),
+                      StarDisplay(value: value.averages![entry.key]!, size: 15),
+                    ],
+                  ),
+                ),
+          if (value.recent.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            for (final r in value.recent)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    StarDisplay(value: r.overall, size: 14),
+                    if (r.comment != null) Text('“${r.comment!}”', style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+              ),
+          ],
+        ],
       ),
     );
   }

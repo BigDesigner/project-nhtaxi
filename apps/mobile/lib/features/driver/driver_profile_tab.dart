@@ -10,6 +10,7 @@ import '../../models/driver_profile.dart';
 import '../../widgets/driver_avatar.dart';
 import '../../widgets/error_banner.dart';
 import '../../widgets/help_card.dart';
+import '../../widgets/star_rating.dart';
 import '../passenger/passenger_shell.dart' show confirmSignOut;
 import 'driver_controllers.dart';
 import 'driver_documents_section.dart';
@@ -175,6 +176,22 @@ class _ProfileBodyState extends ConsumerState<_ProfileBody> {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
+        if (p.rating != null && p.ratingCount > 0) ...[
+          const SizedBox(height: 8),
+          Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                StarDisplay(value: p.rating!, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  '${p.rating!.toStringAsFixed(1)} from ${p.ratingCount} ${p.ratingCount == 1 ? 'rating' : 'ratings'}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 24),
         Card(
           child: Column(

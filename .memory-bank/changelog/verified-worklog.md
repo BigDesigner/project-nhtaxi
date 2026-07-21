@@ -511,6 +511,54 @@ admin-lockdown and dual-role gates themselves**, which need real admin
 credentials this session doesn't have — worth a quick manual check once the
 account conversion above happens.
 
+### Driver ratings & reviews
+Passengers rate a completed trip on five 1–5 star questions — courtesy, safe
+driving, on-time pickup, kept-you-informed, clean vehicle — plus an optional
+comment. Five separate questions, not one score, so a driver gets something
+they can act on. The rating folds into their headline average
+(`driver_profiles.rating`, **which was dead until now — see the dead-list
+below**) and drives the review summary a passenger sees when tapping a driver.
+
+Only a registered passenger's own TRIP_COMPLETED trip can be rated, once (the
+`trip_ratings.trip_id` is unique — a rating is a record of how the ride felt
+at the time, not something to rewrite later). A guest/referral trip has no
+customer account, so it's never rated. The insert and the recomputed driver
+average land in one `db.batch()` — a rating that counted but didn't move the
+average would leave the headline wrong.
+
+New table `trip_ratings` + a new `driver_profiles.rating_count` column
+(migration `0010`, a plain CREATE TABLE + ADD COLUMN, no rebuild). New routes:
+`POST/GET /api/trips/{id}/rating`, `GET /api/drivers/{id}/reviews` (aggregate
++ per-question averages + recent commented reviews, **no reviewer identity** —
+the score is public, who said it is not). The directory response now carries
+`rating`+`ratingCount` so the passenger's map/list shows stars. App: a rating
+prompt on the completed-trip screen (or a read-only recap once rated), star
+chips + a reviews section on the driver sheet, and the driver's own average on
+their profile tab. 9 backend tests, 6 Flutter model tests.
+
+### Defined-but-dead: the standing list (start here for "what else is stubbed")
+This category was surfaced late — a fair complaint. It tracks schema/columns
+defined since an early phase that nothing at runtime actually writes or reads,
+so a stub can't masquerade as a finished feature again.
+
+- **`driver_profiles.rating`** — dead since Faz 0 (read into a projection,
+  never written; always null). **Resolved by the ratings feature above.**
+- **`zones` + `driver_zone_assignments` tables** — zero runtime references.
+  A whole geofence / zone-assignment layer, defined and never wired to
+  anything. Single-market, so unused by design. Left inert (user had no
+  preference on deleting); a future multi-city build would use it, and until
+  then it's harmless weight. **Delete candidate if the churn is ever wanted.**
+- **Per-city columns** (`trips.city_id`, `driver_profiles.city_id`,
+  `pricing_config.city_id`): trips are created with a null city, drivers never
+  get one, and pricing always reads the global (`city_id IS NULL`) row.
+  Multi-city / per-city-pricing infrastructure, deferred by the single-market
+  decision. **Kept on purpose** — removing it means rebuilding `trips` /
+  `pricing_config`, the exact dangerous operation that broke 0002/0007, for no
+  benefit while there's one market.
+- **`cities` / service areas** — a name+timezone label list; no dispatch or
+  booking code reads a boundary. Documented already; the admin CRUD (add /
+  dedupe / delete) works, it just doesn't gate anything.
+
 ## Known Incomplete Work
 - **Push notifications deliver nothing, and the missing piece is bigger than
   it was recorded as.** This was previously noted as "waiting for the Firebase
@@ -727,12 +775,12 @@ same pattern is worth applying to the other routers if they're ever touched.
 
 ## Validation Status
 
-As of commit `0aca2d7` (Tawk.to chat), everything below is deployed and
-verified against production.
+As of the driver-ratings commit, everything below is deployed and verified
+against production.
 
-- Backend: 190/190 vitest tests passing (real D1/DO via
+- Backend: 199/199 vitest tests passing (real D1/DO via
   `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean.
-- Mobile: 78/78 Flutter tests passing, `flutter analyze` clean.
+- Mobile: 85/85 Flutter tests passing, `flutter analyze` clean.
 - CI `Deploy` + `Mobile` workflows green; live on `api.nhtaxi.com` and
   `gnncab-preview.pages.dev`.
 - Migrations `0004`–`0006` were single `ALTER TABLE … ADD COLUMN` statements,

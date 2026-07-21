@@ -16,6 +16,8 @@ class DirectoryDriver {
     this.vehiclePlate,
     this.photoUrl,
     this.freeInMinutes,
+    this.rating,
+    this.ratingCount = 0,
   });
 
   final String driverId;
@@ -32,6 +34,10 @@ class DirectoryDriver {
   final String? photoUrl;
   final int? freeInMinutes;
 
+  /// Headline star average, null until the driver has been rated at least once.
+  final double? rating;
+  final int ratingCount;
+
   factory DirectoryDriver.fromJson(Map<String, dynamic> json) => DirectoryDriver(
         driverId: json['driverId'] as String,
         firstName: json['firstName'] as String,
@@ -46,6 +52,8 @@ class DirectoryDriver {
         vehiclePlate: json['vehiclePlate'] as String?,
         photoUrl: json['photoUrl'] as String?,
         freeInMinutes: (json['freeInMinutes'] as num?)?.toInt(),
+        rating: (json['rating'] as num?)?.toDouble(),
+        ratingCount: (json['ratingCount'] as num?)?.toInt() ?? 0,
       );
 
   /// Drivers without a position can't be drawn; they still show in the list.

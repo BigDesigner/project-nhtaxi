@@ -35,7 +35,15 @@ export const driverProfilesTable = sqliteTable(
     currentLng: real("current_lng"),
     lastSeen: integer("last_seen", { mode: "timestamp" }),
     cityId: text("city_id").references(() => citiesTable.id),
+    /**
+     * Headline star average across this driver's rated trips, recomputed from
+     * `trip_ratings` on every new rating (lib/ratings.ts). Null until the
+     * driver has at least one rating — a driver with no history shows no
+     * stars rather than a misleading zero.
+     */
     rating: real("rating"),
+    /** How many ratings back the average — shown as "4.6 (23 trips)". */
+    ratingCount: integer("rating_count").notNull().default(0),
     totalTrips: integer("total_trips").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),

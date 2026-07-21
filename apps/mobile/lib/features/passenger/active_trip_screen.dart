@@ -16,6 +16,8 @@ import '../../widgets/help_card.dart';
 import '../../widgets/map_markers.dart';
 import '../../widgets/search_countdown.dart';
 import '../../widgets/trip_timeline.dart';
+import 'rating/rate_trip_screen.dart';
+import 'rating/rating_controller.dart';
 
 /// Polls one trip's status.
 ///
@@ -231,6 +233,13 @@ class _TripDetail extends ConsumerWidget {
             ),
           ),
         ),
+        // Rate the driver once the trip is over. Only for a completed trip
+        // that actually had a driver — a timed-out search closed by the
+        // passenger has nobody to rate.
+        if (trip.status == 'TRIP_COMPLETED' && trip.driverId != null) ...[
+          const SizedBox(height: 16),
+          _RatingCard(tripId: tripId, driverId: trip.driverId!),
+        ],
         const SizedBox(height: 16),
         Card(
           child: Padding(
@@ -377,6 +386,61 @@ class _DriverPositionMarker extends StatelessWidget {
         boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 5, offset: Offset(0, 1))],
       ),
       child: const Icon(Icons.local_taxi, color: Colors.white, size: 20),
+    );
+  }
+}
+
+/// Either a prompt to rate the completed trip, or — once rated — a read-only
+/// recap. Which one shows is decided by the server (tripRatingProvider), so a
+/// passenger who already rated on another device sees the recap here too.
+class _RatingCard extends ConsumerWidget {
+  const _RatingCard({required this.tripId, required this.driverId});
+
+  final String tripId;
+  final String driverId;
+
+  Future<void> _openForm(BuildContext context, WidgetRef ref, String driverName) async {
+    final done = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => RateTripScreen(tripId: tripId, driverName: driverName)),
+    );
+    if (done == true) ref.invalidate(tripRatingProvider(tripId));
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rating = ref.watch(tripRatingProvider(tripId));
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: switch (rating) {
+          // Keep quiet while loading rather than flashing a prompt that might
+          // immediately be replaced by the "already rated" recap.
+          AsyncLoading() => const SizedBox(
+              height: 24,
+              child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+            ),
+          AsyncError() => const SizedBox.shrink(),
+          AsyncData(:final value?) => RatingSummary(rating: value),
+          AsyncData() => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('How was your trip?', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(
+                  'Rate your driver so we can keep the service good.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: () => _openForm(context, ref, 'your driver'),
+                  icon: const Icon(Icons.star_outline),
+                  label: const Text('Rate this trip'),
+                ),
+              ],
+            ),
+        },
+      ),
     );
   }
 }
