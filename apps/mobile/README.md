@@ -1,7 +1,9 @@
-# GNNcab mobile
+# NH Taxi mobile
 
-Single Flutter app for all three roles (L7). Wave 1 implements auth + the
-passenger shell; map/booking and live tracking follow in later waves.
+Single Flutter app for all three roles (L7), branded **NH Taxi**. The Dart
+package name is `nhtaxi` (`import 'package:nhtaxi/...'`); the Android
+`applicationId` is `com.nhtaxi.app`. Wave 1 implements auth + the passenger
+shell; map/booking and live tracking follow in later waves.
 
 ## Running locally
 

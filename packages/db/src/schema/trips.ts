@@ -42,7 +42,7 @@ export type TripOrigin = (typeof TRIP_ORIGINS)[number];
  * Whether GNN LLC put this job in front of the driver — and so whether it
  * owes commission.
  *
- * This exists because commission cannot be inferred from `origin`. GNNcab is
+ * This exists because commission cannot be inferred from `origin`. NH Taxi is
  * not a platform that takes a cut of everything: drivers pay rent for time on
  * the app, and finding work through ordinary dispatch is what that rent buys.
  * Commission is owed only when GNN LLC *referred* the job, and a referral can

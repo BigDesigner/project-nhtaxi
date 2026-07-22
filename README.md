@@ -1,7 +1,13 @@
-# GNNcab
+# NH Taxi
 
-Ride-dispatch platform for GNN LLC (North Conway, NH). Runs on Cloudflare's
-free tier end-to-end.
+Ride-dispatch platform for GNN LLC (North Conway, NH), branded **NH Taxi** to
+match `nhtaxi.com`. Runs on Cloudflare's free tier end-to-end.
+
+> The repo folder, some Cloudflare resource names (Worker, D1 database, R2
+> bucket) and the Flutter web preview subdomain (`gnncab.nhtaxi.com`) still say
+> "gnncab" — that's the pre-rebrand internal name, kept deliberately since it's
+> purely cosmetic and invisible to users. Nothing user-facing says "GNNcab"
+> anymore (see ADR 0009).
 
 **Agents / new contributors start here:** read [AGENTS.md](AGENTS.md), then
 [.memory-bank/changelog/verified-worklog.md](.memory-bank/changelog/verified-worklog.md)

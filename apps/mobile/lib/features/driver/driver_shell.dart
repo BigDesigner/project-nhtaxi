@@ -18,7 +18,7 @@ class DriverShell extends ConsumerStatefulWidget {
 class _DriverShellState extends ConsumerState<DriverShell> {
   int _index = 0;
 
-  static const _titles = ['GNNcab Driver', 'What I owe', 'Profile'];
+  static const _titles = ['NH Taxi Driver', 'What I owe', 'Profile'];
 
   @override
   void initState() {

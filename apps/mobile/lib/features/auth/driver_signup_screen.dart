@@ -73,7 +73,7 @@ class _DriverSignupScreenState extends ConsumerState<DriverSignupScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Drive with GNNcab'),
+        title: const Text('Drive with NH Taxi'),
         leading: const AppBackButton(fallbackLocation: '/login'),
       ),
       body: SafeArea(

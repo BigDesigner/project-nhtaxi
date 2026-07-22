@@ -1,11 +1,11 @@
 {
-    "name": "gnncab",
-    "short_name": "gnncab",
+    "name": "NH Taxi",
+    "short_name": "NH Taxi",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "NH Taxi — ride-hailing for North Conway, NH.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

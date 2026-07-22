@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gnncab/core/live_driver_position.dart';
-import 'package:gnncab/core/location_socket.dart';
+import 'package:nhtaxi/core/live_driver_position.dart';
+import 'package:nhtaxi/core/location_socket.dart';
 import 'package:latlong2/latlong.dart';
 
 /// A transport the test drives directly — `deliver` simulates a frame

@@ -10,4 +10,4 @@
  * keep the version they accepted; re-acceptance is a product decision, not an
  * automatic consequence of the constant changing.
  */
-export const CURRENT_TERMS_VERSION = "2026-07-20";
+export const CURRENT_TERMS_VERSION = "2026-07-22";

@@ -32,7 +32,7 @@ class _PassengerShellState extends ConsumerState<PassengerShell> {
     });
   }
 
-  static const _titles = ['GNNcab', 'Your trips', 'Profile', 'Settings'];
+  static const _titles = ['NH Taxi', 'Your trips', 'Profile', 'Settings'];
 
   @override
   Widget build(BuildContext context) {

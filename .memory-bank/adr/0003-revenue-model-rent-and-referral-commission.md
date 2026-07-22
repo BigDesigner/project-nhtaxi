@@ -18,7 +18,7 @@ Commission is decided by `trips.referralSource` (`NONE` / `ADMIN_ASSIGNED` / `DR
 `PAYMENT_METHODS = ["cash"]` is enforced at the **contract layer only**; the DB `CHECK` constraint is deliberately left wide so re-enabling card payment later is a one-line contract change, not a migration.
 
 ## Consequences
-- Cash from a completed trip never touches the system — it is the driver's, paid to them directly by the passenger. The only money GNNcab records is what the driver owes back (usage fee + commission) and what the office has collected against it.
+- Cash from a completed trip never touches the system — it is the driver's, paid to them directly by the passenger. The only money the app records is what the driver owes back (usage fee + commission) and what the office has collected against it.
 - The driver Balance tab is framed as "what I owe", not "earnings"; the driver Earnings export is a separate record of *their* turnover for *their* taxes (see ADR 0007).
 - Any code that assumes a per-fare platform cut is wrong. `referralSource`, not `origin`, is load-bearing and must stay that way.
 - Stripe (legacy "Phase 9") is indefinitely postponed but trivially reversible at the contract layer.

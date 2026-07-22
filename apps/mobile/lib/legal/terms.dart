@@ -17,7 +17,7 @@
 /// wording was shown. Change the wording, change both.
 library;
 
-const termsVersion = '2026-07-20';
+const termsVersion = '2026-07-22';
 
 class TermsSection {
   const TermsSection(this.heading, this.body);
@@ -43,7 +43,7 @@ class TermsDocument {
 const passengerTerms = TermsDocument(
   title: 'Passenger Terms',
   intro:
-      'GNNcab is operated by GNN LLC, a licensed Transportation Network Company '
+      'NH Taxi is operated by GNN LLC, a licensed Transportation Network Company '
       'authorised to operate in the State of New Hampshire under RSA 376-A. '
       'Please read these terms before creating an account. You cannot use the '
       'app without accepting them.',
@@ -51,7 +51,7 @@ const passengerTerms = TermsDocument(
   sections: [
     TermsSection(
       '1. What this app does',
-      'GNNcab connects you with independent drivers. GNN LLC provides the '
+      'NH Taxi connects you with independent drivers. GNN LLC provides the '
           'technology; the driver provides the transport. We are not a carrier '
           'and we do not employ the drivers.',
     ),
@@ -113,7 +113,7 @@ const passengerTerms = TermsDocument(
 const driverTerms = TermsDocument(
   title: 'Driver Agreement',
   intro:
-      'GNNcab is operated by GNN LLC, a licensed Transportation Network Company '
+      'NH Taxi is operated by GNN LLC, a licensed Transportation Network Company '
       'authorised to operate in the State of New Hampshire under RSA 376-A. '
       'This agreement covers your eligibility, what you pay GNN LLC, and how '
       'your documents and information are handled. You cannot drive without '

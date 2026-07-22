@@ -1,4 +1,4 @@
-package com.gnncab.gnncab
+package com.nhtaxi.app
 
 import io.flutter.embedding.android.FlutterActivity
 

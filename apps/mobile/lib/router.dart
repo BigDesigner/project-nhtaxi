@@ -166,7 +166,7 @@ class _ComingSoonScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('GNNcab'),
+        title: const Text('NH Taxi'),
         actions: [
           IconButton(
             tooltip: 'Sign out',

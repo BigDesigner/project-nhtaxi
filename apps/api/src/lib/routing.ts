@@ -83,7 +83,7 @@ export async function roadDistanceMiles(
   let response: Response;
   try {
     response = await fetch(url, {
-      headers: { "User-Agent": "GNNcab/1.0 (https://nhtaxi.com)" },
+      headers: { "User-Agent": "NHTaxi/1.0 (https://nhtaxi.com)" },
       signal: AbortSignal.timeout(8_000),
     });
   } catch (cause) {

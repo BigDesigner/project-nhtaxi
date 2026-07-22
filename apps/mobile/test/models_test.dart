@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gnncab/models/directory_driver.dart';
-import 'package:gnncab/models/fare_estimate.dart';
-import 'package:gnncab/models/trip.dart';
+import 'package:nhtaxi/models/directory_driver.dart';
+import 'package:nhtaxi/models/fare_estimate.dart';
+import 'package:nhtaxi/models/trip.dart';
 
 void main() {
   group('Trip', () {

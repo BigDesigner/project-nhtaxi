@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gnncab/core/api_client.dart';
-import 'package:gnncab/core/location_service.dart';
-import 'package:gnncab/core/providers.dart';
-import 'package:gnncab/core/token_store.dart';
-import 'package:gnncab/core/trip_path_recorder.dart';
+import 'package:nhtaxi/core/api_client.dart';
+import 'package:nhtaxi/core/location_service.dart';
+import 'package:nhtaxi/core/providers.dart';
+import 'package:nhtaxi/core/token_store.dart';
+import 'package:nhtaxi/core/trip_path_recorder.dart';
 import 'package:latlong2/latlong.dart';
 
 /// Records every call instead of making one, so a test can see exactly what

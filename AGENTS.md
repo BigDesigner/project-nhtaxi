@@ -1,4 +1,4 @@
-# AGENTS.md — canonical agent onboarding for GNNcab
+# AGENTS.md — canonical agent onboarding for NH Taxi
 
 This is the entry point for **any** AI agent working on this repo (Claude,
 Gemini, Codex, DeepSeek, Antigravity, Cursor, …). `CLAUDE.md` and `GEMINI.md`
@@ -9,13 +9,21 @@ at the repo root just redirect here. Read this file, then the two files under
 
 ## What this project is
 
-**GNNcab** — a ride-dispatch platform for **GNN LLC**, a ~10–20 driver taxi
-operation in **North Conway, New Hampshire, USA**. Deliberately small and lean:
-the whole thing runs on **Cloudflare's free tier (~$0/mo)**. Drivers are
-independent owner-operators who pay GNN LLC rent for app time plus commission on
-referred jobs, and are paid by passengers in **cash** (no in-app payment). The
-product language is **Turkish** (chat with the user) but the **codebase, UI
-copy, commits and docs are English**.
+**NH Taxi** — a ride-dispatch platform for **GNN LLC**, a ~10–20 driver taxi
+operation in **North Conway, New Hampshire, USA**, branded to match its domain
+`nhtaxi.com`. Deliberately small and lean: the whole thing runs on
+**Cloudflare's free tier (~$0/mo)**. Drivers are independent owner-operators
+who pay GNN LLC rent for app time plus commission on referred jobs, and are
+paid by passengers in **cash** (no in-app payment). The product language is
+**Turkish** (chat with the user) but the **codebase, UI copy, commits and docs
+are English**.
+
+**"GNNcab" was the working name during the rebuild** (still visible in the
+repo folder name, the Cloudflare Worker/D1/R2 resource names, and the Flutter
+web preview subdomain `gnncab.nhtaxi.com` — kept deliberately, purely cosmetic,
+see ADR 0009). Nothing a user sees — app UI, emails, legal terms, the OpenAPI
+title — says "GNNcab" anymore; the Dart package and Android `applicationId`
+are `nhtaxi` / `com.nhtaxi.app`.
 
 ## Start here (read these two first)
 
@@ -75,8 +83,9 @@ Live: API `api.nhtaxi.com`, web preview `gnncab-preview.pages.dev`.
 8. **Plan before code on anything non-trivial.** The user works "önce plan,
    sonra kod" (plan first). For a sizeable change, present the plan and wait.
 9. **Verify before claiming done.** `pnpm run typecheck` + backend vitest +
-   `flutter analyze`/`flutter test`, then commit → watch **both** CI workflows
-   (`Deploy` for backend, `Mobile` for Flutter — path-filtered) → live smoke.
+   `flutter analyze`/`flutter test`, then commit → watch CI (`Deploy` runs on
+   every push to `main`, no path filter; `Mobile` is path-filtered to
+   `apps/mobile/**`, so it only fires when Flutter changed) → live smoke.
 
 ## Memory discipline — update after every commit
 

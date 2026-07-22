@@ -33,7 +33,7 @@ class GeocodingService {
     _dio.options
       ..connectTimeout = const Duration(seconds: 10)
       ..receiveTimeout = const Duration(seconds: 10)
-      ..headers['User-Agent'] = 'GNNcab/1.0 (https://nhtaxi.com)';
+      ..headers['User-Agent'] = 'NHTaxi/1.0 (https://nhtaxi.com)';
   }
 
   final Dio _dio;

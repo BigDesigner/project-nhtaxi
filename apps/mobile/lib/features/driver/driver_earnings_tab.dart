@@ -13,7 +13,7 @@ import 'driver_controllers.dart';
 ///
 /// Deliberately framed as "what I owe" rather than "earnings": the money the
 /// driver makes is cash in their pocket that never touches this system. The
-/// only figures GNNcab holds are the ones they have to hand back, so showing
+/// only figures NH Taxi holds are the ones they have to hand back, so showing
 /// them plainly — and showing the hours that produced them — is what makes
 /// the cash hand-over uncontroversial.
 class DriverEarningsTab extends ConsumerWidget {

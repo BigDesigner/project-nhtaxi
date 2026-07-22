@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gnncab/models/admin.dart';
+import 'package:nhtaxi/models/admin.dart';
 
 void main() {
   group('AdminDriver', () {

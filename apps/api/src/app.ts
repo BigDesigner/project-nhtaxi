@@ -68,7 +68,7 @@ app.get("/api/ws", (c) => {
 // generated from in later phases. Never hand-edit an openapi.yaml.
 app.doc("/api/openapi.json", {
   openapi: "3.1.0",
-  info: { title: "GNNcab API", version: "0.0.0" },
+  info: { title: "NH Taxi API", version: "0.0.0" },
   servers: [{ url: "/api" }],
 });
 

@@ -23,18 +23,18 @@ export interface EmailContent {
 export function welcomeEmail(firstName: string, role: "customer" | "driver"): EmailContent {
   if (role === "driver") {
     return {
-      subject: "Welcome to GNNcab — you're signed up",
+      subject: "Welcome to NH Taxi — you're signed up",
       html: wrap(
         `<p>Hi ${firstName},</p>` +
-          `<p>Thanks for signing up to drive with GNNcab. The office will review your ` +
+          `<p>Thanks for signing up to drive with NH Taxi. The office will review your ` +
           `documents and approve your account before you can go online — you'll hear from ` +
           `us once that's done.</p>`
       ),
     };
   }
   return {
-    subject: "Welcome to GNNcab",
-    html: wrap(`<p>Hi ${firstName},</p><p>Thanks for creating a GNNcab account. You're ready to book a ride whenever you need one.</p>`),
+    subject: "Welcome to NH Taxi",
+    html: wrap(`<p>Hi ${firstName},</p><p>Thanks for creating a NH Taxi account. You're ready to book a ride whenever you need one.</p>`),
   };
 }
 
@@ -56,7 +56,7 @@ export function adminNewSignupEmail(fullName: string, email: string, role: "cust
 
 export function passwordChangedEmail(firstName: string): EmailContent {
   return {
-    subject: "Your GNNcab password was changed",
+    subject: "Your NH Taxi password was changed",
     html: wrap(`<p>Hi ${firstName},</p><p>Your password was just changed. If this wasn't you, contact GNN LLC immediately.</p>`),
   };
 }
@@ -92,7 +92,7 @@ export function tripCompletedEmail(trip: TripSummaryForEmail, audience: "custome
     .join("");
 
   const intro =
-    audience === "admin" ? "<p>A trip just completed.</p>" : "<p>Thanks for riding with GNNcab. Here's your trip summary.</p>";
+    audience === "admin" ? "<p>A trip just completed.</p>" : "<p>Thanks for riding with NH Taxi. Here's your trip summary.</p>";
 
   return {
     subject: audience === "admin" ? `Trip completed — ${trip.id.slice(0, 8)}` : "Your trip is complete",

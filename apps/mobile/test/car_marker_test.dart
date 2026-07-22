@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gnncab/widgets/car_marker.dart';
+import 'package:nhtaxi/widgets/car_marker.dart';
 
 void main() {
   group('CarMarker', () {

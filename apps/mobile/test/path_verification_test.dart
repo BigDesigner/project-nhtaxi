@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gnncab/core/path_verification.dart';
+import 'package:nhtaxi/core/path_verification.dart';
 
 void main() {
   group('TripPathVerification', () {

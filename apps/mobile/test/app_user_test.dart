@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gnncab/models/user.dart';
+import 'package:nhtaxi/models/user.dart';
 
 Map<String, dynamic> userJson({required String role, bool? isAdmin}) => {
       'id': 'u1',

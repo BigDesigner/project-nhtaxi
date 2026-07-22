@@ -1,9 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gnncab/core/driver_location_broadcaster.dart';
-import 'package:gnncab/core/location_service.dart';
-import 'package:gnncab/core/location_socket.dart';
-import 'package:gnncab/core/providers.dart';
+import 'package:nhtaxi/core/driver_location_broadcaster.dart';
+import 'package:nhtaxi/core/location_service.dart';
+import 'package:nhtaxi/core/location_socket.dart';
+import 'package:nhtaxi/core/providers.dart';
 import 'package:latlong2/latlong.dart';
 
 class _FixedLocation extends LocationService {

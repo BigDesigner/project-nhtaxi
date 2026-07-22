@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gnncab/core/providers.dart';
-import 'package:gnncab/core/token_store.dart';
-import 'package:gnncab/features/auth/login_screen.dart';
+import 'package:nhtaxi/core/providers.dart';
+import 'package:nhtaxi/core/token_store.dart';
+import 'package:nhtaxi/features/auth/login_screen.dart';
 
 void main() {
   /// The auth controller reads persisted tokens on build, which in production
@@ -21,7 +21,7 @@ void main() {
     await tester.pumpWidget(wrap(const LoginScreen()));
     await tester.pumpAndSettle();
 
-    expect(find.text('GNNcab'), findsOneWidget);
+    expect(find.text('NH Taxi'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Email'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Password'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);

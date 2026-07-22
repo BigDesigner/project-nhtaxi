@@ -35,14 +35,14 @@ describe("sendEmail — with a key configured", () => {
   it("posts the exact shape Brevo expects", async () => {
     await sendEmail("fake-key", {
       to: [{ email: "pat@example.com", name: "Pat" }],
-      subject: "Welcome to GNNcab",
+      subject: "Welcome to NH Taxi",
       htmlContent: "<p>hi</p>",
     });
 
     const [sent] = capturedEmails();
     expect(sent).toBeDefined();
     expect(sent!.to).toEqual([{ email: "pat@example.com", name: "Pat" }]);
-    expect(sent!.subject).toBe("Welcome to GNNcab");
+    expect(sent!.subject).toBe("Welcome to NH Taxi");
     expect(sent!.htmlContent).toBe("<p>hi</p>");
     expect(sent!.sender.email).toBeTruthy();
   });

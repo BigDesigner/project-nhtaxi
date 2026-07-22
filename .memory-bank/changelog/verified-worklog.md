@@ -611,6 +611,34 @@ and the route (pickup `->` drop-off) alongside the short id. Backend added the
 addresses to `/reports/trips`, the customer name + addresses to
 `/driver/earnings`, and the lookup endpoint.
 
+### Trip & fare report: stop mixing cancelled trips into the total
+Commission is only ever charged at the `TRIP_COMPLETED` transition
+(`routes/trips.ts`), but the trip & fare report summed every row's fare into
+TOTAL regardless of status and marked a referred-but-cancelled trip "Y" as if
+it had actually carried a cut — neither was true, and the two together read as
+completed and cancelled money tangled together. Every trip in the period is
+still listed (a new Status column makes that explicit), but only
+`TRIP_COMPLETED` rows now feed the Fare total and the Referred flag; a note
+calls out how many trips were excluded and their combined quoted amount.
+
+### Rebrand to NH Taxi
+"GNNcab" was this rebuild's working name, never the business's real brand —
+the operator's actual domain and identity is `nhtaxi.com`. Renamed in two
+layers, decided together after confirming the app has no app-store listing yet
+(the one and only free window to change an Android `applicationId`/Flutter
+package name — free before publishing, a new listing from zero afterward):
+every user-visible string (UI, legal terms — `CURRENT_TERMS_VERSION`/
+`termsVersion` bumped alongside the wording, OS-level labels, transactional
+emails, the OpenAPI title) → "NH Taxi"; and the app's technical identity
+(Android `applicationId`/namespace `com.gnncab.gnncab` → `com.nhtaxi.app`,
+Flutter/Dart package `gnncab` → `nhtaxi`). "GNN LLC" is untouched — that's the
+legal entity, not the product name. **Deliberately not renamed**, by explicit
+user instruction, purely cosmetic: the repo folder, the Cloudflare Worker/D1/R2
+resource names, and the Flutter web preview subdomain `gnncab.nhtaxi.com`
+(slated to become `app.nhtaxi.com` once the legacy Trackcar app, which reserves
+`app.`, is retired — a separate future task). See ADR 0009 for the full
+reasoning and exact scope boundary.
+
 ### Defined-but-dead: the standing list (start here for "what else is stubbed")
 This category was surfaced late — a fair complaint. It tracks schema/columns
 defined since an early phase that nothing at runtime actually writes or reads,

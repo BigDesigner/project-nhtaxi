@@ -18,7 +18,7 @@ const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 // A placeholder until the user has a real inbox on their own domain verified
 // with Brevo (required before Brevo will actually deliver on its behalf) —
 // change this one constant once that exists, no code elsewhere depends on it.
-const SENDER = { name: "GNNcab", email: "no-reply@nhtaxi.com" };
+const SENDER = { name: "NH Taxi", email: "no-reply@nhtaxi.com" };
 
 export interface EmailRecipient {
   email: string;

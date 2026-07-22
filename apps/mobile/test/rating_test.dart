@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gnncab/models/directory_driver.dart';
-import 'package:gnncab/models/driver_profile.dart';
-import 'package:gnncab/models/rating.dart';
+import 'package:nhtaxi/models/directory_driver.dart';
+import 'package:nhtaxi/models/driver_profile.dart';
+import 'package:nhtaxi/models/rating.dart';
 
 void main() {
   group('rating questions', () {

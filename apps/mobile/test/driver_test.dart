@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gnncab/models/driver_billing.dart';
-import 'package:gnncab/models/driver_profile.dart';
-import 'package:gnncab/models/trip.dart';
+import 'package:nhtaxi/models/driver_billing.dart';
+import 'package:nhtaxi/models/driver_profile.dart';
+import 'package:nhtaxi/models/trip.dart';
 
 Map<String, dynamic> profileJson({String status = 'AVAILABLE', Object? plate = 'NH-1234'}) => {
       'id': 'dp1',
