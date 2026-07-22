@@ -15,6 +15,8 @@ class Trip {
     this.finalFare,
     required this.currency,
     this.driverId,
+    this.driverName,
+    this.customerName,
     this.completedAt,
     this.searchAttempts = 0,
     this.nextSearchAt,
@@ -45,6 +47,13 @@ class Trip {
   /// Set once a driver is matched. Used to filter the live-position stream
   /// from LocationHub down to the one driver this trip actually cares about.
   final String? driverId;
+
+  /// The other party's name, so each side sees who they rode with in their
+  /// history. The server fills [driverName] and [customerName] on the trip
+  /// list and detail; both are null on the live create/status responses.
+  /// [customerName] falls back to the guest name for an account-less booking.
+  final String? driverName;
+  final String? customerName;
 
   /// Driver-search progress, driven entirely by the server's Alarm loop. The
   /// UI counts down to [nextSearchAt] rather than running its own timer, so
@@ -194,6 +203,8 @@ class Trip {
         finalFare: (json['finalFare'] as num?)?.toDouble(),
         currency: json['currency'] as String? ?? 'USD',
         driverId: json['driverId'] as String?,
+        driverName: json['driverName'] as String?,
+        customerName: json['customerName'] as String?,
         requestedAt: DateTime.parse(json['requestedAt'] as String),
         completedAt: json['completedAt'] == null ? null : DateTime.parse(json['completedAt'] as String),
         searchAttempts: (json['searchAttempts'] as num?)?.toInt() ?? 0,

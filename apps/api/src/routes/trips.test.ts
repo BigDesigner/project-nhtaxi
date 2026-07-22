@@ -123,6 +123,44 @@ describe("trips — request & dispatch", () => {
     expect(dp!.totalTrips).toBe(1);
   });
 
+  it("shows each side the other party's name in their trip history", async () => {
+    const driverEmail = uniqueEmail("trip-driver-names");
+    const driverJar = await registerAvailableNearbyDriver(driverEmail);
+    const passengerJar = await registerPassenger(uniqueEmail("trip-passenger-names"));
+
+    // Pin the assignment to this driver — earlier tests leave other equidistant
+    // drivers AVAILABLE at the same pickup, so plain dispatch could pick any of
+    // them and the driver-side assertion below would be non-deterministic.
+    const db = createDb(env.DB);
+    const [du] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, driverEmail)).limit(1);
+    const [dp] = await db.select({ id: driverProfilesTable.id }).from(driverProfilesTable).where(eq(driverProfilesTable.userId, du!.id)).limit(1);
+
+    const createRes = await req("/api/trips", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...passengerJar.csrfHeaders() },
+      body: JSON.stringify({ ...PICKUP, ...DROPOFF, paymentMethod: "cash", preferredDriverId: dp!.id }),
+    });
+    const trip = await readJson(createRes);
+    expect(trip.status).toBe("DRIVER_ASSIGNED");
+    expect(trip.driverId).toBe(dp!.id);
+
+    // The passenger's history carries the driver's name, not their own.
+    const passengerList = await readJson(
+      await req("/api/trips", { headers: { ...passengerJar.csrfHeaders() } }),
+    );
+    const asPassenger = passengerList.find((t: { id: string }) => t.id === trip.id);
+    expect(asPassenger.driverName).toBe("Dan Driver");
+    expect(asPassenger.customerName).toBe("Pat Passenger");
+
+    // The driver's history carries the passenger's name.
+    const driverList = await readJson(
+      await req("/api/trips", { headers: { ...driverJar.csrfHeaders() } }),
+    );
+    const asDriver = driverList.find((t: { id: string }) => t.id === trip.id);
+    expect(asDriver.customerName).toBe("Pat Passenger");
+    expect(asDriver.driverName).toBe("Dan Driver");
+  });
+
   it("lets the passenger cancel a requested trip and frees the driver", async () => {
     await registerAvailableNearbyDriver(uniqueEmail("trip-driver-cancel"));
     const passengerJar = await registerPassenger(uniqueEmail("trip-passenger-cancel"));

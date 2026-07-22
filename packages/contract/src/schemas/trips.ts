@@ -115,6 +115,11 @@ export const TripResponseSchema = z
     guestName: z.string().nullable(),
     guestPhone: z.string().nullable(),
     driverId: z.string().nullable(),
+    // The people on the trip, so each side sees the other in their history.
+    // Populated on the list and detail responses; null elsewhere. customerName
+    // falls back to the guest name for an account-less booking.
+    driverName: z.string().nullable(),
+    customerName: z.string().nullable(),
     cityId: z.string().nullable(),
     pickupLat: z.number(),
     pickupLng: z.number(),

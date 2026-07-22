@@ -165,7 +165,14 @@ class _TripDetail extends ConsumerWidget {
                             const Icon(Icons.check_circle, color: Colors.green, size: 20),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: Text(trip.statusLabel, style: Theme.of(context).textTheme.titleMedium),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(trip.statusLabel, style: Theme.of(context).textTheme.titleMedium),
+                                if (trip.driverName != null)
+                                  Text('Driver: ${trip.driverName}', style: Theme.of(context).textTheme.bodySmall),
+                              ],
+                            ),
                           ),
                         ],
                       ),

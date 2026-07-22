@@ -32,6 +32,18 @@ void main() {
       expect(trip.currency, 'USD');
     });
 
+    test('parses the driver and passenger names for the history views', () {
+      final trip = Trip.fromJson({...tripJson(), 'driverName': 'Dan Driver', 'customerName': 'Pat Passenger'});
+      expect(trip.driverName, 'Dan Driver');
+      expect(trip.customerName, 'Pat Passenger');
+    });
+
+    test('leaves the names null when the wire omits them', () {
+      final trip = Trip.fromJson(tripJson());
+      expect(trip.driverName, isNull);
+      expect(trip.customerName, isNull);
+    });
+
     test('tolerates a null dropoff (admin-assigned trip before pickup)', () {
       final trip = Trip.fromJson(tripJson(dropoffAddress: null));
       expect(trip.dropoffAddress, isNull);

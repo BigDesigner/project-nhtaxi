@@ -94,6 +94,8 @@ class _JobDetail extends ConsumerWidget {
                 Text(job.statusLabel, style: Theme.of(context).textTheme.titleMedium),
                 if (job.origin == 'ADMIN_ASSIGNED')
                   Text('Assigned by the office', style: Theme.of(context).textTheme.bodySmall),
+                if (job.customerName != null)
+                  Text('Passenger: ${job.customerName}', style: Theme.of(context).textTheme.bodySmall),
                 const SizedBox(height: 16),
                 _Leg(
                   isPickup: true,

@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
   BreadcrumbResponseSchema,
@@ -28,6 +29,7 @@ import {
   tripEventsTable,
   tripRatingsTable,
   tripsTable,
+  usersTable,
 } from "@gnncab/db";
 import type { AppBindings } from "../env";
 import { AuditAction, logAudit } from "../lib/audit";
@@ -99,13 +101,25 @@ const CUSTOMER_NON_CANCELLABLE = new Set([
 // the trip can be closed rather than lingering in the passenger's list.
 const TERMINAL_STATUSES = new Set(["TRIP_COMPLETED", "TRIP_CANCELLED"]);
 
-function toTripResponse(t: typeof tripsTable.$inferSelect) {
+// Names are passed in rather than read off the trip row: the trip only stores
+// ids, and joining users is done by the callers that actually show history
+// (list + detail). Everywhere else leaves them null — a trip-create response
+// has no need to name anyone.
+function toTripResponse(
+  t: typeof tripsTable.$inferSelect,
+  names?: { driverName?: string | null; customerName?: string | null }
+) {
   return {
     id: t.id,
     customerId: t.customerId,
     guestName: t.guestName,
     guestPhone: t.guestPhone,
     driverId: t.driverId,
+    // Who drove, and who rode — so both sides can see the other in their
+    // history instead of a bare "trip". customerName falls back to the
+    // guest name for a phoned-in booking with no account.
+    driverName: names?.driverName ?? null,
+    customerName: names?.customerName ?? t.guestName ?? null,
     cityId: t.cityId,
     pickupLat: t.pickupLat,
     pickupLng: t.pickupLng,
@@ -131,6 +145,36 @@ function toTripResponse(t: typeof tripsTable.$inferSelect) {
     assignedAt: t.assignedAt?.toISOString() ?? null,
     startedAt: t.startedAt?.toISOString() ?? null,
     completedAt: t.completedAt?.toISOString() ?? null,
+  };
+}
+
+// Two aliases of `users` so one query can join both the driver's user row and
+// the customer's user row without them colliding.
+const driverUser = alias(usersTable, "driver_user");
+const customerUser = alias(usersTable, "customer_user");
+
+// The four join columns → the trip, its driver's name, its rider's name. A
+// history row on either side needs the *other* party's name; both come from
+// one query rather than a lookup per row.
+function tripWithNamesSelect() {
+  return {
+    trip: tripsTable,
+    driverFirst: driverUser.firstName,
+    driverLast: driverUser.lastName,
+    customerFirst: customerUser.firstName,
+    customerLast: customerUser.lastName,
+  };
+}
+
+function namesFromJoin(r: {
+  driverFirst: string | null;
+  driverLast: string | null;
+  customerFirst: string | null;
+  customerLast: string | null;
+}) {
+  return {
+    driverName: r.driverFirst ? `${r.driverFirst} ${r.driverLast}` : null,
+    customerName: r.customerFirst ? `${r.customerFirst} ${r.customerLast}` : null,
   };
 }
 
@@ -324,13 +368,16 @@ trips.openapi(listTripsRoute, async (c) => {
   }
 
   const rows = await db
-    .select()
+    .select(tripWithNamesSelect())
     .from(tripsTable)
+    .leftJoin(driverProfilesTable, eq(driverProfilesTable.id, tripsTable.driverId))
+    .leftJoin(driverUser, eq(driverUser.id, driverProfilesTable.userId))
+    .leftJoin(customerUser, eq(customerUser.id, tripsTable.customerId))
     .where(where)
     .orderBy(desc(tripsTable.createdAt))
     .limit(limit)
     .offset(offset);
-  return c.json(rows.map(toTripResponse), 200);
+  return c.json(rows.map((r) => toTripResponse(r.trip, namesFromJoin(r))), 200);
 });
 
 // ─── GET /{tripId} ──────────────────────────────────────────────────────────
@@ -352,12 +399,19 @@ trips.openapi(getTripRoute, async (c) => {
   const { tripId } = c.req.valid("param");
   const db = createDb(c.env.DB);
 
-  const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId)).limit(1);
-  if (!trip) return c.json({ error: "NotFound", message: "Trip not found" }, 404);
-  if (!(await assertOwnsTrip(db, trip, authUser))) {
+  const [row] = await db
+    .select(tripWithNamesSelect())
+    .from(tripsTable)
+    .leftJoin(driverProfilesTable, eq(driverProfilesTable.id, tripsTable.driverId))
+    .leftJoin(driverUser, eq(driverUser.id, driverProfilesTable.userId))
+    .leftJoin(customerUser, eq(customerUser.id, tripsTable.customerId))
+    .where(eq(tripsTable.id, tripId))
+    .limit(1);
+  if (!row) return c.json({ error: "NotFound", message: "Trip not found" }, 404);
+  if (!(await assertOwnsTrip(db, row.trip, authUser))) {
     return c.json({ error: "Forbidden", message: "You do not have access to this trip" }, 403);
   }
-  return c.json(toTripResponse(trip), 200);
+  return c.json(toTripResponse(row.trip, namesFromJoin(row)), 200);
 });
 
 // ─── GET /{tripId}/events ───────────────────────────────────────────────────

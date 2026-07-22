@@ -316,7 +316,17 @@ class _JobHistory extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
               title: Text(trip.destinationLabel, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text('${trip.statusLabel} · ${_formatDate(trip.requestedAt)}'),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('${trip.statusLabel} · ${_formatDate(trip.requestedAt)}'),
+                  // Who the driver carried — visible in their own history.
+                  if (trip.customerName != null)
+                    Text('Passenger: ${trip.customerName}', style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+              isThreeLine: trip.customerName != null,
               trailing: trip.driverTakeHome == null
                   ? null
                   : Text(formatFare(trip.driverTakeHome!, currency: trip.currency)),

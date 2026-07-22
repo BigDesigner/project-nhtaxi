@@ -199,7 +199,17 @@ class TripTile extends StatelessWidget {
             // happening.
             leading: Icon(_statusIcon(trip), color: _statusColor(trip)),
             title: Text(trip.destinationLabel, maxLines: 2, overflow: TextOverflow.ellipsis),
-            subtitle: Text('${trip.statusLabel} · ${_formatDate(trip.requestedAt)}'),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('${trip.statusLabel} · ${_formatDate(trip.requestedAt)}'),
+                // Who drove — so the passenger can see it in their history.
+                if (trip.driverName != null)
+                  Text('Driver: ${trip.driverName}', style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+            isThreeLine: trip.driverName != null,
             // A quote stays a range right up until the trip is finished and
             // there's a real charged amount to show.
             trailing: _FareLabel(trip: trip),
