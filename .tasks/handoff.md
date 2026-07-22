@@ -2,14 +2,21 @@
 
 - **Current mode**: Interactive
 - **Current branch**: `main`
-- **Last commit**: `4332b98` — "Make every real action a filled amber
-  button, fix amber-on-amber icons"
+- **Last commit**: `b16f58a` — "Remove the inert 'Service areas' admin screen"
 - **Worktree status**: clean, committed locally. Push + CI watch is the very
   next step, not yet done as of this line — check `git log origin/main` /
   `gh run list` to see whether that already happened by the time you're
   reading this.
 - **What changed** (most recent first — full history in
   `.memory-bank/changelog/verified-worklog.md`):
+  - **Removed the "Service areas" admin screen** (`b16f58a`): traced end to
+    end that a "service area" determines nothing (no dispatch/pricing code
+    reads a city boundary, `trips.cityId` is never assigned, the
+    passenger-facing coverage text is a hardcoded paragraph) — the user
+    confirmed it was pure clutter and asked to remove it. Deleted the entry
+    point + `_CitiesDialog` from the admin Settings tab; **kept** the
+    backend (`/api/admin/cities`) and Flutter providers, commented, as the
+    reusable base if this is ever wired to a real geofence feature.
   - **Filled buttons + amber-on-amber icon fix** (`4332b98`): "Sign out"
     (x4), "Export my earnings", and all 6 admin Money export buttons
     (Financial summary/Driver earnings/Trip & fare report/Balances/
@@ -54,38 +61,26 @@
     longer count toward the money TOTAL or read "Referred: Y".
   - **Short trip IDs + admin lookup + richer reports** (`4e246d5`).
   - **Money reporting, CSV + PDF** (`881d0ca`, `587b014`, `cfecb95`).
-- **What was verified locally for `4332b98`**: `flutter analyze` clean,
-  104/104 Flutter tests. The login screen (same `flutter build web` + static
-  serve approach — see `.claude/launch.json`) was re-confirmed unchanged.
-  **Not re-screenshotted this round** — the Browser preview pane stopped
-  compositing frames (tooling hiccup, not a code issue) right when it would
-  have shown the post-login screens (Sign out, Export buttons, the icon
-  badges) that this commit actually touches, and reaching those needs a real
-  login this environment has no test credentials for. Confidence is high
-  anyway: the 6 button conversions are the exact same `FilledButton` widget
-  already visually confirmed correct for `Sign in` (zero custom styling
-  added, so there's no new rendering path to distrust), and the icon-circle
-  fix uses `ThemeData.estimateBrightnessForColor` in its standard documented
-  way (the same utility Flutter's own AppBar/SnackBar theming uses to pick
-  contrasting content). **Worth a real look next time someone's logged in.**
+- **What was verified locally for `b16f58a`**: `flutter analyze` clean,
+  104/104 Flutter tests (unchanged count — no widget test covered the
+  removed dialog). Pure deletion + one comment; no new rendering path to
+  distrust.
 - **Known failures**: none open (see `.memory-bank/bugs/bug-list.md`).
 - **Suggested validation commands**:
   - `pnpm run typecheck`
   - `cd apps/api && pnpm vitest run`
   - `cd apps/mobile && flutter analyze && flutter test`
-- **Next recommended action**: push `4332b98`, watch `Deploy` + `Mobile` CI,
-  then get a real logged-in look (any role) at: the "Sign out" buttons, the
-  admin Money "Export reports" row, "Export my earnings", the admin "Assign
-  a job" phone icon, and the passenger "Request a trip" card icon — this
-  round's changes were verified by code/API-correctness reasoning, not a
-  fresh screenshot (see above), so they're the first thing to double-check
-  once someone can actually log in. Also worth a real device check of the
-  Android app icon/splash/amber theme in general. After that, no committed
-  feature is mid-flight — next work is whatever the user surfaces from
-  real-world testing. Present a plan before writing code on anything
-  non-trivial.
+- **Next recommended action**: push `b16f58a`, watch `Deploy` + `Mobile` CI,
+  then get a real logged-in look (any role) at the still-unverified items
+  below from the previous round (Sign out buttons, Export reports row, the
+  "Assign a job"/"Request a trip" icon circles) — those weren't
+  re-screenshotted last time due to a Browser-pane tooling hiccup. Also
+  worth a real device check of the Android app icon/splash/amber theme.
+  After that, no committed feature is mid-flight — next work is whatever
+  the user surfaces from real-world testing. Present a plan before writing
+  code on anything non-trivial.
 - **Not yet proven live / on-device**:
-  - **This commit's actual screens** — Sign out buttons, the Money export
+  - **Screens from the previous commit** (`4332b98`) — Sign out buttons, the Money export
     row, "Export my earnings", the "Assign a job" phone icon, the "Request a
     trip" card icon — need a real logged-in look (see above; not
     screenshotted this round due to a Browser-pane tooling hiccup).
