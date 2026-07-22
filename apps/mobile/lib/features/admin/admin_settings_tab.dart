@@ -137,13 +137,6 @@ class _PricingFormState extends ConsumerState<_PricingForm> {
                   onTap: () => context.go('/home/people'),
                 ),
                 ListTile(
-                  leading: const Icon(Icons.location_city_outlined),
-                  title: const Text('Service areas'),
-                  subtitle: const Text('Cities this business covers'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _showCities(context, ref),
-                ),
-                ListTile(
                   leading: const Icon(Icons.history),
                   title: const Text('Activity log'),
                   subtitle: const Text('Who changed what, and when'),
@@ -186,9 +179,6 @@ class _PricingFormState extends ConsumerState<_PricingForm> {
     );
   }
 
-  Future<void> _showCities(BuildContext context, WidgetRef ref) =>
-      showDialog<void>(context: context, builder: (_) => const _CitiesDialog());
-
   Widget _money(TextEditingController controller, String label) {
     return TextFormField(
       controller: controller,
@@ -201,150 +191,6 @@ class _PricingFormState extends ConsumerState<_PricingForm> {
         if ((n * 100) % 1 != 0) return 'Use at most two decimal places';
         return null;
       },
-    );
-  }
-}
-
-
-/// Service areas. Small enough to live in a dialog rather than its own screen
-/// — a business with fifteen drivers is not managing dozens of cities.
-class _CitiesDialog extends ConsumerStatefulWidget {
-  const _CitiesDialog();
-
-  @override
-  ConsumerState<_CitiesDialog> createState() => _CitiesDialogState();
-}
-
-class _CitiesDialogState extends ConsumerState<_CitiesDialog> {
-  final _name = TextEditingController();
-  final _state = TextEditingController(text: 'NH');
-  bool _saving = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _state.dispose();
-    super.dispose();
-  }
-
-  Future<void> _remove(BuildContext context, City city) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove this service area?'),
-        content: Text('"${city.label}" will no longer be listed.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove')),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    try {
-      await deleteCity(ref, city.id);
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    }
-  }
-
-  Future<void> _add() async {
-    if (_name.text.trim().isEmpty) return;
-
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    try {
-      await createCity(
-        ref,
-        name: _name.text.trim(),
-        state: _state.text.trim().isEmpty ? null : _state.text.trim(),
-      );
-      _name.clear();
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cities = ref.watch(citiesProvider);
-
-    return AlertDialog(
-      title: const Text('Service areas'),
-      content: SizedBox(
-        width: 400,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_error != null) ...[
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-              const SizedBox(height: 8),
-            ],
-            Flexible(
-              child: switch (cities) {
-                AsyncLoading() => const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: CircularProgressIndicator(),
-                ),
-                AsyncError(:final error) => Text('$error'),
-                AsyncData(:final value) when value.isEmpty => const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('No cities added yet.'),
-                ),
-                AsyncData(:final value) => ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final c in value)
-                      ListTile(
-                        dense: true,
-                        leading: const Icon(Icons.place_outlined),
-                        title: Text(c.label),
-                        subtitle: Text(c.timezone, style: Theme.of(context).textTheme.bodySmall),
-                        trailing: IconButton(
-                          tooltip: 'Remove',
-                          icon: const Icon(Icons.delete_outline, size: 20),
-                          onPressed: () => _remove(context, c),
-                        ),
-                      ),
-                  ],
-                ),
-              },
-            ),
-            const Divider(),
-            Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: TextField(
-                    controller: _name,
-                    decoration: const InputDecoration(labelText: 'City'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _state,
-                    decoration: const InputDecoration(labelText: 'State'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (_saving)
-                  const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                else
-                  IconButton(icon: const Icon(Icons.add), onPressed: _add),
-              ],
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Done')),
-      ],
     );
   }
 }

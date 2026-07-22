@@ -245,6 +245,12 @@ final commissionChargesProvider = FutureProvider<List<CommissionCharge>>((ref) a
   return raw.map((e) => CommissionCharge.fromJson(e as Map<String, dynamic>)).toList();
 });
 
+// The "Service areas" admin screen that used these was removed — a service
+// area determines nothing today (no dispatch/pricing code reads a city's
+// bounds; see the changelog), so the UI was pure clutter. Left here
+// deliberately: the backend (this + /api/admin/cities) is the reusable part
+// if service areas are ever wired to something real, and rebuilding the
+// admin screen at that point is cheap.
 final citiesProvider = FutureProvider<List<City>>((ref) async {
   final raw = await ref.read(apiClientProvider).getList('/api/admin/cities');
   return raw.map((e) => City.fromJson(e as Map<String, dynamic>)).toList();

@@ -732,6 +732,27 @@ links.** Two more rounds of user testing found what the review above missed:
    brand accent, and was deliberately left alone — same reasoning as the
    Colors.green/red status colours noted above.
 
+### Removed the "Service areas" admin screen — inert clutter, not a feature
+Asked directly what adding a "service area" actually determines, and traced
+it end to end: nothing. `cities` is a name+timezone label (an optional
+lat/lng exists on the schema but isn't even exposed in the admin dialog);
+`trips.cityId` is defined but no code path ever assigns it (always null);
+`fare.ts` always reads the single global pricing row
+(`WHERE city_id IS NULL`), never a per-city one; the passenger-facing "Where
+we drive" coverage text is a hardcoded static paragraph, entirely
+independent of whatever cities exist. Adding or removing one changes
+nothing a passenger or driver ever sees or is allowed to do.
+
+Once confirmed, removed the "Service areas" entry point and its `_CitiesDialog`
+from the admin Settings tab (`admin_settings_tab.dart`) — pure UI clutter for
+a feature that does nothing. **Deliberately kept**: the backend
+(`/api/admin/cities`, the `cities` table) and the Flutter providers
+(`citiesProvider`/`createCity`/`deleteCity` in `admin_controllers.dart`),
+commented to explain why they're unused from the UI — this is the reusable
+part if service areas are ever wired to a real geofence/dispatch-radius
+feature, and rebuilding a small admin dialog at that point is cheap. No
+migration, no backend behaviour change; 104/104 Flutter tests still pass.
+
 ### Defined-but-dead: the standing list (start here for "what else is stubbed")
 This category was surfaced late — a fair complaint. It tracks schema/columns
 defined since an early phase that nothing at runtime actually writes or reads,
@@ -754,8 +775,10 @@ so a stub can't masquerade as a finished feature again.
   `pricing_config`, the exact dangerous operation that broke 0002/0007, for no
   benefit while there's one market.
 - **`cities` / service areas** — a name+timezone label list; no dispatch or
-  booking code reads a boundary. Documented already; the admin CRUD (add /
-  dedupe / delete) works, it just doesn't gate anything.
+  booking code reads a boundary. **The admin UI entry point was removed**
+  (see below) once the user confirmed it was pure clutter; the backend CRUD
+  (`/api/admin/cities`) and the Flutter providers are kept, inert, for when
+  this is wired to something real.
 
 ## Known Incomplete Work
 - **Push notifications deliver nothing, and the missing piece is bigger than
