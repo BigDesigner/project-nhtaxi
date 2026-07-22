@@ -2,14 +2,21 @@
 
 - **Current mode**: Interactive
 - **Current branch**: `main`
-- **Last commit**: `1827311` — "Use the logo's taxi-yellow as the app's
-  accent colour, not green"
+- **Last commit**: `2c2f371` — "Fix amber-on-white contrast: link text is
+  black bold, not amber"
 - **Worktree status**: clean, committed locally. Push + CI watch is the very
   next step, not yet done as of this line — check `git log origin/main` /
   `gh run list` to see whether that already happened by the time you're
   reading this.
 - **What changed** (most recent first — full history in
   `.memory-bank/changelog/verified-worklog.md`):
+  - **Contrast fix: link text black, not amber** (`2c2f371`): after the amber
+    theme landed, every `TextButton`/`OutlinedButton` ("Sign up", "Drive with
+    us", "Turn it down", terms links) was rendering amber-on-white — a real
+    contrast failure, caught by the user testing on a bright screen. Fixed at
+    the theme level (`textButtonTheme`/`outlinedButtonTheme` force black bold
+    text), so every call site inherited it with no per-screen changes. Amber
+    stays confined to solid fills (`FilledButton`, cards) as intended.
   - **Theme colour: amber, not green** (`1827311`): the Material 3 seed
     colour driving every button/accent was still the pre-rebrand dark green.
     Sampled the actual taxi-yellow from the logo art (`#FCC803`) and made it
@@ -35,20 +42,21 @@
     longer count toward the money TOTAL or read "Referred: Y".
   - **Short trip IDs + admin lookup + richer reports** (`4e246d5`).
   - **Money reporting, CSV + PDF** (`881d0ca`, `587b014`, `cfecb95`).
-- **What was verified locally for `1827311`**: `flutter analyze` clean,
+- **What was verified locally for `2c2f371`**: `flutter analyze` clean,
   104/104 Flutter tests. Visually confirmed in a local `flutter build web` +
   static serve (DWDS dev-mode `flutter run` hung on this machine — use
   `flutter build web` + `npx serve build/web` for any future visual check,
   see `.claude/launch.json`): splash renders correctly on white, the browser
-  tab reads "NH Taxi", the login screen's wordmark is undistorted, and the
-  `Sign in` button + text links read as rich amber-gold (`#FCC803`), not
-  green, not pale yellow.
+  tab reads "NH Taxi", the login screen's wordmark is undistorted, the
+  `Sign in` button reads as rich amber-gold (`#FCC803`) with black text, and
+  "Don't have an account? Sign up" / "Drive with us" now read as black bold
+  text — clearly legible, no amber-on-white anywhere.
 - **Known failures**: none open (see `.memory-bank/bugs/bug-list.md`).
 - **Suggested validation commands**:
   - `pnpm run typecheck`
   - `cd apps/api && pnpm vitest run`
   - `cd apps/mobile && flutter analyze && flutter test`
-- **Next recommended action**: push `1827311`, watch `Deploy` + `Mobile` CI
+- **Next recommended action**: push `2c2f371`, watch `Deploy` + `Mobile` CI
   (Mobile will touch it; Deploy runs on every push regardless), then
   ideally have the user (or a real device) confirm the Android app icon,
   splash and the new amber theme actually look right on a phone — the CLI
