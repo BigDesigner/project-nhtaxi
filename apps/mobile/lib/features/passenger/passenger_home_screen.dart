@@ -85,11 +85,17 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A pale tint of the accent colour behind an icon of the *same* colour
+    // reads as barely-there, worse on a bright screen — the circle is the
+    // solid accent colour instead, with a foreground picked for contrast
+    // against it (this card's colour varies by caller, e.g. the brand amber
+    // needs black, a darker teal needs white).
+    final foreground = ThemeData.estimateBrightnessForColor(color) == Brightness.dark ? Colors.white : Colors.black;
     return Card(
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.15),
-          child: Icon(icon, color: color),
+          backgroundColor: color,
+          child: Icon(icon, color: foreground),
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(subtitle),

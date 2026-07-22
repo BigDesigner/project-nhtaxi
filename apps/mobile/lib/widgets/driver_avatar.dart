@@ -47,11 +47,16 @@ class DriverAvatar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tint = color ?? Theme.of(context).colorScheme.primary;
     final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    // A pale tint behind a same-colour initial reads as barely-there on a
+    // bright screen — solid tint instead, with the initial's colour picked
+    // for contrast against it (brand amber needs black; a darker override
+    // colour would need white).
+    final foreground = ThemeData.estimateBrightnessForColor(tint) == Brightness.dark ? Colors.white : Colors.black;
 
     final fallback = CircleAvatar(
       radius: radius,
-      backgroundColor: tint.withValues(alpha: 0.15),
-      child: Text(initial, style: TextStyle(fontSize: radius * 0.8, color: tint)),
+      backgroundColor: tint,
+      child: Text(initial, style: TextStyle(fontSize: radius * 0.8, color: foreground)),
     );
 
     if (photoUrl == null) return fallback;

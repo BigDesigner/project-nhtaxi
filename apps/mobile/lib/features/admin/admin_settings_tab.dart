@@ -176,7 +176,7 @@ class _PricingFormState extends ConsumerState<_PricingForm> {
             ),
           ),
           const SizedBox(height: 16),
-          OutlinedButton.icon(
+          FilledButton.icon(
             onPressed: () => confirmSignOut(context, ref),
             icon: const Icon(Icons.logout),
             label: const Text('Sign out'),

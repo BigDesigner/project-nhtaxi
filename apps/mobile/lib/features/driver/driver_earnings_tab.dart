@@ -56,7 +56,7 @@ class DriverEarningsTab extends ConsumerWidget {
           // take a copy without going through the office.
           if (earnings.hasValue && earnings.value!.trips.isNotEmpty) ...[
             const SizedBox(height: 8),
-            OutlinedButton.icon(
+            FilledButton.icon(
               icon: const Icon(Icons.download_outlined, size: 18),
               label: const Text('Export my earnings (PDF / CSV)'),
               onPressed: () async {

@@ -707,6 +707,31 @@ dot, the map polyline, the "my driver" car-marker pip, the driver photo's
 edit-button circle) — none of them tint actual paragraph text, they're
 icons/fills/decorative dots, so none needed the same fix.
 
+**Second follow-up, same day: some of those "just an icon" spots were the
+same amber-on-amber problem, and some real actions still looked like plain
+links.** Two more rounds of user testing found what the review above missed:
+
+1. Several genuinely important actions — "Sign out" (×4: passenger, driver,
+   admin), "Export my earnings", and the whole admin Money "Export reports"
+   row (Financial summary / Driver earnings / Trip & fare report / Balances /
+   Commissions / Collections) — were `OutlinedButton`/`FilledButton.tonalIcon`,
+   which read as secondary/washed-out next to the confidently-amber `Sign in`
+   button. All converted to plain `FilledButton`(`.icon`) for one consistent
+   "this is a button" look across the app.
+2. A few icon badges (`admin_trips_tab.dart`'s "Assign a job" phone icon,
+   `_ActionCard`'s leading icon, `DriverAvatar`'s no-photo fallback) used a
+   *pale 15%-alpha tint* of the accent colour as the circle background with a
+   *full-strength* icon of the **same** colour on top — amber-on-pale-amber,
+   nearly invisible, worse on a bright screen. Fixed by making the circle the
+   **solid** accent colour and picking the icon/initial colour for contrast
+   against it (`ThemeData.estimateBrightnessForColor` — black on the brand
+   amber, white on the one non-amber caller, `_BrowseDriversCard`'s teal)
+   rather than hardcoding black, since these two widgets take an arbitrary
+   caller-supplied colour. The `admin_drivers_tab.dart` "online" badge (green)
+   uses the same light-tint idiom but is a semantic status colour, not the
+   brand accent, and was deliberately left alone — same reasoning as the
+   Colors.green/red status colours noted above.
+
 ### Defined-but-dead: the standing list (start here for "what else is stubbed")
 This category was surfaced late — a fair complaint. It tracks schema/columns
 defined since an early phase that nothing at runtime actually writes or reads,

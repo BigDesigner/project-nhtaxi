@@ -35,8 +35,8 @@ class AdminTripsTab extends ConsumerWidget {
           Card(
             child: ListTile(
               leading: CircleAvatar(
-                backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
-                child: Icon(Icons.add_call, color: Theme.of(context).colorScheme.primary),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                child: const Icon(Icons.add_call, color: Colors.black),
               ),
               title: const Text('Assign a job to a driver'),
               subtitle: const Text('For a booking taken over the phone · earns commission'),

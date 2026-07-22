@@ -270,7 +270,7 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                FilledButton.tonalIcon(
+                FilledButton.icon(
                   icon: const Icon(Icons.summarize_outlined, size: 18),
                   label: const Text('Financial summary'),
                   onPressed: _busy
@@ -280,7 +280,7 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
                             return financialSummaryTable(s, from: _from, to: _to);
                           }),
                 ),
-                FilledButton.tonalIcon(
+                FilledButton.icon(
                   icon: const Icon(Icons.person_outline, size: 18),
                   label: const Text('Driver earnings'),
                   onPressed: _busy
@@ -290,7 +290,7 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
                             return adminDriverEarningsTable(rows, from: _from, to: _to);
                           }),
                 ),
-                FilledButton.tonalIcon(
+                FilledButton.icon(
                   icon: const Icon(Icons.receipt_long_outlined, size: 18),
                   label: const Text('Trip & fare report'),
                   onPressed: _busy
@@ -300,7 +300,7 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
                             return tripFareReportTable(rows, from: _from, to: _to);
                           }),
                 ),
-                OutlinedButton.icon(
+                FilledButton.icon(
                   icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
                   label: const Text('Balances'),
                   onPressed: _busy
@@ -310,7 +310,7 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
                             return driverBalancesTable(rows);
                           }),
                 ),
-                OutlinedButton.icon(
+                FilledButton.icon(
                   icon: const Icon(Icons.handshake_outlined, size: 18),
                   label: const Text('Commissions'),
                   onPressed: _busy
@@ -320,7 +320,7 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
                             return commissionsTable(rows);
                           }),
                 ),
-                OutlinedButton.icon(
+                FilledButton.icon(
                   icon: const Icon(Icons.payments_outlined, size: 18),
                   label: const Text('Collections'),
                   onPressed: _busy

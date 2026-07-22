@@ -138,7 +138,7 @@ class _ProfileTab extends ConsumerWidget {
         const SizedBox(height: 16),
         const HelpCard(),
         const SizedBox(height: 16),
-        OutlinedButton.icon(
+        FilledButton.icon(
           onPressed: () => confirmSignOut(context, ref),
           icon: const Icon(Icons.logout),
           label: const Text('Sign out'),
@@ -202,7 +202,7 @@ class _SettingsTab extends ConsumerWidget {
         const SizedBox(height: 16),
         // Also reachable from Profile. Settings is where people go looking for
         // it, so it lives in both rather than only the less obvious one.
-        OutlinedButton.icon(
+        FilledButton.icon(
           onPressed: () => confirmSignOut(context, ref),
           icon: const Icon(Icons.logout),
           label: const Text('Sign out'),

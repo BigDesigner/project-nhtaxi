@@ -303,7 +303,7 @@ class _ProfileBodyState extends ConsumerState<_ProfileBody> {
         const SizedBox(height: 16),
         const HelpCard(),
         const SizedBox(height: 16),
-        OutlinedButton.icon(
+        FilledButton.icon(
           onPressed: () => confirmSignOut(context, ref),
           icon: const Icon(Icons.logout),
           label: const Text('Sign out'),
