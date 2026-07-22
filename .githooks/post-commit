@@ -1,0 +1,24 @@
+#!/bin/sh
+# GNNcab memory-discipline reminder (see AGENTS.md → "Memory discipline").
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+#
+# This only PRINTS a reminder — a script cannot write the "why" that the
+# changelog needs. The agent (or human) makes the actual prose update.
+
+hash=$(git rev-parse --short HEAD 2>/dev/null)
+subject=$(git log -1 --pretty=%s 2>/dev/null)
+
+cat <<EOF
+
+  ── memory reminder ─────────────────────────────────────────────
+  Committed ${hash}: ${subject}
+  If this changed behavior, before moving on update:
+    • .memory-bank/changelog/verified-worklog.md   (what + why)
+    • .tasks/handoff.md                            (commit, tests, next)
+    • .memory-bank/adr/                            (if a real decision)
+    • .memory-bank/active-session.json             (last_commit)
+  ────────────────────────────────────────────────────────────────
+
+EOF
+exit 0

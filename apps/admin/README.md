@@ -1,12 +1,15 @@
-# apps/admin (placeholder)
+# apps/admin (not built — superseded)
 
-Web admin — Faz 8 per [.spec/rebuild_plan.md](../../.spec/rebuild_plan.md).
+**There is no separate web-admin app.** The original plan was a React admin
+ported from the legacy app and hosted at `admin.nhtaxi.com` (Faz 8). That was
+superseded: the admin/owner panel was built **into the single Flutter app**
+(`apps/mobile/lib/features/admin/`) in Faz 9, reachable by an account with
+`isAdmin: true`. See **ADR 0006** and **ADR 0008**.
 
-Ported from the legacy React admin at
-`C:\Users\bigde\.antigravity\GNNcab\artifacts\gnncab` (React 19 + Vite + Tailwind
-+ shadcn/ui, cookie+CSRF auth already in place — L9). Driver/customer pages are
-dropped; only admin routes are kept. The generated API client is regenerated
-against this repo's OpenAPI doc (`apps/api` → `/api/openapi.json`) instead of
-the old hand-maintained `openapi.yaml`.
-
-Deployed to `admin.nhtaxi.com` via Cloudflare Pages (L27).
+This directory is kept only as a placeholder. If a dedicated web admin is ever
+wanted, the archived plan is at
+[.archive/docs-migration/2026-07-19/rebuild_plan.md](../../.archive/docs-migration/2026-07-19/rebuild_plan.md)
+and the legacy React source at
+`C:\Users\bigde\.antigravity\GNNcab\artifacts\gnncab` (React 19 + Vite +
+Tailwind + shadcn/ui). It would regenerate its API client from this repo's
+OpenAPI doc (`apps/api` → `/api/openapi.json`).

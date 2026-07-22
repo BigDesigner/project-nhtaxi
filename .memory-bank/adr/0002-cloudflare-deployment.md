@@ -20,4 +20,6 @@ The application components (API, Web Admin) need dedicated hostnames and deploym
 ## Evidence
 - `apps/api/wrangler.toml`
 - `.github/workflows/deploy.yml`
-- `.spec/rebuild_plan.md` (Archived) - Locked decisions L27, L28.
+- `.archive/docs-migration/2026-07-19/rebuild_plan.md` — Locked decisions L27, L28.
+
+> Note (2026-07-22): as built, the API is live at `api.nhtaxi.com` and the Flutter web preview at `gnncab-preview.pages.dev` (custom domain `gnncab.nhtaxi.com` pending, user-owned). No separate `admin.nhtaxi.com` React app was deployed — admin is inside the Flutter app (ADR 0006).

@@ -4,9 +4,9 @@
   "status": "ACTIVE",
   "mode": "Interactive",
   "preferred_language": "Türkçe",
-  "timestamp": "2026-07-19T09:36:00+03:00",
+  "timestamp": "2026-07-22T18:00:00+03:00",
   "active_branch": "main",
-  "last_commit": "41dc8696ea5daa174b3a9b08bb0d447b3ca8ccab",
+  "last_commit": "4e246d5eeb7044dd0a279d39c622d08b128188d3",
   "git_history_available": true,
   "worktree_status": "clean",
   "current_sprint": {
@@ -14,6 +14,7 @@
     "active_tasks": []
   },
   "tracked_memory_areas": {
+    "agent_guide": "AGENTS.md",
     "adr": ".memory-bank/adr/",
     "changelog": ".memory-bank/changelog/",
     "audits": ".memory-bank/audits/",

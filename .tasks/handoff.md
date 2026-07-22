@@ -2,42 +2,51 @@
 
 - **Current mode**: Interactive
 - **Current branch**: `main`
-- **Last commit**: `77323af` — "Charge commission on referred jobs only, not on everything"
-- **Worktree status**: Clean, pushed, deployed
+- **Last commit**: `4e246d5` — "Add short trip IDs, admin trip lookup, and
+  richer report rows" (this doc-overhaul commit lands on top of it).
+- **Worktree status**: clean, pushed, deployed. Deploy + Mobile CI both green
+  on `4e246d5`.
 - **What changed** (most recent first — full history in
   `.memory-bank/changelog/verified-worklog.md`):
-  - **Faz 11 wave A**: commission now follows `trips.referralSource`, not
-    `origin`. Driver ticks a box on accept (pre-ticked and locked when the
-    office assigned it, and never able to *clear* a referral); admin can set
-    or clear it on any live trip and that wins. Audit-logged.
-  - **Testing round 3**: fixed driver sign-up being unreachable (redirect
-    guard matched `/signup` exactly, bouncing `/signup/driver` to login);
-    split passenger trips onto their own tab; driver map no longer vanishes
-    when nobody is on shift.
-  - **Faz 10**: real driving distance from a routing engine (replacing a
-    straight-line estimate ×1.3), gated sign-up with separate passenger and
-    driver terms, and a change-password endpoint.
-- **What was verified**: 143/143 backend, 44/44 Flutter, analyze clean, both
-  CI workflows green, migrations `0004`–`0006` applied cleanly to remote D1,
-  and live smoke tests against production covering distance accuracy, terms
-  enforcement, driver-route auth and the password-change flow.
+  - **Short trip IDs + admin lookup + richer reports** (`4e246d5`): first-8-char
+    trip code everywhere with a Copy button; admin "Find a trip by ID" prefix
+    search (`GET /api/admin/trips/lookup`); report trip rows now show passenger,
+    driver and route, not a bare UUID; new admin "Trip & fare report" export.
+  - **Money reporting, CSV + PDF** (`881d0ca`, `587b014`, `cfecb95`): period
+    `financial-summary` + `driver-earnings` endpoints; Flutter builds CSV & PDF
+    client-side from one `ReportTable`; Roboto embedded for Turkish names; all
+    report text switched to ASCII punctuation so nothing boxes.
+  - **Names in trip history** (`0ab1e93`): each side sees who they rode with.
+  - **Driver car marker** (`d8e54bc`, `54bf1d1`): top-view taxi that rotates to
+    heading, status pip in the corner.
+- **What was verified**: 204/204 backend vitest, 100/100 Flutter, `typecheck`
+  + `analyze` clean, both CI workflows green, migrations `0000`–`0011` applied
+  cleanly to remote D1. Live: deployed OpenAPI advertises the new endpoints and
+  the `driverName`/`customerName` fields.
 - **Known failures**: none open (see `.memory-bank/bugs/bug-list.md`).
 - **Suggested validation commands**:
   - `pnpm run typecheck`
-  - `cd apps/api && npx vitest run`
+  - `cd apps/api && pnpm vitest run`
   - `cd apps/mobile && flutter analyze && flutter test`
-- **Next recommended action** — Faz 11 wave B, already agreed with the user:
-  1. Live referral trips: the driver taps a Referral button at the kerb, a
-     trip opens at their current GPS, and closes at their GPS on drop-off.
-     Removes driver-declared amounts entirely.
-  2. Breadcrumbs every ~30s during a trip, drawn on a map in the admin panel.
-     The user considers the audit trail important ("ayak izi önemli").
-  3. Metered fare from the real route rather than the booking estimate.
-  4. Needs `DRIVER_REFERRAL` in `TRIP_ORIGINS` → CHECK constraint rewrite →
-     **trips table rebuild. Give it its own migration, alone.** This is the
-     operation that failed twice remotely.
+- **Next recommended action**: no committed feature is mid-flight. The product
+  is functionally complete for the current scope; likely next work is whatever
+  the user surfaces from real-world testing, plus the user-owned items below.
+  Before writing code, present a plan (the user works plan-first).
+- **Not yet proven live** (needs a real device or the admin account):
+  - A PDF/CSV actually downloaded from the admin panel on the web build
+    (`share_plus` web path); confirm a Turkish-named driver renders in a PDF.
+  - The referral happy path (needs an approved driver).
+  - A driver broadcasting GPS and a passenger watching it move.
+  - The admin-lockdown + dual-role gates (need the production admin, or the
+    dual-role conversion below).
 - **Things only the user can do**:
-  - Move `ROUTING_BASE_URL` off the public OSRM demo instance before real
-    volume.
-  - Supply the Firebase service-account key (push is wired but no-ops).
+  - `wrangler secret put BREVO_API_KEY` and `FCM_SERVICE_ACCOUNT_KEY`
+    (email & push no-op silently until set).
+  - Move `ROUTING_BASE_URL` off the public OSRM demo before real volume.
   - Attach `gnncab.nhtaxi.com` to the `gnncab-preview` Pages project.
+  - Convert `info@nhtaxi.com` to `role:"driver", isAdmin:true` (ADR 0008) — a
+    deliberate one-off DB change.
+  - Firebase project + `flutterfire configure` to deliver push.
+  - Supply the GNN LLC report letterhead (address / tax no / logo) for
+    `ReportOrg` (ADR 0007).
+  - Clean the `smoke-*` test accounts/drivers from production D1.

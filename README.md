@@ -1,23 +1,30 @@
 # GNNcab
 
 Ride-dispatch platform for GNN LLC (North Conway, NH). Runs on Cloudflare's
-free tier end-to-end — see [.spec/rebuild_plan.md](.spec/rebuild_plan.md) for
-the full plan and every locked decision (L0–L31). This README only covers the
-one-time setup and day-to-day dev commands.
+free tier end-to-end.
+
+**Agents / new contributors start here:** read [AGENTS.md](AGENTS.md), then
+[.memory-bank/changelog/verified-worklog.md](.memory-bank/changelog/verified-worklog.md)
+and [.tasks/handoff.md](.tasks/handoff.md). The original rebuild plan and every
+locked decision (L0–L31) are archived at
+[.archive/docs-migration/2026-07-19/rebuild_plan.md](.archive/docs-migration/2026-07-19/rebuild_plan.md).
+This README only covers one-time setup and day-to-day dev commands.
 
 ## Repo layout
 
 ```
 apps/
   api/        Backend — Hono on Cloudflare Workers (D1 + R2 + Durable Objects)
-  admin/      Web admin — ported from the legacy React app (Faz 8)
-  mobile/     Flutter app — passenger/driver/admin, one app (Faz 7)
+  admin/      README only — the web admin was built into the Flutter app, not
+              as a separate React app (see ADR 0006)
+  mobile/     Flutter app — passenger + driver + admin, one app, all roles
 packages/
   db/         Drizzle schema (D1/SQLite), shared by the API and migrations
   contract/   Shared zod schemas — the source the OpenAPI doc is generated from
 .github/workflows/
   ci.yml      Pull request: typecheck + test + API preview deploy
   deploy.yml  main branch: typecheck + test + D1 backup + migrate + deploy
+  mobile.yml  main branch: Flutter analyze + test + debug APK + web preview deploy
 ```
 
 ## Local development

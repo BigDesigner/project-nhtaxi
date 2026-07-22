@@ -1,6 +1,6 @@
 # Audit: SRS & System Architecture
 
-Summarized from legacy `.spec/srs_architecture_doc.md`.
+Summarized from the legacy SRS, archived at `.archive/docs-migration/2026-07-19/srs_architecture_doc.md`.
 
 ## Core Purpose
 Real-time ride dispatch and driver tracking platform supporting multiple cities.

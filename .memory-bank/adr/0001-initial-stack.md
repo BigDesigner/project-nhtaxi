@@ -22,5 +22,7 @@ The project needs to scale effectively while prioritizing cost efficiency (speci
 - No Node.js runtime on the backend; all libraries must be compatible with the V8 isolate environment (Cloudflare Workers).
 
 ## Evidence
-- `.spec/rebuild_plan.md` (Archived) - Locked decisions L2, L6, L7, L10.
+- `.archive/docs-migration/2026-07-19/rebuild_plan.md` — Locked decisions L2, L6, L7, L10.
 - `package.json`, `pnpm-workspace.yaml`.
+
+> Note (2026-07-22): the React web-admin plan (Faz 8) was not built as a separate app — `apps/admin/` holds only a README and the admin panel lives in the single Flutter app (see ADR 0006, Faz 9). Everything else here is as built.

@@ -536,6 +536,81 @@ prompt on the completed-trip screen (or a read-only recap once rated), star
 chips + a reviews section on the driver sheet, and the driver's own average on
 their profile tab. 9 backend tests, 6 Flutter model tests.
 
+### Driver marker: a top-view car that turns to its heading
+The map used to show drivers as a generic pin. Now each driver is a top-view
+taxi PNG (`assets/markers/car.png`, nose-up) that rotates to the direction of
+travel, with a small status pip in the corner (green available / red busy /
+amber reserved) rather than colouring the car body. Heading is derived
+**client-side** from consecutive live positions (`core/live_driver_position.dart`),
+with a 15-metre movement threshold so a parked car holds its heading instead of
+spinning on GPS jitter; a driver with only one known position (just connected)
+points up rather than guessing. Zero backend change — it reads the same
+LocationHub position stream wave 3 added. The user supplied the PNG after a
+hand-drawn SVG was rejected ("looks like a space shuttle"); the marker uses
+`Image.asset` (raster) not an icon font, so the web release build can't subset
+its glyphs away.
+
+### Each side sees who they rode with, in their history
+Trip history showed the other party's name only to the admin. Now a passenger
+sees the driver's name on their trips and a driver sees the passenger's name on
+their past jobs. `TripResponse` gained `driverName`/`customerName`, filled from
+a self-join on `users` (joined twice via drizzle `alias()` — once for the
+driver's profile, once for the customer), populated on the trip list and detail
+responses and null on the live create/status responses that don't need them.
+`customerName` falls back to the guest name for an account-less booking.
+
+### Money reporting — everything financial as CSV and PDF
+Every figure the business runs on can now leave the app as a formatted file,
+for accounting and tax filing.
+
+**Backend** added two read-only aggregation endpoints (no schema change — it all
+sums from tables that already exist): `GET /api/admin/reports/financial-summary`
+(period totals: usage fee + commission = GNN income, cash collected, and — kept
+deliberately separate — the drivers' gross fares, which are their turnover, not
+GNN's) and `GET /api/admin/reports/driver-earnings` (completed-fare total per
+driver, whole fleet or one via `?driverId`). CSV output (`?format=csv`) added to
+the balances and commissions reports too, so all four money reports have a raw
+API export. See ADR 0007 for why the *designed* exports are built client-side.
+
+**Flutter** builds both the CSV and the PDF from one `ReportTable` model
+(`core/report_export.dart`, `core/report_tables.dart`), so the two formats carry
+an identical, self-describing layout: an org/title/period header, column
+headers, a bold TOTAL row, and a legend explaining every column and the money
+model. PDF via the `pdf`/`printing` packages (browser download on web, share
+sheet on mobile); CSV via `share_plus`, OWASP formula-injection-guarded and
+UTF-8-BOM'd so Excel reads Turkish names. The admin Money tab gained an
+"Export" card with a date-range picker and a button per report; drivers can
+export their own earnings from their earnings tab (their own tax record). The
+GNN LLC letterhead (address, tax number, logo) is a filled-in-later seam in
+`ReportOrg` — the user will supply it.
+
+Two follow-up fixes the same feature needed: the PDF's built-in Helvetica has no
+Unicode, so Turkish names and em-dashes printed as empty boxes — fixed by
+embedding **Roboto** via `PdfGoogleFonts` (fetched once, cached; a report's data
+is already fetched over the network so an export always has connectivity, and it
+falls back to the built-in font rather than failing) — and all report *text* was
+switched to plain ASCII punctuation (`:` `;` `->` `...`) so it stays clean
+regardless of which font the PDF ends up using.
+
+### Short trip IDs, admin lookup, and richer report rows
+A trip's id is a UUID; nobody can read one out or match one by eye. Now the
+first 8 characters are the human-facing code everywhere — on the passenger,
+driver and admin trip detail, each with a **Copy Trip ID** button that puts the
+*full* id on the clipboard, and in every report row. This powers a simple
+support flow: "read us your trip ID". A new admin **"Find a trip by ID"** card
+(`GET /api/admin/trips/lookup?q=`) prefix-matches the code and shows the full
+trip; the query is sanitised to the id charset (hex + hyphen) before it reaches
+`LIKE`, which also neutralises `%`/`_` wildcards. First-8 is not guaranteed
+unique, so the lookup returns *every* prefix hit rather than guessing — a
+collision across a small fleet is astronomically unlikely but never silently
+mis-resolves.
+
+Report trip rows stopped being bare UUIDs: the driver's own earnings and a new
+admin **Trip & fare report** (added to the export card) show the passenger name
+and the route (pickup `->` drop-off) alongside the short id. Backend added the
+addresses to `/reports/trips`, the customer name + addresses to
+`/driver/earnings`, and the lookup endpoint.
+
 ### Defined-but-dead: the standing list (start here for "what else is stubbed")
 This category was surfaced late — a fair complaint. It tracks schema/columns
 defined since an early phase that nothing at runtime actually writes or reads,
@@ -585,6 +660,19 @@ so a stub can't masquerade as a finished feature again.
   quoting fails closed (503) rather than returning a wrong price. Move
   `ROUTING_BASE_URL` to a self-hosted or paid OSRM-compatible endpoint before
   real volume. Config only, no code change.
+- **Report letterhead** — the GNN LLC address, tax number and logo on exported
+  PDFs/CSVs are a `ReportOrg` seam (`core/report_export.dart`) that currently
+  only fills in the name. The user will supply the real details; drop them into
+  `ReportOrg.gnn` and every export picks them up.
+- **Production admin not yet converted to the dual role.** `users.isAdmin` and
+  the whole owner-operator path are built and inert; `info@nhtaxi.com` is still
+  `role: "admin", isAdmin: false`. Converting it (to `role: "driver",
+  isAdmin: true`) is a deliberate, user-confirmed, one-off **direct database
+  change** — no API path grants `isAdmin`. Until then the admin-lockdown and
+  dual-role gates are unproven live.
+- **Brevo / FCM secrets** still unset in production, so email and push both take
+  their silent no-op path. User-owned `wrangler secret put` (see
+  `.specs/bootstrap.md`); nothing in the code needs touching once set.
 
 ## How Things Work — Non-Obvious Mechanisms
 
@@ -777,14 +865,25 @@ same pattern is worth applying to the other routers if they're ever touched.
 
 ## Validation Status
 
-As of the driver-ratings commit, everything below is deployed and verified
-against production.
+As of commit `4e246d5` (short trip IDs + admin lookup + richer report rows),
+everything below is deployed and verified against production.
 
-- Backend: 199/199 vitest tests passing (real D1/DO via
+- Backend: 204/204 vitest tests passing (real D1/DO via
   `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean.
-- Mobile: 85/85 Flutter tests passing, `flutter analyze` clean.
+- Mobile: 100/100 Flutter tests passing, `flutter analyze` clean.
 - CI `Deploy` + `Mobile` workflows green; live on `api.nhtaxi.com` and
   `gnncab-preview.pages.dev`.
+- Migrations `0000`–`0011` all applied cleanly to remote D1. `0011` (drop the
+  dead `zones` / `driver_zone_assignments` tables) was a rebuild-class op done
+  child-first; `0010` (ratings) and everything money-reporting since were plain
+  `ADD COLUMN` / new-endpoint work with no migration.
+- Latest live smoke (money reporting + trip IDs): the deployed OpenAPI doc
+  advertises `financial-summary`, `driver-earnings`, `trips/lookup`, and the
+  `driverName`/`customerName` fields on `TripResponse`. **Not yet proven live:
+  an actual PDF/CSV downloaded from the admin panel on the web build** — the
+  export builders are unit-tested but the `share_plus` web download path wants a
+  human click. Worth confirming a Turkish-named driver renders correctly in a
+  real PDF once there is one.
 - Migrations `0004`–`0006` were single `ALTER TABLE … ADD COLUMN` statements,
   deliberately, since the two migrations that ever failed remotely were table
   rebuilds. **`0007` is a table rebuild and applied cleanly to remote D1** —
