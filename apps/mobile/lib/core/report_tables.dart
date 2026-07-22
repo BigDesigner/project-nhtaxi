@@ -33,7 +33,7 @@ ReportTable financialSummaryTable(FinancialSummary s, {DateTime? from, DateTime?
       ReportColumn('GNN revenue', description: "GNN's income from this driver: usage fee + commission.", numeric: true),
       ReportColumn('Cash collected', description: 'Cash the office recorded receiving from the driver.', numeric: true),
       ReportColumn('Trips', description: 'Completed trips in the period.', numeric: true),
-      ReportColumn('Gross fares', description: "The driver's own turnover (passenger-paid) — NOT GNN income.", numeric: true),
+      ReportColumn('Gross fares', description: "The driver's own turnover (passenger-paid), NOT GNN income.", numeric: true),
     ],
     rows: [
       for (final d in s.drivers)
@@ -57,7 +57,7 @@ ReportTable financialSummaryTable(FinancialSummary s, {DateTime? from, DateTime?
       m(s.grossFares),
     ],
     notes: const [
-      "GNN LLC's taxable income is the usage fee (rent) plus commission — the 'GNN revenue' column.",
+      "GNN LLC's taxable income is the usage fee (rent) plus commission: the 'GNN revenue' column.",
       "Gross fares are the money passengers paid the drivers directly; that turnover is the drivers' own, not GNN's, and is shown only for reference.",
     ],
   );
@@ -126,7 +126,7 @@ ReportTable commissionsTable(List<CommissionCharge> rows) {
         ],
     ],
     totals: ['TOTAL', '', '', '', '', m(_sum(rows, (r) => r.commission))],
-    notes: const ['Commission is charged only on jobs GNN LLC referred — ordinary dispatch work carries none.'],
+    notes: const ['Commission is charged only on jobs GNN LLC referred; ordinary dispatch work carries none.'],
   );
 }
 
@@ -161,7 +161,7 @@ ReportTable adminDriverEarningsTable(List<AdminDriverEarningsRow> rows, {DateTim
     columns: const [
       ReportColumn('Driver'),
       ReportColumn('Trips', description: 'Completed trips in the period.', numeric: true),
-      ReportColumn('Earnings', description: "The driver's turnover — total fares passengers paid them.", numeric: true),
+      ReportColumn('Earnings', description: "The driver's turnover: total fares passengers paid them.", numeric: true),
     ],
     rows: [
       for (final r in rows) [r.driverName, '${r.tripCount}', m(r.totalEarnings)],
@@ -179,7 +179,7 @@ ReportTable adminDriverEarningsTable(List<AdminDriverEarningsRow> rows, {DateTim
 ReportTable driverOwnEarningsTable(DriverEarnings e, {required String driverName, DateTime? from, DateTime? to}) {
   String m(double? v) => v == null ? '' : formatFare(v, currency: e.currency);
   return ReportTable(
-    title: 'My earnings — $driverName',
+    title: 'My earnings: $driverName',
     from: from,
     to: to,
     columns: const [
@@ -193,6 +193,6 @@ ReportTable driverOwnEarningsTable(DriverEarnings e, {required String driverName
         [_d(t.completedAt), t.tripId, t.distanceMiles?.toStringAsFixed(1) ?? '', m(t.fare)],
     ],
     totals: ['TOTAL', '${e.tripCount} trips', '', m(e.totalEarnings)],
-    notes: const ['This is a record of cash paid to you directly by passengers — not a payment made through the app.'],
+    notes: const ['This is a record of cash paid to you directly by passengers, not a payment made through the app.'],
   );
 }

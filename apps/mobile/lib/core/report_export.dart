@@ -71,9 +71,9 @@ class ReportTable {
   final DateTime generatedAt;
 
   String get periodLabel {
-    String d(DateTime? x) => x == null ? '…' : _isoDate(x);
+    String d(DateTime? x) => x == null ? '...' : _isoDate(x);
     if (from == null && to == null) return 'All time';
-    return '${d(from)} – ${d(to)}';
+    return '${d(from)} to ${d(to)}';
   }
 }
 
