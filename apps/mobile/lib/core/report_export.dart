@@ -142,12 +142,33 @@ String buildReportCsv(ReportTable t) {
 }
 
 // ─── PDF ────────────────────────────────────────────────────────────────────
+/// The PDF's default fonts are Helvetica, which has no Unicode — Turkish names
+/// (ö, ç, ş, ğ, ı) and punctuation like em-dashes come out as boxes. Roboto
+/// covers all of it. It's fetched once and cached; because a report's data is
+/// itself fetched over the network, an export always has connectivity, so this
+/// adds no offline limitation. If the fetch ever fails we fall back to the
+/// built-in fonts rather than failing the export.
+pw.ThemeData? _cachedTheme;
+Future<pw.ThemeData?> _reportTheme() async {
+  if (_cachedTheme != null) return _cachedTheme;
+  try {
+    _cachedTheme = pw.ThemeData.withFont(
+      base: await PdfGoogleFonts.robotoRegular(),
+      bold: await PdfGoogleFonts.robotoBold(),
+    );
+  } catch (_) {
+    return null;
+  }
+  return _cachedTheme;
+}
+
 /// Builds a print-ready PDF: an org/title/period header band, the table with a
 /// shaded header row, zebra body rows, right-aligned numeric columns and a bold
 /// totals row, then a legend + notes block. Returns the raw bytes so the same
 /// document can be shared, downloaded or asserted on in a test.
 Future<Uint8List> buildReportPdf(ReportTable t) async {
-  final doc = pw.Document();
+  final theme = await _reportTheme();
+  final doc = pw.Document(theme: theme);
   final numeric = t.columns.map((c) => c.numeric).toList();
 
   pw.Widget cell(String text, {required bool isNumeric, bool bold = false}) => pw.Padding(
@@ -200,6 +221,7 @@ Future<Uint8List> buildReportPdf(ReportTable t) async {
   doc.addPage(
     pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
+      theme: theme,
       margin: const pw.EdgeInsets.all(28),
       build: (context) => [
         pw.Row(
