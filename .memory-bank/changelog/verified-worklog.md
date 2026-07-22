@@ -930,7 +930,7 @@ same pattern is worth applying to the other routers if they're ever touched.
 
 ## Validation Status
 
-As of commit `48dab10` (rebrand to NH Taxi),
+As of commit `a1a39c9` (real NH Taxi branding assets),
 everything below is deployed and verified against production.
 
 - Backend: 204/204 vitest tests passing (real D1/DO via
