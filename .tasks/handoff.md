@@ -3,10 +3,9 @@
 - **Current mode**: Interactive
 - **Current branch**: `main`
 - **Last commit**: `48dab10` — "Rebrand the app from GNNcab to NH Taxi"
-- **Worktree status**: clean, committed. Verified locally (typecheck, backend
-  vitest, flutter analyze/test all green); push + CI watch is the very next
-  step, not yet done as of this line — check `git log origin/main` / `gh run
-  list` to see whether that already happened by the time you're reading this.
+- **Worktree status**: clean, pushed, deployed. Deploy + Mobile CI both green
+  on `fd19933`. Live-confirmed: `api.nhtaxi.com`'s OpenAPI doc title reads
+  "NH Taxi API".
 - **What changed** (most recent first — full history in
   `.memory-bank/changelog/verified-worklog.md`):
   - **Rebrand to NH Taxi** (`48dab10`): every user-visible string (UI, legal
@@ -33,20 +32,19 @@
   - `pnpm run typecheck`
   - `cd apps/api && pnpm vitest run`
   - `cd apps/mobile && flutter analyze && flutter test`
-- **Next recommended action**: push `48dab10`, watch `Deploy` + `Mobile` CI to
-  green (both touched: backend strings + Flutter), then live-smoke that
-  `api.nhtaxi.com`'s OpenAPI doc title reads "NH Taxi API" and a fresh CI
-  debug APK actually installs under the new `com.nhtaxi.app` id (a device
-  that already has the OLD `com.gnncab.gnncab` build installed will treat
-  the new id as a **different app** — a fresh install, not an update; that's
-  expected and harmless since nothing has shipped to real users yet). After
-  that, no committed feature is mid-flight — next work is whatever the user
-  surfaces from real-world testing, plus the user-owned items below. Present
-  a plan before writing code on anything non-trivial (the user works
-  plan-first).
+- **Next recommended action**: no committed feature is mid-flight. The user is
+  supplying an NH Taxi logo (PNG, square, transparent, >=1024x1024) to drop at
+  `apps/mobile/assets/logo/nhtaxi-logo.png` — once it lands, wire it into the
+  app icon (Android mipmaps + web favicon/manifest icons) and the PDF report
+  letterhead (`ReportOrg.logo` seam, ADR 0007). Otherwise, next work is
+  whatever the user surfaces from real-world testing, plus the user-owned
+  items below. Present a plan before writing code on anything non-trivial.
 - **Not yet proven live** (needs a real device or the admin account):
   - The rebranded APK installing/running under `com.nhtaxi.app` (fresh CI
-    artifact `nhtaxi-debug-apk`).
+    artifact `nhtaxi-debug-apk`) — a device with the OLD `com.gnncab.gnncab`
+    build installed will treat the new id as a **different app** (fresh
+    install, not an update); expected and harmless, nothing has shipped to
+    real users yet.
   - A PDF/CSV actually downloaded from the admin panel on the web build
     (`share_plus` web path); confirm a Turkish-named driver renders in a PDF.
   - The referral happy path (needs an approved driver).
