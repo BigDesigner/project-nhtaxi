@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../widgets/brand_header_bar.dart';
 import 'admin_controllers.dart';
 import 'admin_drivers_tab.dart';
 import 'admin_fleet_map_tab.dart';
@@ -24,7 +25,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_titles[_index])),
+      appBar: BrandHeaderBar(subtitle: _titles[_index]),
       body: IndexedStack(
         index: _index,
         children: const [

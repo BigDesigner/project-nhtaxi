@@ -753,6 +753,23 @@ part if service areas are ever wired to a real geofence/dispatch-radius
 feature, and rebuilding a small admin dialog at that point is cheap. No
 migration, no backend behaviour change; 104/104 Flutter tests still pass.
 
+### One shared header on every screen, not a corner logo on one tab
+The wordmark previously lived inside each shell's `AppBar.title`, and only on
+tab index 0 — every other tab (Balance, Profile, Settings, Money...) showed a
+plain text title with no branding at all. User feedback: too small, and
+inconsistent from page to page ("bir sayfada çıkıyor bir sayfada çıkmıyor").
+
+Added `widgets/brand_header_bar.dart` — a `BrandHeaderBar` (`PreferredSizeWidget`)
+used as the `AppBar` for all three shells (`passenger_shell.dart`,
+`driver_shell.dart`, `admin_shell.dart`) and the post-login `_ComingSoonScreen`
+in `router.dart`. It centres a larger `BrandLogo` (40px, up from 24-28px) with
+the current tab's name as a small subtitle underneath, on every tab — so the
+header is now identical in structure everywhere, rather than one tab getting
+special-cased. `flutter analyze` clean, 104/104 tests pass. Not yet confirmed
+with a real screenshot — the Browser preview pane hit the same compositing
+hiccup as an earlier round this session; worth a real look next time someone's
+on a device or the tooling cooperates.
+
 ### Defined-but-dead: the standing list (start here for "what else is stubbed")
 This category was surfaced late — a fair complaint. It tracks schema/columns
 defined since an early phase that nothing at runtime actually writes or reads,

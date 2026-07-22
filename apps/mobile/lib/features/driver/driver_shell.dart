@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/driver_location_broadcaster.dart';
-import '../../widgets/brand_logo.dart';
+import '../../widgets/brand_header_bar.dart';
 import 'driver_controllers.dart';
 import 'driver_earnings_tab.dart';
 import 'driver_home_tab.dart';
@@ -19,9 +19,7 @@ class DriverShell extends ConsumerStatefulWidget {
 class _DriverShellState extends ConsumerState<DriverShell> {
   int _index = 0;
 
-  // Index 0's string is unused (the wordmark + "Driver" replace it below) —
-  // kept so the other indices still line up with the destinations.
-  static const _titles = ['NH Taxi Driver', 'What I owe', 'Profile'];
+  static const _titles = ['Jobs', 'Balance', 'Profile'];
 
   @override
   void initState() {
@@ -45,14 +43,7 @@ class _DriverShellState extends ConsumerState<DriverShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: _index == 0
-            ? const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [BrandLogo(height: 24), SizedBox(width: 8), Text('Driver')],
-              )
-            : Text(_titles[_index]),
-      ),
+      appBar: BrandHeaderBar(subtitle: _titles[_index]),
       body: IndexedStack(
         index: _index,
         children: const [DriverHomeTab(), DriverEarningsTab(), DriverProfileTab()],

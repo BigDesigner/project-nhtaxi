@@ -19,7 +19,7 @@ import 'features/passenger/active_trip_screen.dart';
 import 'features/passenger/booking/booking_screen.dart';
 import 'features/passenger/drivers/drivers_screen.dart';
 import 'features/passenger/passenger_shell.dart';
-import 'widgets/brand_logo.dart';
+import 'widgets/brand_header_bar.dart';
 
 /// The app's route table.
 ///
@@ -166,8 +166,7 @@ class _ComingSoonScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(
-        title: const BrandLogo(height: 24),
+      appBar: BrandHeaderBar(
         actions: [
           IconButton(
             tooltip: 'Sign out',

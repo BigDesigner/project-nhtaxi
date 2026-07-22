@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/change_password_sheet.dart';
-import '../../widgets/brand_logo.dart';
+import '../../widgets/brand_header_bar.dart';
 import '../../widgets/help_card.dart';
 import '../auth/auth_controller.dart';
 import 'passenger_home_screen.dart';
@@ -33,15 +33,12 @@ class _PassengerShellState extends ConsumerState<PassengerShell> {
     });
   }
 
-  // Index 0 shows the wordmark instead of a title — everywhere else, a plain
-  // label. The first entry is unused as a string but kept so the indices
-  // still line up with the destinations below.
-  static const _titles = ['NH Taxi', 'Your trips', 'Profile', 'Settings'];
+  static const _titles = ['Home', 'Your trips', 'Profile', 'Settings'];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: _index == 0 ? const BrandLogo(height: 28) : Text(_titles[_index])),
+      appBar: BrandHeaderBar(subtitle: _titles[_index]),
       body: IndexedStack(
         index: _index,
         children: const [PassengerHomeTab(), PassengerTripsTab(), _ProfileTab(), _SettingsTab()],
