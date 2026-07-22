@@ -2,15 +2,15 @@
 
 - **Current mode**: Interactive
 - **Current branch**: `main`
-- **Last commit**: pending — one shared `BrandHeaderBar` header, not yet
-  committed as of this line (see "What changed" below). Check `git log` /
-  `git log origin/main` to see whether that already happened by the time
-  you're reading this.
-- **Worktree status**: check `git status` — a commit + push + CI watch for
-  the header-bar change may still be outstanding as of this line.
+- **Last commit**: `45d2e50` — "Give every shell a shared, centered header
+  instead of a corner logo"
+- **Worktree status**: clean, committed locally. Push + CI watch is the very
+  next step, not yet done as of this line — check `git log origin/main` /
+  `gh run list` to see whether that already happened by the time you're
+  reading this.
 - **What changed** (most recent first — full history in
   `.memory-bank/changelog/verified-worklog.md`):
-  - **One shared header on every screen** (pending commit): the wordmark used
+  - **One shared header on every screen** (`45d2e50`): the wordmark used
     to live only in tab 0's `AppBar` per shell — every other tab had a plain
     text title, no branding. User feedback: too small, and inconsistent tab
     to tab. Added `widgets/brand_header_bar.dart`, used as the `AppBar` for
@@ -82,8 +82,8 @@
   - `pnpm run typecheck`
   - `cd apps/api && pnpm vitest run`
   - `cd apps/mobile && flutter analyze && flutter test`
-- **Next recommended action**: commit + push the header-bar change, watch
-  `Deploy` + `Mobile` CI, then get a real logged-in look (any role) at every
+- **Next recommended action**: push `45d2e50`, watch `Deploy` + `Mobile` CI,
+  then get a real logged-in look (any role) at every
   unscreenshotted item below — the new header bar, plus the still-unverified
   items from earlier rounds (Sign out buttons, Export reports row, the
   "Assign a job"/"Request a trip" icon circles) — none of these were
