@@ -2,14 +2,26 @@
 
 - **Current mode**: Interactive
 - **Current branch**: `main`
-- **Last commit**: `2c2f371` — "Fix amber-on-white contrast: link text is
-  black bold, not amber"
+- **Last commit**: `4332b98` — "Make every real action a filled amber
+  button, fix amber-on-amber icons"
 - **Worktree status**: clean, committed locally. Push + CI watch is the very
   next step, not yet done as of this line — check `git log origin/main` /
   `gh run list` to see whether that already happened by the time you're
   reading this.
 - **What changed** (most recent first — full history in
   `.memory-bank/changelog/verified-worklog.md`):
+  - **Filled buttons + amber-on-amber icon fix** (`4332b98`): "Sign out"
+    (x4), "Export my earnings", and all 6 admin Money export buttons
+    (Financial summary/Driver earnings/Trip & fare report/Balances/
+    Commissions/Collections) were `OutlinedButton`/`FilledButton.tonalIcon` —
+    looked secondary next to the confident amber `Sign in`. Converted to
+    plain `FilledButton(.icon)`. Separately, a few icon badges ("Assign a job"
+    phone icon, `_ActionCard`, `DriverAvatar`'s fallback) had a pale
+    15%-tint circle behind a full-strength same-colour icon — amber-on-
+    pale-amber, nearly invisible. Now solid accent-colour circle + a
+    contrast-computed icon colour (`ThemeData.estimateBrightnessForColor`).
+    The one green "online" badge with the same tint idiom was deliberately
+    left — semantic status colour, not the brand accent.
   - **Contrast fix: link text black, not amber** (`2c2f371`): after the amber
     theme landed, every `TextButton`/`OutlinedButton` ("Sign up", "Drive with
     us", "Turn it down", terms links) was rendering amber-on-white — a real
@@ -42,30 +54,41 @@
     longer count toward the money TOTAL or read "Referred: Y".
   - **Short trip IDs + admin lookup + richer reports** (`4e246d5`).
   - **Money reporting, CSV + PDF** (`881d0ca`, `587b014`, `cfecb95`).
-- **What was verified locally for `2c2f371`**: `flutter analyze` clean,
-  104/104 Flutter tests. Visually confirmed in a local `flutter build web` +
-  static serve (DWDS dev-mode `flutter run` hung on this machine — use
-  `flutter build web` + `npx serve build/web` for any future visual check,
-  see `.claude/launch.json`): splash renders correctly on white, the browser
-  tab reads "NH Taxi", the login screen's wordmark is undistorted, the
-  `Sign in` button reads as rich amber-gold (`#FCC803`) with black text, and
-  "Don't have an account? Sign up" / "Drive with us" now read as black bold
-  text — clearly legible, no amber-on-white anywhere.
+- **What was verified locally for `4332b98`**: `flutter analyze` clean,
+  104/104 Flutter tests. The login screen (same `flutter build web` + static
+  serve approach — see `.claude/launch.json`) was re-confirmed unchanged.
+  **Not re-screenshotted this round** — the Browser preview pane stopped
+  compositing frames (tooling hiccup, not a code issue) right when it would
+  have shown the post-login screens (Sign out, Export buttons, the icon
+  badges) that this commit actually touches, and reaching those needs a real
+  login this environment has no test credentials for. Confidence is high
+  anyway: the 6 button conversions are the exact same `FilledButton` widget
+  already visually confirmed correct for `Sign in` (zero custom styling
+  added, so there's no new rendering path to distrust), and the icon-circle
+  fix uses `ThemeData.estimateBrightnessForColor` in its standard documented
+  way (the same utility Flutter's own AppBar/SnackBar theming uses to pick
+  contrasting content). **Worth a real look next time someone's logged in.**
 - **Known failures**: none open (see `.memory-bank/bugs/bug-list.md`).
 - **Suggested validation commands**:
   - `pnpm run typecheck`
   - `cd apps/api && pnpm vitest run`
   - `cd apps/mobile && flutter analyze && flutter test`
-- **Next recommended action**: push `2c2f371`, watch `Deploy` + `Mobile` CI
-  (Mobile will touch it; Deploy runs on every push regardless), then
-  ideally have the user (or a real device) confirm the Android app icon,
-  splash and the new amber theme actually look right on a phone — the CLI
-  verification above proves the files generated and wired correctly, but
-  this is ultimately a visual, on-device judgment call the user should sign
-  off on. After that, no committed feature is mid-flight — next work is
-  whatever the user surfaces from real-world testing. Present a plan before
-  writing code on anything non-trivial.
+- **Next recommended action**: push `4332b98`, watch `Deploy` + `Mobile` CI,
+  then get a real logged-in look (any role) at: the "Sign out" buttons, the
+  admin Money "Export reports" row, "Export my earnings", the admin "Assign
+  a job" phone icon, and the passenger "Request a trip" card icon — this
+  round's changes were verified by code/API-correctness reasoning, not a
+  fresh screenshot (see above), so they're the first thing to double-check
+  once someone can actually log in. Also worth a real device check of the
+  Android app icon/splash/amber theme in general. After that, no committed
+  feature is mid-flight — next work is whatever the user surfaces from
+  real-world testing. Present a plan before writing code on anything
+  non-trivial.
 - **Not yet proven live / on-device**:
+  - **This commit's actual screens** — Sign out buttons, the Money export
+    row, "Export my earnings", the "Assign a job" phone icon, the "Request a
+    trip" card icon — need a real logged-in look (see above; not
+    screenshotted this round due to a Browser-pane tooling hiccup).
   - The Android app icon and splash screen on an actual installed APK (only
     verified via generated-file inspection + a web build's favicon/splash).
   - The rebranded APK installing/running under `com.nhtaxi.app` (fresh CI
