@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nhtaxi/core/providers.dart';
 import 'package:nhtaxi/core/token_store.dart';
 import 'package:nhtaxi/features/auth/login_screen.dart';
+import 'package:nhtaxi/widgets/brand_logo.dart';
 
 void main() {
   /// The auth controller reads persisted tokens on build, which in production
@@ -21,7 +22,7 @@ void main() {
     await tester.pumpWidget(wrap(const LoginScreen()));
     await tester.pumpAndSettle();
 
-    expect(find.text('NH Taxi'), findsOneWidget);
+    expect(find.byType(BrandLogo), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Email'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Password'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nhtaxi/core/report_export.dart';
 import 'package:nhtaxi/core/report_tables.dart';
@@ -74,6 +75,16 @@ void main() {
       expect(bytes.length, greaterThan(0));
       // Every PDF starts with the "%PDF" magic bytes.
       expect(String.fromCharCodes(bytes.take(4)), '%PDF');
+    });
+
+    // Uses testWidgets rather than test() specifically because rootBundle
+    // needs a real Flutter binding to resolve pubspec assets — the plain
+    // test() above never touches the asset bundle at all (buildReportPdf
+    // swallows a failed load and renders without a logo), so it can't catch
+    // a typo'd path or a missing pubspec entry the way this one does.
+    testWidgets('the default PDF logo asset actually resolves', (tester) async {
+      final data = await rootBundle.load('assets/branding/logo-pdf.png');
+      expect(data.lengthInBytes, greaterThan(0));
     });
   });
 

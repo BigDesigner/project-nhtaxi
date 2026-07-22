@@ -639,6 +639,43 @@ resource names, and the Flutter web preview subdomain `gnncab.nhtaxi.com`
 `app.`, is retired — a separate future task). See ADR 0009 for the full
 reasoning and exact scope boundary.
 
+### Real branding assets: app icon, splash, in-app logo, PDF logo
+The user supplied the actual NH Taxi artwork (a taxi-and-moose-head mark, "NH
+TAXI · LIVE FREE · RIDE LOCAL") as five PNGs — square icon (opaque, 1024×1024:
+iOS rejects a transparent app icon), splash mark (transparent, same size —
+splash screens compose as a solid background colour filling the whole screen
+plus a small centred image, never a full-screen picture, so square is correct
+and 9:16 would have been wrong), a horizontal wordmark for in-app display, a
+matching one for the PDF letterhead, and a spare square variant not wired
+anywhere yet. Dropped at `apps/mobile/assets/branding/`.
+
+`flutter_launcher_icons` and `flutter_native_splash` (new dev dependencies)
+generate every Android density + the web favicon/manifest icons from the one
+square source — `dart run flutter_launcher_icons` / `flutter_native_splash:
+create` regenerate them if the art changes. iOS is configured but skipped
+(`ios/` doesn't exist yet, see ADR 0006); flip `ios: true` in `pubspec.yaml`'s
+`flutter_launcher_icons:` block once `flutter create --platforms=ios .` runs,
+then re-run both generators.
+
+The horizontal wordmark replaces the plain "NH Taxi" text on the login screen
+and the passenger/driver home tab's app bar (`widgets/brand_logo.dart`, a
+thin `Image.asset` wrapper) — the driver one keeps a "Driver" text suffix
+next to it since the mark alone doesn't say which app this is. The PDF
+report header (`core/report_export.dart`) now actually renders `ReportOrg.logo`
+as an image (that rendering path didn't exist before, only the data field
+did) — defaulting to the same wordmark loaded once from
+`assets/branding/logo-pdf.png` and cached, with the same "network access
+already required, so the asset load always succeeds; if it somehow doesn't,
+render without a logo rather than fail the export" pattern used for the
+Roboto font. **`ReportOrg.gnn`'s name stayed "GNN LLC"** — a formal financial
+export names the legal filer, not the consumer brand, even though the logo
+above it is the consumer mark. A `testWidgets` test (not a bare `test()`)
+asserts the asset path actually resolves via `rootBundle.load`, since the
+try/catch fallback means a typo'd path would otherwise degrade silently to
+"no logo" instead of failing anything. 104/104 Flutter tests, verified
+visually in a local `flutter build web` (splash renders correctly on white,
+browser tab title reads "NH Taxi", the login screen's logo shows undistorted).
+
 ### Defined-but-dead: the standing list (start here for "what else is stubbed")
 This category was surfaced late — a fair complaint. It tracks schema/columns
 defined since an early phase that nothing at runtime actually writes or reads,
@@ -898,7 +935,7 @@ everything below is deployed and verified against production.
 
 - Backend: 204/204 vitest tests passing (real D1/DO via
   `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean.
-- Mobile: 103/103 Flutter tests passing, `flutter analyze` clean.
+- Mobile: 104/104 Flutter tests passing, `flutter analyze` clean.
 - CI `Deploy` + `Mobile` workflows green; live on `api.nhtaxi.com` and
   `gnncab-preview.pages.dev`.
 - Migrations `0000`–`0011` all applied cleanly to remote D1. `0011` (drop the

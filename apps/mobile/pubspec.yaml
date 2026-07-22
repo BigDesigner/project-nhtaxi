@@ -59,6 +59,39 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  # Generate every platform icon size from one 1024x1024 source (`dart run
+  # flutter_launcher_icons`) — see the `flutter_launcher_icons:` config below.
+  flutter_launcher_icons: ^0.14.4
+  # Same idea for the launch/splash screen (`dart run
+  # flutter_native_splash:create`) — config below.
+  flutter_native_splash: ^2.4.6
+
+# Source images for the generators above. Android/iOS icon must NOT be
+# transparent (App Store rejects a transparent icon) — icon-square.png is
+# opaque on purpose. Splash uses a transparent PNG centred on `background`,
+# per how native splash screens actually compose (solid colour fills the
+# screen at whatever aspect ratio the device has; the image is just the small
+# centred mark, never a full-screen picture).
+flutter_launcher_icons:
+  android: true
+  # `ios/` doesn't exist yet (see apps/mobile/README.md — deferred, L26).
+  # Flip this to true once `flutter create --platforms=ios .` creates it,
+  # then re-run `dart run flutter_launcher_icons`.
+  ios: false
+  image_path: "assets/branding/icon-square.png"
+  min_sdk_android: 21
+  web:
+    generate: true
+    image_path: "assets/branding/icon-square.png"
+    background_color: "#FFFFFF"
+    theme_color: "#FFFFFF"
+
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/branding/splash-icon.png
+  android_12:
+    color: "#FFFFFF"
+    image: assets/branding/splash-icon.png
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -73,6 +106,7 @@ flutter:
 
   assets:
     - assets/markers/car.png
+    - assets/branding/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

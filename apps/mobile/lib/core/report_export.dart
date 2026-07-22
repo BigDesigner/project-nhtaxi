@@ -1,13 +1,14 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
 /// The organisation a report is filed under. Only the name is filled today —
-/// address, tax number and a logo are left as a deliberate seam so they can be
+/// address and tax number are left as a deliberate seam so they can be
 /// dropped in later without touching any call site or the renderers.
 class ReportOrg {
   const ReportOrg({this.name = 'GNN LLC', this.address, this.taxId, this.logo});
@@ -16,10 +17,30 @@ class ReportOrg {
   final String? address;
   final String? taxId;
 
-  /// A PNG/JPEG the PDF header can show once we have one. Left null for now.
+  /// A PNG/JPEG the PDF header shows. Leave null to use the app's own
+  /// `assets/branding/logo-pdf.png` (see [_defaultLogoBytes]) — only set this
+  /// explicitly to override it (tests do, so they never touch the asset
+  /// bundle) or once the org actually has no logo to show.
   final Uint8List? logo;
 
   static const ReportOrg gnn = ReportOrg();
+}
+
+/// Cached after the first load, same reasoning as [_reportTheme] below — a
+/// report's data is already fetched over the network, so an export always has
+/// connectivity to load this asset once. `null` (fetch failed, or running
+/// somewhere without the asset bundle, e.g. a bare Dart test) just means the
+/// header renders without a logo rather than failing the export.
+Uint8List? _cachedDefaultLogo;
+Future<Uint8List?> _defaultLogoBytes() async {
+  if (_cachedDefaultLogo != null) return _cachedDefaultLogo;
+  try {
+    final data = await rootBundle.load('assets/branding/logo-pdf.png');
+    _cachedDefaultLogo = data.buffer.asUint8List();
+  } catch (_) {
+    return null;
+  }
+  return _cachedDefaultLogo;
 }
 
 /// One column: its header text, a one-line explanation of what it means (shown
@@ -170,6 +191,7 @@ Future<Uint8List> buildReportPdf(ReportTable t) async {
   final theme = await _reportTheme();
   final doc = pw.Document(theme: theme);
   final numeric = t.columns.map((c) => c.numeric).toList();
+  final logoBytes = t.org.logo ?? await _defaultLogoBytes();
 
   pw.Widget cell(String text, {required bool isNumeric, bool bold = false}) => pw.Padding(
         padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -231,6 +253,12 @@ Future<Uint8List> buildReportPdf(ReportTable t) async {
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
+                // The consumer brand mark, distinct from the legal filer name
+                // printed below it — a formal report names both.
+                if (logoBytes != null) ...[
+                  pw.Image(pw.MemoryImage(logoBytes), height: 28, fit: pw.BoxFit.contain),
+                  pw.SizedBox(height: 4),
+                ],
                 pw.Text(t.org.name, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
                 if (t.org.address != null) pw.Text(t.org.address!, style: const pw.TextStyle(fontSize: 9)),
                 if (t.org.taxId != null) pw.Text('Tax no: ${t.org.taxId}', style: const pw.TextStyle(fontSize: 9)),

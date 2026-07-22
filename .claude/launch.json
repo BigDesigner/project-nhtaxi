@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mobile-web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "serve", "build/web", "-l", "5174"],
+      "cwd": "apps/mobile",
+      "port": 5174
+    }
+  ]
+}

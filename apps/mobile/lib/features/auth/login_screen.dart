@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../widgets/brand_logo.dart';
 import '../../widgets/error_banner.dart';
 import 'auth_controller.dart';
 
@@ -53,11 +54,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      'NH Taxi',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-                    ),
+                    const Center(child: BrandLogo(height: 56)),
                     const SizedBox(height: 8),
                     Text(
                       'Sign in to book a ride',

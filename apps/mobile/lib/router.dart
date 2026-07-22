@@ -19,6 +19,7 @@ import 'features/passenger/active_trip_screen.dart';
 import 'features/passenger/booking/booking_screen.dart';
 import 'features/passenger/drivers/drivers_screen.dart';
 import 'features/passenger/passenger_shell.dart';
+import 'widgets/brand_logo.dart';
 
 /// The app's route table.
 ///
@@ -166,7 +167,7 @@ class _ComingSoonScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('NH Taxi'),
+        title: const BrandLogo(height: 24),
         actions: [
           IconButton(
             tooltip: 'Sign out',
