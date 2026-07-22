@@ -893,12 +893,12 @@ same pattern is worth applying to the other routers if they're ever touched.
 
 ## Validation Status
 
-As of commit `4e246d5` (short trip IDs + admin lookup + richer report rows),
+As of commit `48dab10` (rebrand to NH Taxi),
 everything below is deployed and verified against production.
 
 - Backend: 204/204 vitest tests passing (real D1/DO via
   `@cloudflare/vitest-pool-workers`), `pnpm run typecheck` clean.
-- Mobile: 100/100 Flutter tests passing, `flutter analyze` clean.
+- Mobile: 103/103 Flutter tests passing, `flutter analyze` clean.
 - CI `Deploy` + `Mobile` workflows green; live on `api.nhtaxi.com` and
   `gnncab-preview.pages.dev`.
 - Migrations `0000`–`0011` all applied cleanly to remote D1. `0011` (drop the
