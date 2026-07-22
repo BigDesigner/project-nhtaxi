@@ -676,6 +676,22 @@ try/catch fallback means a typo'd path would otherwise degrade silently to
 visually in a local `flutter build web` (splash renders correctly on white,
 browser tab title reads "NH Taxi", the login screen's logo shows undistorted).
 
+### Theme colour: the taxi-yellow from the logo, not green
+The whole app's buttons/accents came from one Material 3 seed colour
+(`ColorScheme.fromSeed`) that was still the pre-rebrand dark green — every
+`FilledButton`, the nav bar's selection indicator, all of it. Sampled the
+actual taxi-yellow out of the logo artwork itself (`logo-horizontal.png`'s
+dominant pixel colour, `#FCC803`) rather than guessing a generic amber, and
+made that the seed. `primary`/`onPrimary` are then forced explicitly (amber /
+black) via `.copyWith(...)` rather than left to `fromSeed`'s own algorithm —
+`fromSeed` optimises for contrast and would otherwise have muted a bright
+yellow into a dark gold for button backgrounds, which reads as "brownish", not
+"amber". Black text on amber matches how the logo itself pairs them. Every
+other semantic status colour (green = available/approved/completed, red =
+busy/cancelled, amber pip = reserved, blue = searching) is a separate,
+deliberate `Colors.green`/`Colors.red` used directly in each screen and was
+left untouched — those mean something specific and aren't the brand colour.
+
 ### Defined-but-dead: the standing list (start here for "what else is stubbed")
 This category was surfaced late — a fair complaint. It tracks schema/columns
 defined since an early phase that nothing at runtime actually writes or reads,
