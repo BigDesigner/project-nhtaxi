@@ -114,6 +114,70 @@ void main() {
     });
   });
 
+  group('tripFareReportTable', () {
+    TripReportRow trip({
+      required String id,
+      required String status,
+      required bool referred,
+      double? finalFare,
+      double? estimatedFare,
+    }) =>
+        TripReportRow(
+          tripId: id,
+          status: status,
+          requestedAt: DateTime.utc(2026, 7, 20),
+          completedAt: status == 'TRIP_COMPLETED' ? DateTime.utc(2026, 7, 20, 1) : null,
+          customerName: 'Pat Passenger',
+          driverName: 'Dan Driver',
+          finalFare: finalFare,
+          estimatedFare: estimatedFare,
+          currency: 'USD',
+          referred: referred,
+        );
+
+    test('only sums completed trips into TOTAL, excluding cancelled/other', () {
+      final rows = [
+        trip(id: 'aaaaaaaa-0000-0000-0000-000000000000', status: 'TRIP_COMPLETED', referred: false, finalFare: 10),
+        trip(id: 'bbbbbbbb-0000-0000-0000-000000000000', status: 'TRIP_CANCELLED', referred: false, estimatedFare: 50),
+        trip(id: 'cccccccc-0000-0000-0000-000000000000', status: 'TIMEOUT', referred: false, estimatedFare: 20),
+      ];
+      final table = tripFareReportTable(rows);
+
+      // All three trips are still listed...
+      expect(table.rows, hasLength(3));
+      // ...but only the completed one's fare reaches TOTAL.
+      final fareCol = table.columns.indexWhere((c) => c.header == 'Fare');
+      expect(table.totals![fareCol], r'$10.00');
+      expect(table.totals!.first, contains('completed only'));
+    });
+
+    test('shows Status for every row and never marks a non-completed trip Referred', () {
+      final rows = [
+        // Referral was set on the trip, but it was cancelled before finishing —
+        // no commission was ever actually charged (trips.ts only inserts it at
+        // TRIP_COMPLETED), so this must NOT read "Y".
+        trip(id: 'dddddddd-0000-0000-0000-000000000000', status: 'TRIP_CANCELLED', referred: true, estimatedFare: 30),
+        trip(id: 'eeeeeeee-0000-0000-0000-000000000000', status: 'TRIP_COMPLETED', referred: true, finalFare: 12),
+      ];
+      final table = tripFareReportTable(rows);
+
+      final statusCol = table.columns.indexWhere((c) => c.header == 'Status');
+      final referredCol = table.columns.indexWhere((c) => c.header == 'Referred');
+      expect(table.rows[0][statusCol], 'Cancelled');
+      expect(table.rows[0][referredCol], isEmpty);
+      expect(table.rows[1][statusCol], 'Completed');
+      expect(table.rows[1][referredCol], 'Y');
+    });
+
+    test('notes the excluded not-completed trips when there are any', () {
+      final rows = [
+        trip(id: 'ffffffff-0000-0000-0000-000000000000', status: 'TRIP_CANCELLED', referred: false, estimatedFare: 15),
+      ];
+      final table = tripFareReportTable(rows);
+      expect(table.notes.any((n) => n.contains('1 trip(s)') && n.contains('not part of TOTAL')), isTrue);
+    });
+  });
+
   group('financialSummaryTable', () {
     test('lays out GNN income and gross fares with a totals row', () {
       final summary = FinancialSummary(

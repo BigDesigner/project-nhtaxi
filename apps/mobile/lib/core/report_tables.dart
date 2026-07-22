@@ -184,11 +184,35 @@ ReportTable adminDriverEarningsTable(List<AdminDriverEarningsRow> rows, {DateTim
   );
 }
 
+/// Short, report-facing status label. Deliberately coarser than the app's own
+/// `Trip.statusLabel` — a formal export groups every not-yet-finished state
+/// (searching, matched, en route, ...) as "In progress" rather than spelling
+/// out the dispatch machinery.
+String _reportStatusLabel(String status) => switch (status) {
+      'TRIP_COMPLETED' => 'Completed',
+      'TRIP_CANCELLED' => 'Cancelled',
+      'TIMEOUT' => 'No driver found',
+      _ => 'In progress',
+    };
+
 /// Per-trip fare detail: who rode with whom, where, and what was charged. The
-/// fullest tax export — every completed trip as its own line.
+/// fullest tax export — every trip in the period as its own line.
+///
+/// Only a **completed** trip ever charges anything: commission is inserted
+/// exactly once, at the TRIP_COMPLETED transition (routes/trips.ts). A
+/// cancelled or timed-out trip may still carry `referralSource` (the office
+/// can set it before the trip finishes) but never actually billed a cut, so
+/// counting it in TOTAL or marking it "Referred" would overstate GNN's money.
+/// Every trip is still listed — for visibility, e.g. cancellation patterns —
+/// but only completed rows feed the Fare total and the Referred flag.
 ReportTable tripFareReportTable(List<TripReportRow> rows, {DateTime? from, DateTime? to}) {
   String m(double? v) => v == null ? '' : formatFare(v, currency: rows.isEmpty ? 'USD' : rows.first.currency);
-  final charged = rows.where((r) => r.fare != null).fold<double>(0, (s, r) => s + r.fare!);
+  final completed = rows.where((r) => r.status == 'TRIP_COMPLETED').toList();
+  final notCompleted = rows.where((r) => r.status != 'TRIP_COMPLETED').toList();
+  final charged = completed.where((r) => r.fare != null).fold<double>(0, (s, r) => s + r.fare!);
+  final notCompletedFare =
+      notCompleted.where((r) => r.fare != null).fold<double>(0, (s, r) => s + r.fare!);
+
   return ReportTable(
     title: 'Trip & fare report',
     from: from,
@@ -196,28 +220,33 @@ ReportTable tripFareReportTable(List<TripReportRow> rows, {DateTime? from, DateT
     columns: const [
       ReportColumn('Date'),
       ReportColumn('Trip', description: 'First 8 characters of the trip ID.'),
+      ReportColumn('Status'),
       ReportColumn('Passenger'),
       ReportColumn('Driver'),
       ReportColumn('Route', description: 'Pickup and drop-off.'),
-      ReportColumn('Referred', description: 'Y if GNN LLC referred the job (commission applies).'),
-      ReportColumn('Fare', description: 'Final charge, or the estimate if not yet finalised.', numeric: true),
+      ReportColumn('Referred', description: 'Y only if the trip completed and GNN LLC referred it (commission was actually charged).'),
+      ReportColumn('Fare', description: 'Charged fare for a completed trip; the quote for anything else.', numeric: true),
     ],
     rows: [
       for (final r in rows)
         [
           _d(r.completedAt ?? r.requestedAt),
           shortTripId(r.tripId),
+          _reportStatusLabel(r.status),
           r.customerName ?? '',
           r.driverName ?? '',
           _route(r.pickupAddress, r.dropoffAddress),
-          r.referred ? 'Y' : '',
+          (r.referred && r.status == 'TRIP_COMPLETED') ? 'Y' : '',
           m(r.fare),
         ],
     ],
-    totals: ['TOTAL', '', '', '', '', '', m(charged)],
-    notes: const [
-      'Fares are the passengers\' payments to the drivers (the drivers\' turnover), shown per trip for reference.',
-      'The Referred column marks the jobs GNN LLC referred, which are the ones that carry commission.',
+    totals: ['TOTAL (completed only)', '', '', '', '', '', '', m(charged)],
+    notes: [
+      "Fares are the passengers' payments to the drivers (the drivers' turnover), shown per trip for reference.",
+      'The Referred column marks completed jobs GNN LLC referred — the only ones that ever actually carried commission.',
+      'Only completed trips count toward the Fare total. Cancelled, timed-out and in-progress trips are listed above for visibility but never charged anything, so they are excluded from the total.',
+      if (notCompleted.isNotEmpty)
+        '${notCompleted.length} trip(s) in this period were not completed (quoted total ${m(notCompletedFare)}, not part of TOTAL).',
     ],
   );
 }
