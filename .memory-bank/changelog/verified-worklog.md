@@ -692,6 +692,21 @@ busy/cancelled, amber pip = reserved, blue = searching) is a separate,
 deliberate `Colors.green`/`Colors.red` used directly in each screen and was
 left untouched — those mean something specific and aren't the brand colour.
 
+**Follow-up, same day: amber text on white is a real contrast failure.**
+`TextButton`/`OutlinedButton` default their *text* to `colorScheme.primary`
+too — fine as a button background, a genuine readability problem as text on
+a plain white surface (every "Sign up", "Drive with us", "Turn it down",
+"Read the terms" link came out amber-on-white, close to unreadable on a
+bright screen). Fixed at the theme level rather than per screen:
+`textButtonTheme`/`outlinedButtonTheme` now force black, bold text (and a
+neutral `Colors.black54` border for the outlined variant) — every call site
+in the app inherits this automatically, nothing to hunt down screen by
+screen. Checked the handful of places that read `colorScheme.primary`
+directly (`_ActionCard`'s icon-in-a-tinted-circle, `trip_timeline`'s rail
+dot, the map polyline, the "my driver" car-marker pip, the driver photo's
+edit-button circle) — none of them tint actual paragraph text, they're
+icons/fills/decorative dots, so none needed the same fix.
+
 ### Defined-but-dead: the standing list (start here for "what else is stubbed")
 This category was surfaced late — a fair complaint. It tracks schema/columns
 defined since an early phase that nothing at runtime actually writes or reads,

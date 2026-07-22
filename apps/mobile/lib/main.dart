@@ -34,6 +34,25 @@ class NhTaxiApp extends ConsumerWidget {
           onPrimary: Colors.black,
         ),
         useMaterial3: true,
+        // TextButton/OutlinedButton default their text to colorScheme.primary
+        // — fine as a button *background* (FilledButton, above), a genuine
+        // readability problem as *text on a plain white surface* (amber on
+        // white fails contrast badly, worse on a bright screen). Every link
+        // ("Sign up", "Drive with us", "Turn it down", ...) is black and bold
+        // instead: amber stays confined to solid fills, not text.
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.black,
+            textStyle: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.black,
+            side: const BorderSide(color: Colors.black54),
+            textStyle: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
       ),
       routerConfig: ref.watch(routerProvider),
     );
