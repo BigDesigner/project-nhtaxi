@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { and, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import {
   AdminCreateTripRequestSchema,
@@ -11,9 +11,13 @@ import {
   AdminUserSchema,
   AdminVerifyDriverRequestSchema,
   SetTripReferralRequestSchema,
+  AdminDriverEarningsQuerySchema,
+  AdminDriverEarningsRowSchema,
   AuditLogEntrySchema,
   AuditLogQuerySchema,
   AuthResponseSchema,
+  FinancialSummaryQuerySchema,
+  FinancialSummaryResponseSchema,
   CitySchema,
   CreateCityRequestSchema,
   DriverBalanceReportRowSchema,
@@ -67,6 +71,20 @@ import { toDocumentResponse } from "./driver_profile";
 import { toTripResponse } from "./trips";
 
 const admin = new OpenAPIHono<AppBindings>();
+
+// A spreadsheet-ready file response — the report rows plus a dated filename so
+// downloads don't all collide as "report.csv". The Flutter admin builds its
+// own richly-formatted CSV/PDF client-side; this is the raw API export for
+// curl/accounting-tool imports.
+function csvResponse(rows: Record<string, unknown>[], name: string): Response {
+  return new Response(toCsv(rows), {
+    status: 200,
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${name}-${new Date().toISOString().slice(0, 10)}.csv"`,
+    },
+  });
+}
 
 // ─── POST /bootstrap — create the first admin, self-locking ───────────────
 // There's no self-service admin sign-up (L15/L16) and no CLI/SQL should be
@@ -1171,13 +1189,21 @@ const driverBalancesRoute = createRoute({
   method: "get",
   path: "/reports/driver-balances",
   tags: ["admin"],
-  summary: "Pending balance owed per driver — usage fee + commission, minus cash already collected",
+  summary: "Pending balance owed per driver — usage fee + commission, minus cash already collected. JSON or CSV",
+  request: { query: z.object({ format: z.enum(["json", "csv"]).default("json") }) },
   responses: {
-    200: { description: "Balances", content: { "application/json": { schema: z.array(DriverBalanceReportRowSchema) } } },
+    200: {
+      description: "Balances (JSON by default) or a CSV file with ?format=csv",
+      content: {
+        "application/json": { schema: z.array(DriverBalanceReportRowSchema) },
+        "text/csv": { schema: z.string() },
+      },
+    },
   },
 });
 
 admin.openapi(driverBalancesRoute, async (c) => {
+  const { format } = c.req.valid("query");
   const db = createDb(c.env.DB);
 
   const drivers = await db
@@ -1200,6 +1226,9 @@ admin.openapi(driverBalancesRoute, async (c) => {
     });
   }
 
+  if (format === "csv") {
+    return csvResponse(rows, "driver-balances");
+  }
   return c.json(rows, 200);
 });
 
@@ -1283,12 +1312,15 @@ const driverCommissionsReportRoute = createRoute({
   method: "get",
   path: "/reports/driver-commissions",
   tags: ["admin"],
-  summary: "Commission charges from admin-assigned trips — filterable by driver/date range",
+  summary: "Commission charges from admin-assigned trips — filterable by driver/date range. JSON or CSV",
   request: { query: DriverCommissionQuerySchema },
   responses: {
     200: {
-      description: "Commission charges",
-      content: { "application/json": { schema: z.array(DriverCommissionChargeSchema) } },
+      description: "Commission charges (JSON by default) or a CSV file with ?format=csv",
+      content: {
+        "application/json": { schema: z.array(DriverCommissionChargeSchema) },
+        "text/csv": { schema: z.string() },
+      },
     },
   },
 });
@@ -1322,17 +1354,199 @@ admin.openapi(driverCommissionsReportRoute, async (c) => {
     .limit(query.limit)
     .offset(query.offset);
 
+  const reportRows = rows.map((r) => ({
+    id: r.id,
+    driverId: r.driverId,
+    driverName: `${r.driverFirstName} ${r.driverLastName}`,
+    tripId: r.tripId,
+    fare: r.fareCents / 100,
+    commissionPercent: r.commissionPercent,
+    commission: r.commissionCents / 100,
+    createdAt: r.createdAt.toISOString(),
+  }));
+
+  if (query.format === "csv") {
+    return csvResponse(reportRows, "driver-commissions");
+  }
+  return c.json(reportRows, 200);
+});
+
+// ─── GET /reports/driver-earnings — per-driver completed-fare totals ───────
+// The office-side mirror of the driver's own /driver/earnings: one totals row
+// per driver so an admin can run the whole fleet, or hand a single driver
+// their figure for a meeting (?driverId=). This is the *driver's* turnover
+// (what passengers paid them) — GNN's own cut lives in the other reports.
+const earningsDriverUser = alias(usersTable, "earnings_driver_user");
+
+const adminDriverEarningsRoute = createRoute({
+  method: "get",
+  path: "/reports/driver-earnings",
+  tags: ["admin"],
+  summary: "Completed-fare earnings per driver — the whole fleet, or one driver with ?driverId",
+  request: { query: AdminDriverEarningsQuerySchema },
+  responses: {
+    200: { description: "Earnings rows", content: { "application/json": { schema: z.array(AdminDriverEarningsRowSchema) } } },
+  },
+});
+
+admin.openapi(adminDriverEarningsRoute, async (c) => {
+  const query = c.req.valid("query");
+  const db = createDb(c.env.DB);
+
+  const conditions = [eq(tripsTable.status, "TRIP_COMPLETED")];
+  if (query.driverId) conditions.push(eq(tripsTable.driverId, query.driverId));
+  if (query.from) conditions.push(gte(tripsTable.completedAt, query.from));
+  if (query.to) conditions.push(lte(tripsTable.completedAt, query.to));
+
+  const rows = await db
+    .select({
+      driverId: tripsTable.driverId,
+      driverFirstName: earningsDriverUser.firstName,
+      driverLastName: earningsDriverUser.lastName,
+      tripCount: sql<number>`count(*)`,
+      totalCents: sql<number>`coalesce(sum(${tripsTable.finalFareCents}), 0)`,
+      currency: sql<string>`coalesce(max(${tripsTable.currency}), 'USD')`,
+    })
+    .from(tripsTable)
+    .innerJoin(driverProfilesTable, eq(tripsTable.driverId, driverProfilesTable.id))
+    .innerJoin(earningsDriverUser, eq(driverProfilesTable.userId, earningsDriverUser.id))
+    .where(and(...conditions))
+    .groupBy(tripsTable.driverId, earningsDriverUser.firstName, earningsDriverUser.lastName)
+    .orderBy(desc(sql`sum(${tripsTable.finalFareCents})`));
+
   return c.json(
     rows.map((r) => ({
-      id: r.id,
-      driverId: r.driverId,
+      driverId: r.driverId!,
       driverName: `${r.driverFirstName} ${r.driverLastName}`,
-      tripId: r.tripId,
-      fare: r.fareCents / 100,
-      commissionPercent: r.commissionPercent,
-      commission: r.commissionCents / 100,
-      createdAt: r.createdAt.toISOString(),
+      tripCount: r.tripCount,
+      totalEarnings: r.totalCents / 100,
+      currency: r.currency,
     })),
+    200
+  );
+});
+
+// ─── GET /reports/financial-summary — period totals for tax filing ─────────
+// GNN LLC's income is rent (usage fees) + commission; the gross fares the
+// passengers paid are the drivers' turnover, not GNN's, so they sit in a
+// separate informational block. Every figure sums over [from, to]; omit
+// either bound for an open-ended range. Aggregated in four grouped queries
+// (usage / commission / collected / fares), then merged per driver.
+const financialSummaryRoute = createRoute({
+  method: "get",
+  path: "/reports/financial-summary",
+  tags: ["admin"],
+  summary: "Period financial summary — GNN income (rent + commission), cash collected, and gross fares",
+  request: { query: FinancialSummaryQuerySchema },
+  responses: {
+    200: { description: "Summary", content: { "application/json": { schema: FinancialSummaryResponseSchema } } },
+  },
+});
+
+admin.openapi(financialSummaryRoute, async (c) => {
+  const query = c.req.valid("query");
+  const db = createDb(c.env.DB);
+
+  const between = (col: Parameters<typeof gte>[0]) => {
+    const cs = [];
+    if (query.from) cs.push(gte(col, query.from));
+    if (query.to) cs.push(lte(col, query.to));
+    return cs;
+  };
+
+  // Usage fees (rent) — closed, priced sessions only.
+  const usageRows = await db
+    .select({
+      driverId: driverSessionsTable.driverId,
+      cents: sql<number>`coalesce(sum(${driverSessionsTable.chargeCents}), 0)`,
+    })
+    .from(driverSessionsTable)
+    .where(and(isNotNull(driverSessionsTable.chargeCents), ...between(driverSessionsTable.endedAt)))
+    .groupBy(driverSessionsTable.driverId);
+
+  const commissionRows = await db
+    .select({
+      driverId: driverTripCommissionsTable.driverId,
+      cents: sql<number>`coalesce(sum(${driverTripCommissionsTable.commissionCents}), 0)`,
+    })
+    .from(driverTripCommissionsTable)
+    .where(between(driverTripCommissionsTable.createdAt).length ? and(...between(driverTripCommissionsTable.createdAt)) : undefined)
+    .groupBy(driverTripCommissionsTable.driverId);
+
+  const collectionRows = await db
+    .select({
+      driverId: driverCashCollectionsTable.driverId,
+      cents: sql<number>`coalesce(sum(${driverCashCollectionsTable.amountCents}), 0)`,
+    })
+    .from(driverCashCollectionsTable)
+    .where(between(driverCashCollectionsTable.collectedAt).length ? and(...between(driverCashCollectionsTable.collectedAt)) : undefined)
+    .groupBy(driverCashCollectionsTable.driverId);
+
+  const fareRows = await db
+    .select({
+      driverId: tripsTable.driverId,
+      cents: sql<number>`coalesce(sum(${tripsTable.finalFareCents}), 0)`,
+      count: sql<number>`count(*)`,
+    })
+    .from(tripsTable)
+    .where(and(eq(tripsTable.status, "TRIP_COMPLETED"), ...between(tripsTable.completedAt)))
+    .groupBy(tripsTable.driverId);
+
+  // Names for every driver that appears in any bucket.
+  const nameRows = await db
+    .select({ id: driverProfilesTable.id, firstName: usersTable.firstName, lastName: usersTable.lastName })
+    .from(driverProfilesTable)
+    .innerJoin(usersTable, eq(driverProfilesTable.userId, usersTable.id));
+  const names = new Map(nameRows.map((n) => [n.id, `${n.firstName} ${n.lastName}`]));
+
+  type Acc = { usage: number; commission: number; collected: number; fares: number; trips: number };
+  const perDriver = new Map<string, Acc>();
+  const bump = (id: string | null, patch: Partial<Acc>) => {
+    if (!id) return;
+    const cur = perDriver.get(id) ?? { usage: 0, commission: 0, collected: 0, fares: 0, trips: 0 };
+    perDriver.set(id, {
+      usage: cur.usage + (patch.usage ?? 0),
+      commission: cur.commission + (patch.commission ?? 0),
+      collected: cur.collected + (patch.collected ?? 0),
+      fares: cur.fares + (patch.fares ?? 0),
+      trips: cur.trips + (patch.trips ?? 0),
+    });
+  };
+  for (const r of usageRows) bump(r.driverId, { usage: r.cents });
+  for (const r of commissionRows) bump(r.driverId, { commission: r.cents });
+  for (const r of collectionRows) bump(r.driverId, { collected: r.cents });
+  for (const r of fareRows) bump(r.driverId, { fares: r.cents, trips: r.count });
+
+  const drivers = [...perDriver.entries()]
+    .map(([driverId, a]) => ({
+      driverId,
+      driverName: names.get(driverId) ?? "Unknown",
+      usageFeesCharged: a.usage / 100,
+      commissionCharged: a.commission / 100,
+      gnnRevenue: (a.usage + a.commission) / 100,
+      cashCollected: a.collected / 100,
+      completedTripCount: a.trips,
+      grossFares: a.fares / 100,
+    }))
+    .sort((x, y) => y.gnnRevenue - x.gnnRevenue);
+
+  const sum = (pick: (a: Acc) => number) => [...perDriver.values()].reduce((s, a) => s + pick(a), 0);
+  const usageTotal = sum((a) => a.usage);
+  const commissionTotal = sum((a) => a.commission);
+
+  return c.json(
+    {
+      from: query.from ? query.from.toISOString() : null,
+      to: query.to ? query.to.toISOString() : null,
+      currency: "USD",
+      usageFeesCharged: usageTotal / 100,
+      commissionCharged: commissionTotal / 100,
+      gnnGrossRevenue: (usageTotal + commissionTotal) / 100,
+      cashCollected: sum((a) => a.collected) / 100,
+      completedTripCount: sum((a) => a.trips),
+      grossFares: sum((a) => a.fares) / 100,
+      drivers,
+    },
     200
   );
 });

@@ -82,3 +82,64 @@ export const DriverEarningsSummarySchema = z
     trips: z.array(DriverEarningsTripSchema),
   })
   .openapi("DriverEarningsSummary");
+
+// ─── Admin: earnings across drivers (bulk + individual) ────────────────────
+// The mirror of DriverEarningsSummary but for the office: one totals row per
+// driver, so an admin can hand a driver their figure at a meeting or run the
+// whole fleet at once. `driverId` narrows it to a single driver.
+export const AdminDriverEarningsQuerySchema = z.object({
+  driverId: z.string().uuid().optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+});
+
+export const AdminDriverEarningsRowSchema = z
+  .object({
+    driverId: z.string(),
+    driverName: z.string(),
+    tripCount: z.number().int(),
+    totalEarnings: z.number(),
+    currency: z.string(),
+  })
+  .openapi("AdminDriverEarningsRow");
+
+// ─── Period financial summary (the tax-filing backbone) ────────────────────
+// GNN LLC's own income is rent (usage fees) + commission; the gross fares
+// passengers paid belong to the drivers, not GNN, so they sit in a separate
+// informational block. Every figure is a sum over [from, to] (omit either for
+// an open-ended range).
+export const FinancialSummaryQuerySchema = z.object({
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+});
+
+// Per-driver contribution to the period, so the totals can be traced to a name.
+export const FinancialSummaryRowSchema = z
+  .object({
+    driverId: z.string(),
+    driverName: z.string(),
+    usageFeesCharged: z.number(),
+    commissionCharged: z.number(),
+    gnnRevenue: z.number(),
+    cashCollected: z.number(),
+    completedTripCount: z.number().int(),
+    grossFares: z.number(),
+  })
+  .openapi("FinancialSummaryRow");
+
+export const FinancialSummaryResponseSchema = z
+  .object({
+    from: z.string().nullable(),
+    to: z.string().nullable(),
+    currency: z.string(),
+    // GNN LLC income
+    usageFeesCharged: z.number(),
+    commissionCharged: z.number(),
+    gnnGrossRevenue: z.number(),
+    cashCollected: z.number(),
+    // Informational — the drivers' own turnover, not GNN's money
+    completedTripCount: z.number().int(),
+    grossFares: z.number(),
+    drivers: z.array(FinancialSummaryRowSchema),
+  })
+  .openapi("FinancialSummaryResponse");

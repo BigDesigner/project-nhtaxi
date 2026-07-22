@@ -165,6 +165,62 @@ describe("GET /api/admin/reports/trips", () => {
   });
 });
 
+describe("GET /api/admin/reports/driver-earnings", () => {
+  it("totals completed fares per driver, filterable to one driver", async () => {
+    const { pickup, dropoff } = region(48.0);
+    const adminJar = await createAdminSession();
+    const driver = await registerAvailableNearbyDriver(uniqueEmail("earn-driver"), pickup.pickupLat, pickup.pickupLng);
+    const passengerJar = await registerPassenger(uniqueEmail("earn-passenger"));
+    const completed = await completeTrip(driver.jar, passengerJar, pickup, dropoff);
+
+    const res = await req(`/api/admin/reports/driver-earnings?driverId=${driver.driverProfileId}`, {
+      headers: { Cookie: adminJar.header() },
+    });
+    expect(res.status).toBe(200);
+    const rows = await readJson(res);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].driverId).toBe(driver.driverProfileId);
+    expect(rows[0].driverName).toBe("Dan Driver");
+    expect(rows[0].tripCount).toBe(1);
+    expect(rows[0].totalEarnings).toBeCloseTo(completed.finalFare);
+  });
+});
+
+describe("GET /api/admin/reports/financial-summary", () => {
+  it("sums GNN income and gross fares over the period, with cash collected", async () => {
+    const { pickup, dropoff } = region(49.0);
+    const adminJar = await createAdminSession();
+    const driver = await registerAvailableNearbyDriver(uniqueEmail("fin-driver"), pickup.pickupLat, pickup.pickupLng);
+    const passengerJar = await registerPassenger(uniqueEmail("fin-passenger"));
+    const completed = await completeTrip(driver.jar, passengerJar, pickup, dropoff);
+
+    // A cash collection so cashCollected is non-zero and traceable to this driver.
+    const collectRes = await req(`/api/admin/drivers/${driver.driverProfileId}/collections`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...adminJar.csrfHeaders() },
+      body: JSON.stringify({ amount: 20 }),
+    });
+    expect(collectRes.status).toBe(201);
+
+    const res = await req(`/api/admin/reports/financial-summary`, { headers: { Cookie: adminJar.header() } });
+    expect(res.status).toBe(200);
+    const summary = await readJson(res);
+
+    const row = summary.drivers.find((d: any) => d.driverId === driver.driverProfileId);
+    expect(row).toBeTruthy();
+    expect(row.completedTripCount).toBe(1);
+    expect(row.grossFares).toBeCloseTo(completed.finalFare);
+    expect(row.cashCollected).toBeCloseTo(20);
+    // No admin-assigned commission and no closed/charged session in this flow,
+    // so GNN's own cut on this driver is zero — the fare is the driver's money.
+    expect(row.gnnRevenue).toBe(0);
+
+    // Fleet totals include at least this driver's contribution (shared D1).
+    expect(summary.grossFares).toBeGreaterThanOrEqual(completed.finalFare - 0.001);
+    expect(summary.cashCollected).toBeGreaterThanOrEqual(20);
+  });
+});
+
 describe("GET /api/admin/audit-logs", () => {
   it("records and lists a trip's audit trail, filterable by action", async () => {
     const { pickup, dropoff } = region(47.0);

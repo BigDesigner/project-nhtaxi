@@ -389,6 +389,117 @@ class CommissionCharge {
       );
 }
 
+/// One driver's completed-fare total (GET /api/admin/reports/driver-earnings).
+/// This is the driver's own turnover — what passengers paid them — which the
+/// office can hand a driver for their tax record.
+class AdminDriverEarningsRow {
+  const AdminDriverEarningsRow({
+    required this.driverId,
+    required this.driverName,
+    required this.tripCount,
+    required this.totalEarnings,
+    required this.currency,
+  });
+
+  final String driverId;
+  final String driverName;
+  final int tripCount;
+  final double totalEarnings;
+  final String currency;
+
+  factory AdminDriverEarningsRow.fromJson(Map<String, dynamic> json) => AdminDriverEarningsRow(
+        driverId: json['driverId'] as String,
+        driverName: json['driverName'] as String? ?? 'Unknown',
+        tripCount: (json['tripCount'] as num?)?.toInt() ?? 0,
+        totalEarnings: (json['totalEarnings'] as num?)?.toDouble() ?? 0,
+        currency: json['currency'] as String? ?? 'USD',
+      );
+}
+
+/// A single driver's contribution to a period's financial summary.
+class FinancialSummaryRow {
+  const FinancialSummaryRow({
+    required this.driverId,
+    required this.driverName,
+    required this.usageFeesCharged,
+    required this.commissionCharged,
+    required this.gnnRevenue,
+    required this.cashCollected,
+    required this.completedTripCount,
+    required this.grossFares,
+  });
+
+  final String driverId;
+  final String driverName;
+  final double usageFeesCharged;
+  final double commissionCharged;
+
+  /// GNN LLC's own income from this driver: rent + commission.
+  final double gnnRevenue;
+  final double cashCollected;
+  final int completedTripCount;
+
+  /// The driver's turnover (passenger-paid fares) — informational, not GNN's.
+  final double grossFares;
+
+  factory FinancialSummaryRow.fromJson(Map<String, dynamic> json) => FinancialSummaryRow(
+        driverId: json['driverId'] as String,
+        driverName: json['driverName'] as String? ?? 'Unknown',
+        usageFeesCharged: (json['usageFeesCharged'] as num?)?.toDouble() ?? 0,
+        commissionCharged: (json['commissionCharged'] as num?)?.toDouble() ?? 0,
+        gnnRevenue: (json['gnnRevenue'] as num?)?.toDouble() ?? 0,
+        cashCollected: (json['cashCollected'] as num?)?.toDouble() ?? 0,
+        completedTripCount: (json['completedTripCount'] as num?)?.toInt() ?? 0,
+        grossFares: (json['grossFares'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+/// Period totals for tax filing (GET /api/admin/reports/financial-summary).
+/// GNN LLC's income (rent + commission) is kept apart from the gross fares,
+/// which belong to the drivers, not GNN.
+class FinancialSummary {
+  const FinancialSummary({
+    required this.from,
+    required this.to,
+    required this.currency,
+    required this.usageFeesCharged,
+    required this.commissionCharged,
+    required this.gnnGrossRevenue,
+    required this.cashCollected,
+    required this.completedTripCount,
+    required this.grossFares,
+    required this.drivers,
+  });
+
+  final DateTime? from;
+  final DateTime? to;
+  final String currency;
+  final double usageFeesCharged;
+  final double commissionCharged;
+
+  /// The headline for GNN's books: usage fees + commission over the period.
+  final double gnnGrossRevenue;
+  final double cashCollected;
+  final int completedTripCount;
+  final double grossFares;
+  final List<FinancialSummaryRow> drivers;
+
+  factory FinancialSummary.fromJson(Map<String, dynamic> json) => FinancialSummary(
+        from: json['from'] == null ? null : DateTime.parse(json['from'] as String),
+        to: json['to'] == null ? null : DateTime.parse(json['to'] as String),
+        currency: json['currency'] as String? ?? 'USD',
+        usageFeesCharged: (json['usageFeesCharged'] as num?)?.toDouble() ?? 0,
+        commissionCharged: (json['commissionCharged'] as num?)?.toDouble() ?? 0,
+        gnnGrossRevenue: (json['gnnGrossRevenue'] as num?)?.toDouble() ?? 0,
+        cashCollected: (json['cashCollected'] as num?)?.toDouble() ?? 0,
+        completedTripCount: (json['completedTripCount'] as num?)?.toInt() ?? 0,
+        grossFares: (json['grossFares'] as num?)?.toDouble() ?? 0,
+        drivers: ((json['drivers'] as List<dynamic>?) ?? [])
+            .map((e) => FinancialSummaryRow.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
 /// A place the business serves (GET/POST /api/admin/cities).
 class City {
   const City({

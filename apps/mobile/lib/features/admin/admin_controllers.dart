@@ -74,6 +74,37 @@ final cashCollectionsProvider = FutureProvider<List<CashCollection>>((ref) async
   return raw.map((e) => CashCollection.fromJson(e as Map<String, dynamic>)).toList();
 });
 
+/// A reporting period. Null bounds mean open-ended; used as the family key for
+/// the period-scoped reports so each range is cached separately.
+typedef ReportPeriod = ({DateTime? from, DateTime? to});
+
+Map<String, dynamic>? _periodQuery(ReportPeriod p) {
+  final q = <String, dynamic>{};
+  if (p.from != null) q['from'] = p.from!.toUtc().toIso8601String();
+  if (p.to != null) q['to'] = p.to!.toUtc().toIso8601String();
+  return q.isEmpty ? null : q;
+}
+
+/// Period financial summary — GNN income (rent + commission), cash collected,
+/// and gross fares. The backbone of the tax-filing export.
+final financialSummaryProvider =
+    FutureProvider.family<FinancialSummary, ReportPeriod>((ref, period) async {
+  final raw = await ref
+      .read(apiClientProvider)
+      .get('/api/admin/reports/financial-summary', query: _periodQuery(period));
+  return FinancialSummary.fromJson(raw);
+});
+
+/// Completed-fare earnings per driver — the drivers' own turnover, for handing
+/// a driver their figure or running the whole fleet.
+final adminDriverEarningsProvider =
+    FutureProvider.family<List<AdminDriverEarningsRow>, ReportPeriod>((ref, period) async {
+  final raw = await ref
+      .read(apiClientProvider)
+      .getList('/api/admin/reports/driver-earnings', query: _periodQuery(period));
+  return raw.map((e) => AdminDriverEarningsRow.fromJson(e as Map<String, dynamic>)).toList();
+});
+
 /// Records cash a driver has physically handed over.
 ///
 /// This is the only way a balance ever goes down, so it invalidates both the

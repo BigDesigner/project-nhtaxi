@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/fare_range.dart';
+import '../../core/report_export.dart';
+import '../../core/report_tables.dart';
 import '../../models/admin.dart';
 import '../../widgets/error_banner.dart';
+import '../../widgets/report_export_sheet.dart';
 import 'admin_controllers.dart';
 
 /// What the drivers collectively owe, and what's been collected.
@@ -32,6 +35,8 @@ class AdminMoneyTab extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const _ExportCard(),
+          const SizedBox(height: 24),
           switch (balances) {
             AsyncLoading() => const Padding(
                 padding: EdgeInsets.symmetric(vertical: 32),
@@ -147,6 +152,184 @@ class _Outstanding extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// The export hub: pick a period, then download any money report as a
+/// formatted PDF or a spreadsheet CSV. The period applies to the two
+/// period-scoped reports (financial summary, driver earnings); balances and
+/// the logs are point-in-time / all-time and ignore it.
+class _ExportCard extends ConsumerStatefulWidget {
+  const _ExportCard();
+
+  @override
+  ConsumerState<_ExportCard> createState() => _ExportCardState();
+}
+
+class _ExportCardState extends ConsumerState<_ExportCard> {
+  DateTime? _from;
+  DateTime? _to;
+  bool _busy = false;
+
+  ReportPeriod get _period => (from: _from, to: _to);
+
+  Future<void> _pick({required bool isFrom}) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: (isFrom ? _from : _to) ?? now,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 1),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isFrom) {
+        _from = DateTime(picked.year, picked.month, picked.day);
+      } else {
+        // Include the whole chosen day.
+        _to = DateTime(picked.year, picked.month, picked.day, 23, 59, 59);
+      }
+    });
+  }
+
+  /// Fetches (if needed), builds the report, and opens the PDF/CSV chooser.
+  /// A single guard stops a second tap while a fetch is in flight.
+  Future<void> _export(Future<ReportTable> Function() build) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final table = await build();
+      if (!mounted) return;
+      await showReportExportSheet(context, table);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not build report: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _label(DateTime? d) => d == null ? 'Any' : '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.download_outlined),
+                const SizedBox(width: 8),
+                Text('Export reports', style: Theme.of(context).textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Download any figure as a formatted PDF or a CSV for accounting and tax filing.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            // The period for the summary + earnings reports.
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.event, size: 18),
+                    label: Text('From: ${_label(_from)}'),
+                    onPressed: () => _pick(isFrom: true),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.event, size: 18),
+                    label: Text('To: ${_label(_to)}'),
+                    onPressed: () => _pick(isFrom: false),
+                  ),
+                ),
+              ],
+            ),
+            if (_from != null || _to != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => setState(() {
+                    _from = null;
+                    _to = null;
+                  }),
+                  child: const Text('Clear dates'),
+                ),
+              ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.tonalIcon(
+                  icon: const Icon(Icons.summarize_outlined, size: 18),
+                  label: const Text('Financial summary'),
+                  onPressed: _busy
+                      ? null
+                      : () => _export(() async {
+                            final s = await ref.read(financialSummaryProvider(_period).future);
+                            return financialSummaryTable(s, from: _from, to: _to);
+                          }),
+                ),
+                FilledButton.tonalIcon(
+                  icon: const Icon(Icons.person_outline, size: 18),
+                  label: const Text('Driver earnings'),
+                  onPressed: _busy
+                      ? null
+                      : () => _export(() async {
+                            final rows = await ref.read(adminDriverEarningsProvider(_period).future);
+                            return adminDriverEarningsTable(rows, from: _from, to: _to);
+                          }),
+                ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
+                  label: const Text('Balances'),
+                  onPressed: _busy
+                      ? null
+                      : () => _export(() async {
+                            final rows = await ref.read(driverBalancesProvider.future);
+                            return driverBalancesTable(rows);
+                          }),
+                ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.handshake_outlined, size: 18),
+                  label: const Text('Commissions'),
+                  onPressed: _busy
+                      ? null
+                      : () => _export(() async {
+                            final rows = await ref.read(commissionChargesProvider.future);
+                            return commissionsTable(rows);
+                          }),
+                ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.payments_outlined, size: 18),
+                  label: const Text('Collections'),
+                  onPressed: _busy
+                      ? null
+                      : () => _export(() async {
+                            final rows = await ref.read(cashCollectionsProvider.future);
+                            return collectionsTable(rows);
+                          }),
+                ),
+              ],
+            ),
+            if (_busy)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: LinearProgressIndicator(),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

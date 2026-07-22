@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/fare_range.dart';
+import '../../core/report_tables.dart';
 import '../../models/driver_billing.dart';
 import '../../widgets/error_banner.dart';
 import '../../widgets/help_card.dart';
+import '../../widgets/report_export_sheet.dart';
 import 'driver_controllers.dart';
 
 /// What the driver owes GNN LLC, and the hours behind it.
@@ -50,6 +52,20 @@ class DriverEarningsTab extends ConsumerWidget {
             AsyncError() => const SizedBox.shrink(),
             AsyncData(:final value) => _EarningsCard(earnings: value),
           },
+          // A driver's earnings are their own income to declare, so they can
+          // take a copy without going through the office.
+          if (earnings.hasValue && earnings.value!.trips.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.download_outlined, size: 18),
+              label: const Text('Export my earnings (PDF / CSV)'),
+              onPressed: () async {
+                final name = ref.read(driverProfileProvider).value?.fullName ?? 'Driver';
+                final table = driverOwnEarningsTable(earnings.value!, driverName: name);
+                await showReportExportSheet(context, table);
+              },
+            ),
+          ],
           const SizedBox(height: 24),
           Text('When you were online', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),

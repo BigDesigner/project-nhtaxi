@@ -71,6 +71,7 @@ export const DriverCommissionQuerySchema = z.object({
   driverId: z.string().uuid().optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
+  format: z.enum(["json", "csv"]).default("json"),
   limit: z.coerce.number().int().min(1).max(500).default(100),
   offset: z.coerce.number().int().min(0).default(0),
 });
