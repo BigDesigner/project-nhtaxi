@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { and, desc, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, like, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import {
   AdminCreateTripRequestSchema,
@@ -13,6 +13,7 @@ import {
   SetTripReferralRequestSchema,
   AdminDriverEarningsQuerySchema,
   AdminDriverEarningsRowSchema,
+  AdminTripLookupQuerySchema,
   AuditLogEntrySchema,
   AuditLogQuerySchema,
   AuthResponseSchema,
@@ -918,6 +919,8 @@ admin.openapi(tripReportRoute, async (c) => {
       customerFirstName: customerUser.firstName,
       customerLastName: customerUser.lastName,
       referralSource: tripsTable.referralSource,
+      pickupAddress: tripsTable.pickupAddress,
+      dropoffAddress: tripsTable.dropoffAddress,
       distanceMiles: tripsTable.distanceMiles,
       estimatedFareCents: tripsTable.estimatedFareCents,
       finalFareCents: tripsTable.finalFareCents,
@@ -943,6 +946,8 @@ admin.openapi(tripReportRoute, async (c) => {
     customerId: r.customerId,
     customerName: `${r.customerFirstName} ${r.customerLastName}`,
     referralSource: r.referralSource,
+    pickupAddress: r.pickupAddress,
+    dropoffAddress: r.dropoffAddress,
     distanceMiles: r.distanceMiles,
     estimatedFare: r.estimatedFareCents != null ? r.estimatedFareCents / 100 : null,
     finalFare: r.finalFareCents != null ? r.finalFareCents / 100 : null,
@@ -960,6 +965,61 @@ admin.openapi(tripReportRoute, async (c) => {
     });
   }
   return c.json(reportRows, 200);
+});
+
+// ─── GET /trips/lookup — find a trip by id or short prefix ─────────────────
+// Powers the office's "give us your trip ID" support flow: a passenger or
+// driver reads out the 8-char code and the admin pulls the whole trip. Prefix
+// match, so the short code is enough; the id is sanitised to its own charset
+// (hex + hyphen) before it touches LIKE.
+const lookupDriverUser = alias(usersTable, "lookup_driver_user");
+const lookupCustomerUser = alias(usersTable, "lookup_customer_user");
+
+const tripLookupRoute = createRoute({
+  method: "get",
+  path: "/trips/lookup",
+  tags: ["admin"],
+  summary: "Find a trip by full id or short prefix (support lookup)",
+  request: { query: AdminTripLookupQuerySchema },
+  responses: {
+    200: { description: "Matching trips (usually one)", content: { "application/json": { schema: z.array(TripResponseSchema) } } },
+  },
+});
+
+admin.openapi(tripLookupRoute, async (c) => {
+  const { q } = c.req.valid("query");
+  const db = createDb(c.env.DB);
+
+  // A trip id is lowercase hex + hyphens; anything else can't be part of one,
+  // and dropping it also neutralises LIKE wildcards (% _) in one step.
+  const prefix = q.toLowerCase().replace(/[^0-9a-f-]/g, "");
+  if (prefix.length === 0) return c.json([], 200);
+
+  const rows = await db
+    .select({
+      trip: tripsTable,
+      driverFirst: lookupDriverUser.firstName,
+      driverLast: lookupDriverUser.lastName,
+      customerFirst: lookupCustomerUser.firstName,
+      customerLast: lookupCustomerUser.lastName,
+    })
+    .from(tripsTable)
+    .leftJoin(driverProfilesTable, eq(driverProfilesTable.id, tripsTable.driverId))
+    .leftJoin(lookupDriverUser, eq(lookupDriverUser.id, driverProfilesTable.userId))
+    .leftJoin(lookupCustomerUser, eq(lookupCustomerUser.id, tripsTable.customerId))
+    .where(like(tripsTable.id, `${prefix}%`))
+    .orderBy(desc(tripsTable.requestedAt))
+    .limit(10);
+
+  return c.json(
+    rows.map((r) =>
+      toTripResponse(r.trip, {
+        driverName: r.driverFirst ? `${r.driverFirst} ${r.driverLast}` : null,
+        customerName: r.customerFirst ? `${r.customerFirst} ${r.customerLast}` : (r.trip.guestName ?? null),
+      })
+    ),
+    200
+  );
 });
 
 // ─── GET /audit-logs — security/compliance trail (L16) ──────────────────────

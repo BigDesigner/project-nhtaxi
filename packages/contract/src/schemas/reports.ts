@@ -24,6 +24,8 @@ export const TripReportRowSchema = z
     customerId: z.string(),
     customerName: z.string(),
     referralSource: z.enum(REFERRAL_SOURCES),
+    pickupAddress: z.string().nullable(),
+    dropoffAddress: z.string().nullable(),
     distanceMiles: z.number().nullable(),
     estimatedFare: z.number().nullable(),
     finalFare: z.number().nullable(),
@@ -31,6 +33,14 @@ export const TripReportRowSchema = z
     paymentMethod: z.enum(PAYMENT_METHODS),
   })
   .openapi("TripReportRow");
+
+// ─── Admin trip lookup by id/prefix (support: "what's your trip ID?") ──────
+// Matches trips whose id starts with the query, so the short 8-char code
+// shown to passengers and drivers is enough. Near-always one hit; a prefix
+// collision simply returns both rather than guessing.
+export const AdminTripLookupQuerySchema = z.object({
+  q: z.string().min(1).max(64),
+});
 
 // ─── Admin audit log viewing (L16 — security reporting) ────────────────────
 export const AuditLogQuerySchema = z.object({
@@ -67,6 +77,11 @@ export const DriverEarningsTripSchema = z
   .object({
     tripId: z.string(),
     completedAt: z.string().nullable(),
+    // Who and where, so a driver's own earnings record reads like a logbook
+    // rather than a list of opaque IDs.
+    customerName: z.string().nullable(),
+    pickupAddress: z.string().nullable(),
+    dropoffAddress: z.string().nullable(),
     distanceMiles: z.number().nullable(),
     fare: z.number().nullable(),
     currency: z.string(),

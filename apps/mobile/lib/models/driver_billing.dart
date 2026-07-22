@@ -124,6 +124,9 @@ class EarnedTrip {
     required this.tripId,
     required this.currency,
     this.completedAt,
+    this.customerName,
+    this.pickupAddress,
+    this.dropoffAddress,
     this.distanceMiles,
     this.fare,
   });
@@ -131,6 +134,11 @@ class EarnedTrip {
   final String tripId;
   final String currency;
   final DateTime? completedAt;
+
+  /// Who and where, so the earnings export reads like a logbook.
+  final String? customerName;
+  final String? pickupAddress;
+  final String? dropoffAddress;
   final double? distanceMiles;
   final double? fare;
 
@@ -138,6 +146,9 @@ class EarnedTrip {
         tripId: json['tripId'] as String,
         currency: json['currency'] as String? ?? 'USD',
         completedAt: json['completedAt'] == null ? null : DateTime.parse(json['completedAt'] as String),
+        customerName: json['customerName'] as String?,
+        pickupAddress: json['pickupAddress'] as String?,
+        dropoffAddress: json['dropoffAddress'] as String?,
         distanceMiles: (json['distanceMiles'] as num?)?.toDouble(),
         fare: (json['fare'] as num?)?.toDouble(),
       );

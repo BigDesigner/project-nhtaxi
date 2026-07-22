@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gnncab/core/report_export.dart';
 import 'package:gnncab/core/report_tables.dart';
+import 'package:gnncab/core/trip_id.dart';
 import 'package:gnncab/models/admin.dart';
+import 'package:gnncab/models/driver_billing.dart';
 
 void main() {
   group('buildReportCsv', () {
@@ -72,6 +74,43 @@ void main() {
       expect(bytes.length, greaterThan(0));
       // Every PDF starts with the "%PDF" magic bytes.
       expect(String.fromCharCodes(bytes.take(4)), '%PDF');
+    });
+  });
+
+  group('shortTripId', () {
+    test('takes the first 8 characters of a UUID', () {
+      expect(shortTripId('5662e069-1a23-4d52-b7e4-ca829ad03465'), '5662e069');
+    });
+    test('leaves a shorter string untouched', () {
+      expect(shortTripId('abc'), 'abc');
+    });
+  });
+
+  group('driverOwnEarningsTable', () {
+    test('shows short IDs, passenger and route, not the raw UUID', () {
+      final earnings = DriverEarnings(
+        tripCount: 1,
+        totalEarnings: 12.5,
+        currency: 'USD',
+        trips: [
+          EarnedTrip(
+            tripId: '5662e069-1a23-4d52-b7e4-ca829ad03465',
+            currency: 'USD',
+            completedAt: DateTime.utc(2026, 7, 21),
+            customerName: 'Mustafa Gonen',
+            pickupAddress: 'Main St',
+            dropoffAddress: 'Mountain Rd',
+            fare: 12.5,
+          ),
+        ],
+      );
+      final table = driverOwnEarningsTable(earnings, driverName: 'Dan Driver');
+      expect(table.columns.map((c) => c.header), containsAll(['Passenger', 'Route']));
+      final row = table.rows.single;
+      expect(row, contains('5662e069'));
+      expect(row.every((cell) => !cell.contains('ca829ad03465')), isTrue);
+      expect(row, contains('Mustafa Gonen'));
+      expect(row.any((cell) => cell.contains('Main St') && cell.contains('Mountain Rd')), isTrue);
     });
   });
 

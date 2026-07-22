@@ -165,6 +165,36 @@ describe("GET /api/admin/reports/trips", () => {
   });
 });
 
+describe("GET /api/admin/trips/lookup", () => {
+  it("finds a trip by its short id prefix and returns the full detail", async () => {
+    const { pickup, dropoff } = region(50.0);
+    const adminJar = await createAdminSession();
+    const driver = await registerAvailableNearbyDriver(uniqueEmail("lookup-driver"), pickup.pickupLat, pickup.pickupLng);
+    const passengerJar = await registerPassenger(uniqueEmail("lookup-passenger"));
+    const completed = await completeTrip(driver.jar, passengerJar, pickup, dropoff);
+
+    const short = completed.id.slice(0, 8);
+    const res = await req(`/api/admin/trips/lookup?q=${short}`, { headers: { Cookie: adminJar.header() } });
+    expect(res.status).toBe(200);
+    const rows = await readJson(res);
+    const hit = rows.find((t: { id: string }) => t.id === completed.id);
+    expect(hit).toBeTruthy();
+    expect(hit.driverName).toBe("Dan Driver");
+    expect(hit.customerName).toBe("Pat Passenger");
+    expect(hit.pickupAddress).toBe(pickup.pickupAddress);
+  });
+
+  it("neutralises LIKE wildcards in the query (no injection match)", async () => {
+    const adminJar = await createAdminSession();
+    // '%' would match every trip if passed through raw; it's stripped to empty.
+    const res = await req(`/api/admin/trips/lookup?q=${encodeURIComponent("%")}`, {
+      headers: { Cookie: adminJar.header() },
+    });
+    expect(res.status).toBe(200);
+    expect(await readJson(res)).toEqual([]);
+  });
+});
+
 describe("GET /api/admin/reports/driver-earnings", () => {
   it("totals completed fares per driver, filterable to one driver", async () => {
     const { pickup, dropoff } = region(48.0);

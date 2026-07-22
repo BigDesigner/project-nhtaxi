@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
 import '../../core/fare_range.dart';
 import '../../models/admin.dart';
+import '../../models/trip.dart';
 import '../../widgets/error_banner.dart';
+import '../../widgets/trip_id_row.dart';
 import 'admin_controllers.dart';
 
 /// Live jobs first, history underneath, and the button for a phoned-in
@@ -28,6 +30,8 @@ class AdminTripsTab extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const _TripLookupCard(),
+          const SizedBox(height: 16),
           Card(
             child: ListTile(
               leading: CircleAvatar(
@@ -50,6 +54,132 @@ class AdminTripsTab extends ConsumerWidget {
             AsyncData(:final value) => _TripSections(trips: value),
           },
         ],
+      ),
+    );
+  }
+}
+
+/// Look up any trip by its ID or the short 8-char code a passenger/driver reads
+/// out. Prefix search, so the short code is enough; results show the full trip.
+class _TripLookupCard extends ConsumerStatefulWidget {
+  const _TripLookupCard();
+
+  @override
+  ConsumerState<_TripLookupCard> createState() => _TripLookupCardState();
+}
+
+class _TripLookupCardState extends ConsumerState<_TripLookupCard> {
+  final _controller = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _search() {
+    setState(() => _query = _controller.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final results = _query.isEmpty ? null : ref.watch(adminTripLookupProvider(_query));
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.search),
+                const SizedBox(width: 8),
+                Text('Find a trip by ID', style: Theme.of(context).textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Paste a full trip ID or the short code a passenger or driver gave you.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) => _search(),
+                    decoration: const InputDecoration(
+                      hintText: 'e.g. 5662e069',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(onPressed: _search, child: const Text('Search')),
+              ],
+            ),
+            if (results != null) ...[
+              const SizedBox(height: 12),
+              switch (results) {
+                AsyncLoading() => const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator())),
+                AsyncError(:final error) => ErrorBanner(message: error.toString()),
+                AsyncData(:final value) when value.isEmpty => Text(
+                    'No trip found for "$_query".',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                AsyncData(:final value) => Column(
+                    children: [for (final t in value) _TripLookupResult(trip: t)],
+                  ),
+              },
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One matched trip: who, where, when, how much, and its copyable ID.
+class _TripLookupResult extends StatelessWidget {
+  const _TripLookupResult({required this.trip});
+
+  final Trip trip;
+
+  @override
+  Widget build(BuildContext context) {
+    final route = trip.dropoffAddress == null
+        ? trip.pickupAddress
+        : '${trip.pickupAddress}\n→ ${trip.dropoffAddress}';
+    return Card(
+      margin: const EdgeInsets.only(top: 8),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(child: Text(trip.statusLabel, style: Theme.of(context).textTheme.titleSmall)),
+                if (trip.displayFare != null)
+                  Text(formatFare(trip.displayFare!, currency: trip.currency),
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('Passenger: ${trip.customerName ?? 'Unknown'}', style: Theme.of(context).textTheme.bodySmall),
+            Text('Driver: ${trip.driverName ?? 'Unassigned'}', style: Theme.of(context).textTheme.bodySmall),
+            Text(route, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 6),
+            TripIdRow(tripId: trip.id),
+          ],
+        ),
       ),
     );
   }
@@ -241,6 +371,10 @@ class _TripCardState extends ConsumerState<_TripCard> {
                 ],
               ],
             ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
+            child: TripIdRow(tripId: trip.tripId),
           ),
         ],
       ),

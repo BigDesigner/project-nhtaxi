@@ -16,6 +16,7 @@ import '../../widgets/error_banner.dart';
 import '../../widgets/help_card.dart';
 import '../../widgets/map_markers.dart';
 import '../../widgets/search_countdown.dart';
+import '../../widgets/trip_id_row.dart';
 import '../../widgets/trip_timeline.dart';
 import 'rating/rate_trip_screen.dart';
 import 'rating/rating_controller.dart';
@@ -282,6 +283,9 @@ class _TripDetail extends ConsumerWidget {
             title: 'Need to cancel?',
             message: 'Your driver is already on the way. Call dispatch and we will sort it out.',
           ),
+        const SizedBox(height: 16),
+        // The trip's reference, so a passenger reporting a problem can quote it.
+        TripIdRow(tripId: tripId),
       ],
     );
   }

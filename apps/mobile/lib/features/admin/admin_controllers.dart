@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
 import '../../models/admin.dart';
 import '../../models/driver_billing.dart';
+import '../../models/trip.dart';
 
 /// Everything the office reads and writes.
 ///
@@ -103,6 +104,24 @@ final adminDriverEarningsProvider =
       .read(apiClientProvider)
       .getList('/api/admin/reports/driver-earnings', query: _periodQuery(period));
   return raw.map((e) => AdminDriverEarningsRow.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+/// Per-trip fare detail (passenger, driver, route, charge) for the period —
+/// the line-item backing for the summary, and the fullest tax export.
+final tripFareReportProvider =
+    FutureProvider.family<List<TripReportRow>, ReportPeriod>((ref, period) async {
+  final query = {...?_periodQuery(period), 'limit': '500'};
+  final raw = await ref.read(apiClientProvider).getList('/api/admin/reports/trips', query: query);
+  return raw.map((e) => TripReportRow.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+/// Looks a trip up by full id or short prefix (the office "what's your trip
+/// ID?" flow). Empty query short-circuits to no results without a call.
+final adminTripLookupProvider = FutureProvider.family<List<Trip>, String>((ref, query) async {
+  final q = query.trim();
+  if (q.isEmpty) return const [];
+  final raw = await ref.read(apiClientProvider).getList('/api/admin/trips/lookup', query: {'q': q});
+  return raw.map((e) => Trip.fromJson(e as Map<String, dynamic>)).toList();
 });
 
 /// Records cash a driver has physically handed over.

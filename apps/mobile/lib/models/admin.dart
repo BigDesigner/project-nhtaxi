@@ -500,6 +500,58 @@ class FinancialSummary {
       );
 }
 
+/// One row of the admin trip + fare report (GET /api/admin/reports/trips) —
+/// the per-trip money detail for tax filing.
+class TripReportRow {
+  const TripReportRow({
+    required this.tripId,
+    required this.status,
+    required this.requestedAt,
+    this.completedAt,
+    this.driverName,
+    this.customerName,
+    this.pickupAddress,
+    this.dropoffAddress,
+    this.finalFare,
+    this.estimatedFare,
+    required this.currency,
+    required this.referred,
+  });
+
+  final String tripId;
+  final String status;
+  final DateTime requestedAt;
+  final DateTime? completedAt;
+  final String? driverName;
+  final String? customerName;
+  final String? pickupAddress;
+  final String? dropoffAddress;
+  final double? finalFare;
+  final double? estimatedFare;
+  final String currency;
+
+  /// Whether GNN LLC referred this trip (so it carries commission).
+  final bool referred;
+
+  /// What was actually charged, falling back to the estimate.
+  double? get fare => finalFare ?? estimatedFare;
+
+  factory TripReportRow.fromJson(Map<String, dynamic> json) => TripReportRow(
+        tripId: json['tripId'] as String,
+        status: json['status'] as String,
+        requestedAt: DateTime.parse(json['requestedAt'] as String),
+        completedAt: json['completedAt'] == null ? null : DateTime.parse(json['completedAt'] as String),
+        driverName: json['driverName'] as String?,
+        customerName: json['customerName'] as String?,
+        pickupAddress: json['pickupAddress'] as String?,
+        dropoffAddress: json['dropoffAddress'] as String?,
+        finalFare: (json['finalFare'] as num?)?.toDouble(),
+        estimatedFare: (json['estimatedFare'] as num?)?.toDouble(),
+        currency: json['currency'] as String? ?? 'USD',
+        referred: (json['referralSource'] as String? ?? 'NONE') != 'NONE',
+      );
+}
+
 /// A place the business serves (GET/POST /api/admin/cities).
 class City {
   const City({

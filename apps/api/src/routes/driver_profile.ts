@@ -490,25 +490,33 @@ driverProfile.openapi(earningsRoute, async (c) => {
   if (query.to) conditions.push(lte(tripsTable.completedAt, query.to));
 
   const rows = await db
-    .select()
+    .select({
+      trip: tripsTable,
+      customerFirst: usersTable.firstName,
+      customerLast: usersTable.lastName,
+    })
     .from(tripsTable)
+    .leftJoin(usersTable, eq(usersTable.id, tripsTable.customerId))
     .where(and(...conditions))
     .orderBy(desc(tripsTable.completedAt));
 
-  const totalCents = rows.reduce((sum, t) => sum + (t.finalFareCents ?? 0), 0);
+  const totalCents = rows.reduce((sum, r) => sum + (r.trip.finalFareCents ?? 0), 0);
 
   return c.json(
     {
       tripCount: rows.length,
       totalEarnings: totalCents / 100,
-      currency: rows[0]?.currency ?? "USD",
-      trips: rows.map((t) => ({
-        tripId: t.id,
-        completedAt: t.completedAt?.toISOString() ?? null,
-        distanceMiles: t.distanceMiles,
-        fare: t.finalFareCents != null ? t.finalFareCents / 100 : null,
-        currency: t.currency,
-        paymentMethod: t.paymentMethod,
+      currency: rows[0]?.trip.currency ?? "USD",
+      trips: rows.map((r) => ({
+        tripId: r.trip.id,
+        completedAt: r.trip.completedAt?.toISOString() ?? null,
+        customerName: r.customerFirst ? `${r.customerFirst} ${r.customerLast}` : (r.trip.guestName ?? null),
+        pickupAddress: r.trip.pickupAddress,
+        dropoffAddress: r.trip.dropoffAddress,
+        distanceMiles: r.trip.distanceMiles,
+        fare: r.trip.finalFareCents != null ? r.trip.finalFareCents / 100 : null,
+        currency: r.trip.currency,
+        paymentMethod: r.trip.paymentMethod,
       })),
     },
     200

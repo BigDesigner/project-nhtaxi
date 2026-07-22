@@ -290,6 +290,16 @@ class _ExportCardState extends ConsumerState<_ExportCard> {
                             return adminDriverEarningsTable(rows, from: _from, to: _to);
                           }),
                 ),
+                FilledButton.tonalIcon(
+                  icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                  label: const Text('Trip & fare report'),
+                  onPressed: _busy
+                      ? null
+                      : () => _export(() async {
+                            final rows = await ref.read(tripFareReportProvider(_period).future);
+                            return tripFareReportTable(rows, from: _from, to: _to);
+                          }),
+                ),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
                   label: const Text('Balances'),

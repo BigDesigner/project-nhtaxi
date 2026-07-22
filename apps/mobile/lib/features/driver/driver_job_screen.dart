@@ -10,6 +10,7 @@ import '../../widgets/app_back_button.dart';
 import '../../widgets/error_banner.dart';
 import '../../widgets/map_markers.dart';
 import '../../widgets/path_verification_badge.dart';
+import '../../widgets/trip_id_row.dart';
 import 'driver_controllers.dart';
 import 'job_actions.dart';
 
@@ -162,6 +163,9 @@ class _JobDetail extends ConsumerWidget {
         JobEarningsSummary(job: job),
         const SizedBox(height: 16),
         JobActions(job: job),
+        const SizedBox(height: 16),
+        // The reference to quote to the office about this job.
+        TripIdRow(tripId: job.id),
       ],
     );
   }

@@ -2,6 +2,7 @@ import '../models/admin.dart';
 import '../models/driver_billing.dart';
 import 'fare_range.dart';
 import 'report_export.dart';
+import 'trip_id.dart';
 
 /// Turns the money models into fully-described [ReportTable]s — one place that
 /// owns the column headers, their explanations, and the totals row, so the CSV
@@ -17,6 +18,14 @@ String _d(DateTime? dt) {
 }
 
 double _sum<T>(List<T> xs, double Function(T) pick) => xs.fold(0, (s, x) => s + pick(x));
+
+/// "pickup -> dropoff" as a two-line cell (ASCII arrow so it never depends on a
+/// Unicode glyph). Falls back to just the pickup when there's no dropoff yet.
+String _route(String? pickup, String? dropoff) {
+  final from = pickup ?? '';
+  if (dropoff == null || dropoff.isEmpty) return from;
+  return '$from\n-> $dropoff';
+}
 
 /// The tax-filing backbone: GNN's income (rent + commission) with cash
 /// collected, plus the drivers' own gross fares kept clearly separate.
@@ -109,7 +118,7 @@ ReportTable commissionsTable(List<CommissionCharge> rows) {
     columns: const [
       ReportColumn('Date'),
       ReportColumn('Driver'),
-      ReportColumn('Trip'),
+      ReportColumn('Trip', description: 'First 8 characters of the trip ID.'),
       ReportColumn('Fare', description: 'The fare the commission was taken from.', numeric: true),
       ReportColumn('Rate %', description: 'Commission percentage applied.', numeric: true),
       ReportColumn('Commission', description: 'Amount owed to GNN on this job.', numeric: true),
@@ -119,7 +128,7 @@ ReportTable commissionsTable(List<CommissionCharge> rows) {
         [
           _d(r.createdAt),
           r.driverName,
-          r.tripId,
+          shortTripId(r.tripId),
           m(r.fare),
           r.commissionPercent.toStringAsFixed(0),
           m(r.commission),
@@ -175,6 +184,44 @@ ReportTable adminDriverEarningsTable(List<AdminDriverEarningsRow> rows, {DateTim
   );
 }
 
+/// Per-trip fare detail: who rode with whom, where, and what was charged. The
+/// fullest tax export — every completed trip as its own line.
+ReportTable tripFareReportTable(List<TripReportRow> rows, {DateTime? from, DateTime? to}) {
+  String m(double? v) => v == null ? '' : formatFare(v, currency: rows.isEmpty ? 'USD' : rows.first.currency);
+  final charged = rows.where((r) => r.fare != null).fold<double>(0, (s, r) => s + r.fare!);
+  return ReportTable(
+    title: 'Trip & fare report',
+    from: from,
+    to: to,
+    columns: const [
+      ReportColumn('Date'),
+      ReportColumn('Trip', description: 'First 8 characters of the trip ID.'),
+      ReportColumn('Passenger'),
+      ReportColumn('Driver'),
+      ReportColumn('Route', description: 'Pickup and drop-off.'),
+      ReportColumn('Referred', description: 'Y if GNN LLC referred the job (commission applies).'),
+      ReportColumn('Fare', description: 'Final charge, or the estimate if not yet finalised.', numeric: true),
+    ],
+    rows: [
+      for (final r in rows)
+        [
+          _d(r.completedAt ?? r.requestedAt),
+          shortTripId(r.tripId),
+          r.customerName ?? '',
+          r.driverName ?? '',
+          _route(r.pickupAddress, r.dropoffAddress),
+          r.referred ? 'Y' : '',
+          m(r.fare),
+        ],
+    ],
+    totals: ['TOTAL', '', '', '', '', '', m(charged)],
+    notes: const [
+      'Fares are the passengers\' payments to the drivers (the drivers\' turnover), shown per trip for reference.',
+      'The Referred column marks the jobs GNN LLC referred, which are the ones that carry commission.',
+    ],
+  );
+}
+
 /// A single driver's own completed trips and total — their tax record.
 ReportTable driverOwnEarningsTable(DriverEarnings e, {required String driverName, DateTime? from, DateTime? to}) {
   String m(double? v) => v == null ? '' : formatFare(v, currency: e.currency);
@@ -184,15 +231,22 @@ ReportTable driverOwnEarningsTable(DriverEarnings e, {required String driverName
     to: to,
     columns: const [
       ReportColumn('Date'),
-      ReportColumn('Trip'),
-      ReportColumn('Distance (mi)', numeric: true),
+      ReportColumn('Trip', description: 'First 8 characters of the trip ID.'),
+      ReportColumn('Passenger'),
+      ReportColumn('Route', description: 'Pickup and drop-off.'),
       ReportColumn('Fare', description: 'Cash the passenger paid you for this trip.', numeric: true),
     ],
     rows: [
       for (final t in e.trips)
-        [_d(t.completedAt), t.tripId, t.distanceMiles?.toStringAsFixed(1) ?? '', m(t.fare)],
+        [
+          _d(t.completedAt),
+          shortTripId(t.tripId),
+          t.customerName ?? '',
+          _route(t.pickupAddress, t.dropoffAddress),
+          m(t.fare),
+        ],
     ],
-    totals: ['TOTAL', '${e.tripCount} trips', '', m(e.totalEarnings)],
+    totals: ['TOTAL', '${e.tripCount} trips', '', '', m(e.totalEarnings)],
     notes: const ['This is a record of cash paid to you directly by passengers, not a payment made through the app.'],
   );
 }
