@@ -753,6 +753,32 @@ part if service areas are ever wired to a real geofence/dispatch-radius
 feature, and rebuilding a small admin dialog at that point is cheap. No
 migration, no backend behaviour change; 104/104 Flutter tests still pass.
 
+### Repo went public: renamed to project-nhtaxi, secret-scanning precautions
+User made the repo public and asked for every reasonable precaution against
+a secret/token leak going forward, and renamed it again (`gnncab-nhtaxi` →
+`project-nhtaxi`).
+
+Two layers added, since either alone can be skipped or miss something:
+1. **GitHub's own secret scanning + push protection**, enabled via the API
+   (`PATCH /repos/.../security_and_analysis`) — free for public repos, was
+   off by default. Push protection can reject a push server-side even if a
+   contributor's local hooks aren't set up.
+2. **`.githooks/pre-commit`** (new — the repo already had a `post-commit`
+   reminder hook). Blocks a commit outright on: credential-shaped filenames
+   not matching the project's `.example` convention, private-key blocks,
+   AWS/GitHub/Slack token prefixes, and generic `KEY=<long value>`
+   assignments that don't match the established placeholder style. Verified
+   against three cases before trusting it: a real-looking fake API key
+   (blocked), a fake `.env` file (blocked — `.gitignore` also independently
+   catches this, defense in depth), and its own legitimate commit (allowed
+   through cleanly).
+
+Renamed the GitHub repo again (`gh repo rename`), updated the local `origin`
+remote. The earlier public-repo security audit (README/description cleanup
+entry, a few sections below) is the baseline that made going public safe in
+the first place — it should be re-run, not assumed still valid, after any
+future change that touches config/secrets/CI.
+
 ### Production launch reset — wiped every smoke-test row, kept the admin
 User's explicit instruction: keep `info@nhtaxi.com` (the admin account) and
 scrub everything else from the live database, so the app can stand as a

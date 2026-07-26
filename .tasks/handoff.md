@@ -2,8 +2,46 @@
 
 - **Current mode**: Interactive
 - **Current branch**: `main`
-- **Last commit**: `7b28b52` — "Don't let the backup-upload quota issue
-  block the launch reset either"
+- **Last commit**: `3bd0b0e` — "Add a pre-commit secret-scanning hook, now
+  that the repo is public"
+- **Repo is now PUBLIC**, and renamed again:
+  `https://github.com/BigDesigner/project-nhtaxi` (was `gnncab-nhtaxi`
+  briefly, before that `GNNcab-stack`). Local `origin` remote updated to
+  match. GitHub auto-redirects old URLs for a while, but use the current one.
+  **This changes the stakes on every future commit** — see the new rules
+  below before touching secrets/config.
+- **Precautions taken for going public**:
+  - GitHub's own **secret scanning + push protection** enabled via the API
+    (`security_and_analysis`) — free for public repos, was off by default.
+    This can block a push server-side even if a local hook is skipped.
+  - Added **`.githooks/pre-commit`** (new, alongside the existing
+    `post-commit` reminder): blocks a commit outright (not just warns) on
+    credential-shaped filenames (`.env`, `.dev.vars`, `*.pem`, keystores —
+    exempting the project's own `.example` convention), private-key blocks,
+    AWS/GitHub/Slack token prefixes, and generic `KEY=<long random value>`
+    assignments that don't match the project's placeholder style
+    (`change-me-*`, `process.env.*`, `wrangler secret put`, etc). Already
+    active (`core.hooksPath` was set to `.githooks` earlier this session).
+    Tested against a real-looking fake key (blocked) and a fake `.env` file
+    (blocked, `.gitignore` also independently catches this) before trusting
+    it. `--no-verify` remains available for a genuine, verified false
+    positive — not a default habit.
+  - **For the next agent**: the earlier public-repo security audit (see the
+    entry below) is still the baseline — re-run its checklist (full git
+    history for ever-committed secrets, `.gitignore` coverage, wrangler.toml,
+    Android signing, npmrc) after any change that touches config/secrets/CI,
+    not just once.
+- **`.archive/docs-migration/` retired** (`4e05d1d`): the folder holding the
+  original pre-rebuild planning docs is gone. Everything in it was verified
+  captured first — the locked decisions live across ADR 0001/0002 already,
+  plus a new **ADR 0010** (domain topology + Trackcar cutover plan, written
+  up in full for the first time — it existed only in fragments before), and
+  the legacy SRS's `zones`/`driver_zone_assignments` design (which the
+  changelog explicitly pointed at this archive for) was added to
+  `.memory-bank/audits/srs-architecture.md`. Every reference to the old path
+  was updated (`README.md`, `apps/admin/README.md`, both ADRs,
+  `active-session.json`, `.agents/runtime-manifest.json`,
+  `.memory-bank/migration-map.md` itself).
 - **Production database was reset for launch** (executed live, GitHub run
   `30209214498`, verified after: `users: 1, remaining_email:
   "info@nhtaxi.com", trips: 0, drivers: 0, customers: 0, audit_logs: 0`).
