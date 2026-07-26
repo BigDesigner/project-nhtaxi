@@ -5,10 +5,10 @@
 JWT_SECRET=change-me-local-dev-only
 ENVIRONMENT=development
 # Base64-encoded 256-bit AES-GCM key wrapping driver document data keys (L19).
-# Generate a real one with:
+# Generate your own — never reuse this or any other committed example value:
 #   node -e "console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'))"
-DOCUMENT_ENCRYPTION_KEY=UsctM0ECivyhbOIrSbW87y+ARKw6OsyJIAlphgbfq4c=
+DOCUMENT_ENCRYPTION_KEY=change-me-generate-your-own-local-dev-only
 # One-time, self-locking POST /api/admin/bootstrap (creates the first admin
 # while none exist) requires this in an X-Bootstrap-Token header. Any random
 # string works — generate one the same way as DOCUMENT_ENCRYPTION_KEY above.
-ADMIN_BOOTSTRAP_TOKEN=RWCvFx4S6m7feuR1FhP9MTB79rDuHkYvasmwX60dIx4=
+ADMIN_BOOTSTRAP_TOKEN=change-me-generate-your-own-local-dev-only
