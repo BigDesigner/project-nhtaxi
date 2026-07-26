@@ -2,14 +2,44 @@
 
 - **Current mode**: Interactive
 - **Current branch**: `main`
-- **Last commit**: `45d2e50` — "Give every shell a shared, centered header
-  instead of a corner logo"
+- **Last commit**: `a32c294` — "Tighten README prose and fix a stale brand
+  mention"
+- **Repo**: renamed on GitHub from `GNNcab-stack` to `gnncab-nhtaxi`
+  (`https://github.com/BigDesigner/gnncab-nhtaxi`); local `origin` remote
+  updated to match. GitHub auto-redirects the old URL for a while, but use
+  the new one going forward.
 - **Worktree status**: clean, committed locally. Push + CI watch is the very
   next step, not yet done as of this line — check `git log origin/main` /
   `gh run list` to see whether that already happened by the time you're
   reading this.
 - **What changed** (most recent first — full history in
   `.memory-bank/changelog/verified-worklog.md`):
+  - **README/description cleanup + public-repo security audit** (`a32c294`,
+    `b5a84b5`): user asked to go through the repo for anything that would be
+    a problem if it turned public, and separately to de-AI-ify the README's
+    prose. Full audit (gitignore coverage, entire git history for ever-
+    committed secrets, wrangler.toml, Android signing, npmrc, migrations):
+    clean except one thing — `.dev.vars.example` carried real-looking
+    generated values for `DOCUMENT_ENCRYPTION_KEY`/`ADMIN_BOOTSTRAP_TOKEN`
+    instead of an obvious placeholder like `JWT_SECRET`'s own
+    `change-me-local-dev-only`. Fixed (`b5a84b5`) — production secrets are
+    independently generated and pushed via `wrangler secret put`, never
+    derived from this file, so this was a hygiene fix, not a live rotation.
+    Repo should be safe to make public now. README rewritten with fewer
+    em-dashes and less justification-heavy phrasing; GitHub repo description
+    and `pubspec.yaml` fixed from a stale "GNNcab" mention to "NH Taxi".
+  - **GitHub Actions storage fix** (`c5e8c82`): a billing alert showed 100%
+    of the 500MB free Actions storage used. Measured directly via the API
+    (don't trust a diagnosis that only read the YAML): 2.94GB, 99.97% of it
+    37 debug APKs from `mobile.yml` building one on every `apps/mobile/**`
+    push (this repo has never used PRs, so `pull_request` never gated
+    anything). Split the workflow — `test` (analyze+test) still runs on
+    every push, the APK build is now `workflow_dispatch`-only with 3-day
+    retention. Deleted the 37 existing APK artifacts via the API — quota is
+    back to 0.9MB (just the harmless D1 backups, left alone; not the
+    problem now or for a long time at current DB size). **If you need a
+    debug APK to test on an emulator, trigger it manually**: GitHub →
+    Actions tab → Mobile workflow → Run workflow.
   - **One shared header on every screen** (`45d2e50`): the wordmark used
     to live only in tab 0's `AppBar` per shell — every other tab had a plain
     text title, no branding. User feedback: too small, and inconsistent tab
@@ -101,11 +131,13 @@
     screenshotted due to the same Browser-pane hiccup).
   - The Android app icon and splash screen on an actual installed APK (only
     verified via generated-file inspection + a web build's favicon/splash).
-  - The rebranded APK installing/running under `com.nhtaxi.app` (fresh CI
-    artifact `nhtaxi-debug-apk`) — a device with the OLD `com.gnncab.gnncab`
-    build installed will treat the new id as a **different app** (fresh
-    install, not an update); expected and harmless, nothing has shipped to
-    real users yet.
+  - The rebranded APK installing/running under `com.nhtaxi.app` — the debug
+    APK build is now manual only (GitHub → Actions → Mobile → Run workflow,
+    see the GitHub Actions storage fix above), so there's no fresh artifact
+    sitting around; trigger one when you actually want to test on a device.
+    A device with the OLD `com.gnncab.gnncab` build installed will treat the
+    new id as a **different app** (fresh install, not an update); expected
+    and harmless, nothing has shipped to real users yet.
   - A PDF actually downloaded from the admin panel showing the new logo in
     its header (unit-tested that the asset resolves; not yet eyeballed in a
     real generated PDF file).

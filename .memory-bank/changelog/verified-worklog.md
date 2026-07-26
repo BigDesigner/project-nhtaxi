@@ -753,6 +753,62 @@ part if service areas are ever wired to a real geofence/dispatch-radius
 feature, and rebuilding a small admin dialog at that point is cheap. No
 migration, no backend behaviour change; 104/104 Flutter tests still pass.
 
+### Repo renamed, secret-leak audit, README de-AI-ified
+User wanted to make the repo public (to dodge GitHub's free-tier Actions
+storage cap entirely — public repos have no such quota) and separately asked
+for the repo to be renamed from `GNNcab-stack` to `gnncab-nhtaxi`. Did both,
+but public visibility needed a real audit first, not a guess.
+
+Audited for anything that would be a problem exposed: `.gitignore` coverage,
+the **entire** git history (not just current files) for `.env`/`.dev.vars`
+ever committed, wrangler.toml contents, Android signing config, `.npmrc`,
+migrations for embedded data, README/scripts for real credentials. Found
+exactly one issue: `.dev.vars.example` (tracked, meant to be a template) had
+real-looking generated base64 values for `DOCUMENT_ENCRYPTION_KEY` and
+`ADMIN_BOOTSTRAP_TOKEN` instead of an obvious placeholder — copy this file to
+`.dev.vars` without editing it and you'd be running with a "random-looking"
+key that isn't actually random to anyone who's seen the repo. Fixed to match
+`JWT_SECRET`'s own `change-me-local-dev-only` placeholder style. Production
+secrets are independently generated and pushed via `wrangler secret put`
+(confirmed this is the established practice, not derived from this file), so
+this was hygiene, not a live rotation — rotating `DOCUMENT_ENCRYPTION_KEY` for
+real would break decryption of already-stored driver documents, so that was
+deliberately not done. The tawk.to chat URL and the business's dispatch phone
+number are already public-facing in the shipped app and aren't secrets.
+
+Renamed the GitHub repo to `gnncab-nhtaxi` (`gh repo rename`) and updated the
+local `origin` remote to match.
+
+Separately, README.md read like AI-polished prose — heavy em-dash use,
+justification-heavy asides. User asked for the reader-facing surface (README,
+GitHub repo description, `pubspec.yaml` description) to be tightened, not the
+in-code "why" comments the rest of the project deliberately keeps. Also
+caught and fixed a real stale-brand bug this surfaced: the GitHub repo
+description and `pubspec.yaml` still said "GNNcab" — internal resource names
+keep that name on purpose (ADR 0009), but a public-facing description isn't
+one of them.
+
+### GitHub Actions storage quota: stopped building a debug APK on every push
+A billing alert showed 100% of the 500MB free Actions storage used. Measured
+it directly via the API rather than guessing: **2.94GB total, 99.97% of it
+37 debug APKs** (~85MB each, 14-day retention) — D1 backups were 0.9MB and
+Actions cache was 0 bytes (a separate 10GB quota from Actions storage anyway,
+not part of this problem at all despite an outside AI's advice to "fix" it).
+
+Root cause: `mobile.yml` built and uploaded an APK on every `apps/mobile/**`
+push, and this repo has never used PRs (single branch, direct pushes to
+`main`) — so `pull_request` never fired and every commit, including this
+session's dozen-plus button/color/header tweaks, produced its own unrequested
+APK. Fixed by splitting the workflow: `test` (analyze + flutter test) runs on
+every push/PR as before with zero artifacts; the APK build moved to a new
+`build-apk` job gated to `workflow_dispatch` only (manual "Run workflow" in
+the Actions tab), retention cut 14→3 days. `deploy-web` (Pages) is untouched
+— it was never part of the problem, since a Pages deploy isn't an Actions
+artifact. Deleted the 37 existing APK artifacts via the API to reclaim the
+quota immediately (2.94GB → 0.9MB) rather than waiting out retention.
+Deliberately left D1 backup retention at 90 days — at 0.9MB total it isn't
+the problem and won't be for a very long time at this data volume.
+
 ### One shared header on every screen, not a corner logo on one tab
 The wordmark previously lived inside each shell's `AppBar.title`, and only on
 tab index 0 — every other tab (Balance, Profile, Settings, Money...) showed a
