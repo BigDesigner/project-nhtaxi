@@ -5,6 +5,7 @@ import '../auth/change_password_sheet.dart';
 import '../../widgets/brand_header_bar.dart';
 import '../../widgets/help_card.dart';
 import '../auth/auth_controller.dart';
+import 'customer_profile_controller.dart';
 import 'passenger_home_screen.dart';
 import 'tawk_chat_screen.dart';
 import 'trips_tab.dart';
@@ -98,6 +99,9 @@ class _ProfileTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authControllerProvider).value;
     if (user == null) return const Center(child: CircularProgressIndicator());
+    // Supplementary, not load-bearing — the profile screen still works fine
+    // without it, so a slow or failed fetch just means the row doesn't show.
+    final totalTrips = ref.watch(customerProfileProvider).value?.totalTrips;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -123,6 +127,12 @@ class _ProfileTab extends ConsumerWidget {
                   leading: const Icon(Icons.phone_outlined),
                   title: const Text('Phone'),
                   subtitle: Text(user.phone!),
+                ),
+              if (totalTrips != null)
+                ListTile(
+                  leading: const Icon(Icons.receipt_long_outlined),
+                  title: const Text('Trips taken'),
+                  subtitle: Text('$totalTrips'),
                 ),
               ListTile(
                 leading: const Icon(Icons.badge_outlined),
