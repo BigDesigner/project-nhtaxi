@@ -64,8 +64,14 @@ jobs:
         working-directory: apps/api
         run: npx wrangler d1 export gnncab --remote --output=backup.sql
 
+      # continue-on-error: this is a convenience copy, not the only backup —
+      # D1 has its own built-in Time Travel point-in-time restore on every
+      # plan, free tier included, independent of anything in Actions. A
+      # transient Actions-storage hiccup (quota, an outage) blocking this
+      # upload should never block the actual deploy below.
       - name: Upload D1 backup artifact
         if: steps.cf.outputs.configured == 'true'
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: d1-backup-${{ github.sha }}
