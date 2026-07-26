@@ -2,8 +2,8 @@
 
 - **Current mode**: Interactive
 - **Current branch**: `main`
-- **Last commit**: `a32c294` — "Tighten README prose and fix a stale brand
-  mention"
+- **Last commit**: `5c735e9` — "Don't let a D1 backup artifact upload
+  failure block the deploy"
 - **Repo**: renamed on GitHub from `GNNcab-stack` to `gnncab-nhtaxi`
   (`https://github.com/BigDesigner/gnncab-nhtaxi`); local `origin` remote
   updated to match. GitHub auto-redirects the old URL for a while, but use
@@ -14,6 +14,19 @@
   reading this.
 - **What changed** (most recent first — full history in
   `.memory-bank/changelog/verified-worklog.md`):
+  - **Deploy no longer blocked by an Actions storage hiccup** (`5c735e9`):
+    the very next two deploys after the storage cleanup below (`b5a84b5`,
+    `cbddbcb`) both failed outright — GitHub's own quota counter took longer
+    than the artifact deletion to catch up ("recalculated every 6-12 hours",
+    per its own error), so "Upload D1 backup artifact" failed and killed the
+    whole `deploy-api` job, skipping migrations and the Worker deploy
+    entirely for two commits in a row. Added `continue-on-error: true` to
+    just that upload step — D1 has its own built-in Time Travel
+    point-in-time restore on every plan (free tier included), so this
+    artifact was always a convenience copy, not the only recovery path.
+    Confirmed live: the very next deploy (`5c735e9` itself) hit the exact
+    same quota error on that step and **still deployed successfully**.
+    `api.nhtaxi.com` is now caught up on everything through this commit.
   - **README/description cleanup + public-repo security audit** (`a32c294`,
     `b5a84b5`): user asked to go through the repo for anything that would be
     a problem if it turned public, and separately to de-AI-ify the README's

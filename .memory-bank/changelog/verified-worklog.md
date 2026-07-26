@@ -753,6 +753,28 @@ part if service areas are ever wired to a real geofence/dispatch-radius
 feature, and rebuilding a small admin dialog at that point is cheap. No
 migration, no backend behaviour change; 104/104 Flutter tests still pass.
 
+### A backup-artifact upload failure was quietly blocking every deploy
+Fallout from the storage cleanup above: the next two pushes after deleting
+the 37 stale APK artifacts both failed at `deploy.yml`'s "Upload D1 backup
+artifact" step with `Failed to CreateArtifact: Artifact storage quota has
+been hit` — GitHub's own account-level usage counter is cached and, per its
+own error message, can take 6-12 hours to catch up even after the underlying
+artifacts are gone. That single step failing killed the whole `deploy-api`
+job, so "Apply D1 migrations" and "Deploy Worker" never ran for either
+commit — neither had a schema change, so nothing was actually lost, but the
+next commit that *did* need to reach production would have been silently
+stuck the same way.
+
+Root cause wasn't really the quota timing, it was that the workflow let a
+non-essential step hold the real deploy hostage. D1 has its own built-in
+Time Travel point-in-time restore on every plan, free tier included,
+completely independent of Actions — this artifact was always a convenience
+copy of the backup, never the only way to recover. Added
+`continue-on-error: true` to just that upload step (the export itself still
+always runs first). Verified live: the next push hit the identical quota
+error on that exact step and the deploy still went through end to end,
+migrations applied and Worker deployed. `api.nhtaxi.com` is caught up again.
+
 ### Repo renamed, secret-leak audit, README de-AI-ified
 User wanted to make the repo public (to dodge GitHub's free-tier Actions
 storage cap entirely — public repos have no such quota) and separately asked
