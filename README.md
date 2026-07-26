@@ -1,13 +1,12 @@
 # NH Taxi
 
-Ride-dispatch platform for GNN LLC (North Conway, NH), branded **NH Taxi** to
-match `nhtaxi.com`. Runs on Cloudflare's free tier end-to-end.
+Ride-dispatch platform for GNN LLC in North Conway, NH. Branded NH Taxi to
+match `nhtaxi.com`. Runs entirely on Cloudflare's free tier.
 
-> The repo folder, some Cloudflare resource names (Worker, D1 database, R2
-> bucket) and the Flutter web preview subdomain (`gnncab.nhtaxi.com`) still say
-> "gnncab" — that's the pre-rebrand internal name, kept deliberately since it's
-> purely cosmetic and invisible to users. Nothing user-facing says "GNNcab"
-> anymore (see ADR 0009).
+Some internal names still read "gnncab": the D1 database, the R2 bucket, the
+web preview subdomain. That's the old project name from before the NH Taxi
+rebrand. It's not user-facing anywhere, so it wasn't worth renaming (see
+ADR 0009).
 
 **Agents / new contributors start here:** read [AGENTS.md](AGENTS.md), then
 [.memory-bank/changelog/verified-worklog.md](.memory-bank/changelog/verified-worklog.md)
@@ -20,13 +19,13 @@ This README only covers one-time setup and day-to-day dev commands.
 
 ```
 apps/
-  api/        Backend — Hono on Cloudflare Workers (D1 + R2 + Durable Objects)
-  admin/      README only — the web admin was built into the Flutter app, not
-              as a separate React app (see ADR 0006)
-  mobile/     Flutter app — passenger + driver + admin, one app, all roles
+  api/        Backend: Hono on Cloudflare Workers (D1 + R2 + Durable Objects)
+  admin/      README only. The web admin ended up built into the Flutter app
+              instead of a separate React app (see ADR 0006)
+  mobile/     Flutter app: passenger, driver, and admin, all in one app
 packages/
   db/         Drizzle schema (D1/SQLite), shared by the API and migrations
-  contract/   Shared zod schemas — the source the OpenAPI doc is generated from
+  contract/   Shared zod schemas that the OpenAPI doc is generated from
 .github/workflows/
   ci.yml      Pull request: typecheck + test + API preview deploy
   deploy.yml  main branch: typecheck + test + D1 backup + migrate + deploy
@@ -44,7 +43,7 @@ pnpm --filter @gnncab/api run dev                   # wrangler dev, http://local
 ```
 
 Local `wrangler dev` runs against a local D1/R2/Durable Object emulation
-(miniflare) — no Cloudflare account needed for this.
+(miniflare), so no Cloudflare account is needed for this.
 
 ### Database migrations
 
@@ -61,8 +60,8 @@ Commit the generated `migrations/*.sql` files. `db:migrate:remote` (or the
 
 ## One-time Cloudflare setup
 
-Nothing here runs automatically the first time — do this once, then every
-push to `main` deploys itself via CI.
+None of this runs automatically the first time. Do it once, and every push
+to `main` deploys itself via CI from then on.
 
 1. **Authenticate wrangler** (only needed for the manual steps below; CI uses
    an API token instead):
@@ -82,21 +81,21 @@ push to `main` deploys itself via CI.
    npx wrangler r2 bucket create gnncab-driver-documents
    ```
 
-4. **Push app secrets** (never stored in a file or in wrangler.toml — L25):
+4. **Push app secrets** (never stored in a file or in wrangler.toml, see L25):
    ```bash
    npx wrangler secret put JWT_SECRET
-   # 32 random bytes, base64-encoded — wraps per-file data keys for driver
+   # 32 random bytes, base64-encoded. Wraps per-file data keys for driver
    # document envelope encryption (L19):
    node -e "console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'))"
    npx wrangler secret put DOCUMENT_ENCRYPTION_KEY
-   # Any random string — gates the one-time, self-locking POST
+   # Any random string. Gates the one-time, self-locking POST
    # /api/admin/bootstrap (creates the first admin; 409s forever after):
    node -e "console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'))"
    npx wrangler secret put ADMIN_BOOTSTRAP_TOKEN
    # Stripe/FCM secrets get added here the same way once Faz 6/9 land.
    ```
 
-   Then create the first admin account (no CLI/SQL needed — see routes/admin.ts):
+   Then create the first admin account (no CLI/SQL needed, see routes/admin.ts):
    ```bash
    curl -X POST https://api.nhtaxi.com/api/admin/bootstrap \
      -H "Content-Type: application/json" \
@@ -109,10 +108,10 @@ push to `main` deploys itself via CI.
    `apps/api` generates a `wrangler d1 execute` command as a fallback.
 
 5. **Custom domain**: `nhtaxi.com` is already on this Cloudflare account, so
-   nothing manual is needed — `wrangler.toml` already declares
-   `api.nhtaxi.com` as a custom domain (L27/L29) and the first `wrangler
-   deploy` creates the route + DNS record automatically. `app.` and
-   `tracker.` are reserved by the existing Trackcar app — don't reuse them
+   nothing manual is needed. `wrangler.toml` already declares
+   `api.nhtaxi.com` as a custom domain (L27/L29), and the first `wrangler
+   deploy` creates the route and DNS record automatically. `app.` and
+   `tracker.` are reserved by the existing Trackcar app, so don't reuse them
    (L31).
 
 6. **Apply the first migration to the real database**:
