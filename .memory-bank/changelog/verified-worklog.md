@@ -753,6 +753,54 @@ part if service areas are ever wired to a real geofence/dispatch-radius
 feature, and rebuilding a small admin dialog at that point is cheap. No
 migration, no backend behaviour change; 104/104 Flutter tests still pass.
 
+### Production launch reset — wiped every smoke-test row, kept the admin
+User's explicit instruction: keep `info@nhtaxi.com` (the admin account) and
+scrub everything else from the live database, so the app can stand as a
+blank slate for real customers instead of carrying this session's months of
+smoke-test accounts/trips/documents forward.
+
+Couldn't run this from a terminal here — the local `wrangler` OAuth session
+(`bigdesigner@gmail.com`) is authenticated against a *different* Cloudflare
+account (`c3bd4d79...`) than the one that actually owns this Worker/D1
+(`a7a3a64d...`, per `wrangler.toml`'s `database_id`); `wrangler secret list`
+and `wrangler d1 list` both failed with an auth error confirming this. Built
+`.github/workflows/db-reset.yml` instead — `workflow_dispatch`-only, requires
+typing `RESET` into the trigger input, reuses the same `CLOUDFLARE_API_TOKEN`
+already trusted for deploys — and `apps/api/scripts/reset-to-launch.sql`,
+which deletes children before the parents they reference (ratings →
+commissions → collections → sessions → documents → payments → breadcrumbs →
+events → trips → audit_logs, then `driver_profiles`/`customer_profiles`,
+then `users` except the admin's email) so it's correct regardless of
+whether FK enforcement is on. `push_tokens`/`refresh_tokens` are scoped to
+exclude the admin's own rows, so wiping everyone else's sessions doesn't
+also force-logout the admin.
+
+Dry-run verified against local D1 first with seeded smoke data (admin +
+one customer + one driver + their tokens): after running, `users=1`,
+every other table `=0`, admin's own refresh/push token rows untouched.
+Then hit the exact same bug the earlier Actions-storage cleanup caused in
+`deploy.yml` — the pre-reset backup upload failed on the same stale quota
+counter, killing the job before the reset ran at all (safely — nothing was
+touched). Fixed with the same `continue-on-error` pattern, and deliberately
+did **not** add a job-log fallback for the backup (it contains password
+hashes and PII; this repo is headed public, and a public log is the wrong
+place for that regardless of the artifact quota). D1's own built-in Time
+Travel remains the actual safety net either way.
+
+**Executed live** (GitHub run `30209214498`): verified afterward directly
+against production — `users: 1, remaining_email: "info@nhtaxi.com",
+trips: 0, drivers: 0, customers: 0, audit_logs: 0`. Production is now a
+blank slate.
+
+**Deliberately not touched**: `cities` and `pricing_config` — these are
+real business configuration (the base fare/per-mile rates, whatever
+service-area rows exist), not smoke-test activity, so they weren't in
+scope for a data wipe. **Follow-up not done**: the actual uploaded files in
+the `gnncab-driver-documents` R2 bucket, from the now-deleted
+`driver_documents` rows, are still sitting in R2 — `wrangler r2 object` has
+no bulk list/delete, only one-at-a-time `get`/`put`/`delete`, so cleaning
+that up needs a small separate script if the user wants it gone too.
+
 ### Closed the one backend/frontend gap the audit found
 User's call after the audit below: fix it now rather than leave it noted.
 Added `models/customer_profile.dart` + a `customerProfileProvider`

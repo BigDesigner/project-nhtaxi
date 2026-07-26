@@ -2,8 +2,23 @@
 
 - **Current mode**: Interactive
 - **Current branch**: `main`
-- **Last commit**: `2d65ad6` — "Show a passenger's lifetime trip count on
-  their own Profile tab"
+- **Last commit**: `7b28b52` — "Don't let the backup-upload quota issue
+  block the launch reset either"
+- **Production database was reset for launch** (executed live, GitHub run
+  `30209214498`, verified after: `users: 1, remaining_email:
+  "info@nhtaxi.com", trips: 0, drivers: 0, customers: 0, audit_logs: 0`).
+  Every trip/driver/customer/session/document/rating/commission/collection
+  row is gone; only the `info@nhtaxi.com` admin account survives. This
+  wasn't a targeted "delete smoke-* accounts" cleanup — it's everything
+  except that one account, on the user's explicit instruction to treat the
+  app as launching fresh. **Not touched**: `cities`, `pricing_config` (real
+  business config, not test data). **Not done, optional follow-up**: the
+  actual driver-document files in the `gnncab-driver-documents` R2 bucket
+  are still there — the now-deleted `driver_documents` rows pointed at
+  them, but wrangler has no bulk R2 delete, so purging those needs a small
+  separate script if wanted. To redo this reset later (e.g. after another
+  test round): `gh workflow run "Database Reset" -f confirm=RESET`, or from
+  the Actions tab.
 - **Repo**: renamed on GitHub from `GNNcab-stack` to `gnncab-nhtaxi`
   (`https://github.com/BigDesigner/gnncab-nhtaxi`); local `origin` remote
   updated to match. GitHub auto-redirects the old URL for a while, but use
@@ -152,16 +167,18 @@
   - `cd apps/api && pnpm vitest run`
   - `cd apps/mobile && flutter analyze && flutter test`
 - **Next recommended action**: **nothing code-side is left.** As of
-  `2d65ad6`, every backend endpoint is wired to the app, the one gap the
-  audit found is closed, CI is green, and the deploy pipeline is caught up.
-  Everything still open is either (1) needs a real device/browser to
-  eyeball — see "Not yet proven live" below, the Browser-pane compositing
-  bug has blocked every agent attempt at this, it won't resolve by retrying
-  — or (2) needs the user directly (secrets, a business decision, or
-  production data) — see "Things only the user can do" below. Outside of
-  those two categories and the iOS/Android app-store + Firebase setup work,
-  there is no known remaining gap. Next work is whatever the user surfaces
-  from real-world testing. Present a plan before writing code on anything
+  `7b28b52`, every backend endpoint is wired to the app, the one gap the
+  audit found is closed, CI is green, the deploy pipeline is caught up, and
+  production has been reset to a blank slate for launch (only
+  `info@nhtaxi.com` remains — see "What changed" above). Everything still
+  open is either (1) needs a real device/browser to eyeball — see "Not yet
+  proven live" below, the Browser-pane compositing bug has blocked every
+  agent attempt at this, it won't resolve by retrying — or (2) needs the
+  user directly (secrets, a business decision, or real data they haven't
+  supplied yet) — see "Things only the user can do" below. Outside of those
+  two categories and the iOS/Android app-store + Firebase setup work, there
+  is no known remaining gap. Next work is whatever the user surfaces from
+  real-world testing. Present a plan before writing code on anything
   non-trivial.
 - **Not yet proven live / on-device**:
   - **"Trips taken" on the passenger Profile tab** (`2d65ad6`) — needs a
@@ -173,8 +190,10 @@
     row, "Export my earnings", the "Assign a job" phone icon, the "Request a
     trip" card icon — need a real logged-in look (see above; not
     screenshotted due to the same Browser-pane hiccup).
-  - The Android app icon and splash screen on an actual installed APK (only
-    verified via generated-file inspection + a web build's favicon/splash).
+  - The Android app icon and splash screen on an actual installed **native
+    APK** — user confirmed the PWA (web app) runs fine on a real device,
+    which covers the everyday path; the native build itself is still
+    unverified but no longer a blocker.
   - The rebranded APK installing/running under `com.nhtaxi.app` — the debug
     APK build is now manual only (GitHub → Actions → Mobile → Run workflow,
     see the GitHub Actions storage fix above), so there's no fresh artifact
@@ -187,22 +206,59 @@
     real generated PDF file).
   - The referral happy path (needs an approved driver).
   - A driver broadcasting GPS and a passenger watching it move.
-  - The admin-lockdown + dual-role gates (need the production admin, or the
-    dual-role conversion below).
+  - The admin-lockdown gate (`info@nhtaxi.com` is already the live admin —
+    this is about exercising the lockdown behavior itself) + the optional
+    dual-role conversion described below, if that's ever wanted.
+- **Local `wrangler` CLI can't reach production from this machine**: the
+  OAuth session here (`bigdesigner@gmail.com`) authenticates against
+  Cloudflare account `c3bd4d79...`, but this project's Worker/D1 live under
+  a *different* account, `a7a3a64d...` (per `wrangler.toml`'s
+  `database_id`). `wrangler secret list` / `wrangler d1 list` both fail with
+  an auth error because of this. Anything needing real Cloudflare access —
+  checking which secrets are set, running ad hoc D1 queries — has to go
+  through a GitHub Actions workflow using the repo's `CLOUDFLARE_API_TOKEN`
+  (see `db-reset.yml` for the pattern), not a local wrangler command, unless
+  someone re-runs `wrangler login` and picks the right account.
 - **Things only the user can do**:
-  - `wrangler secret put BREVO_API_KEY` and `FCM_SERVICE_ACCOUNT_KEY`
-    (email & push no-op silently until set).
+  - `wrangler secret put BREVO_API_KEY` — user says this is already set.
+    **Unverified from here**: local wrangler can't list secrets (see above),
+    and there's no email inbox to check against. Cheapest real test: send a
+    real trip-completion or registration and confirm an email actually
+    arrives (`lib/trip-emails.ts`/`lib/email.ts` call Brevo; they no-op
+    silently on any failure, so "no error in logs" doesn't prove delivery).
+  - `wrangler secret put FCM_SERVICE_ACCOUNT_KEY` — **not the same thing as
+    Brevo**. This is Firebase's own service-account JSON (Firebase Console →
+    Project Settings → Service Accounts → Generate new private key),
+    entirely separate from email — it's what `lib/fcm.ts` uses to sign
+    requests to Firebase Cloud Messaging so the server can push driver/
+    passenger notifications. Bundled with the rest of the Firebase setup
+    the user has already scoped out for later.
   - Move `ROUTING_BASE_URL` off the public OSRM demo before real volume.
   - **Done, verified live** (`curl` returns 200, serving the current
     Flutter web build): `gnncab.nhtaxi.com` is attached to the
     `gnncab-preview` Pages project. Swap it for `app.nhtaxi.com` once the
     legacy Trackcar app is retired — see ADR 0009.
-  - Convert `info@nhtaxi.com` to `role:"driver", isAdmin:true` (ADR 0008) — a
-    deliberate one-off DB change.
+  - **Clarification, not a to-do**: `info@nhtaxi.com` is *already* the admin
+    account (`role: "admin"`) — that's what the user logs into the admin
+    panel with today. The actual optional item from ADR 0008 is different:
+    converting it to `role: "driver", isAdmin: true` instead, so the same
+    login could *also* drive (dispatch, the driver app, etc. would treat it
+    as an ordinary driver, with admin access layered on top via `isAdmin`).
+    Undecided — only relevant if the same person who runs the office also
+    wants to drive under this account. No action needed unless that's wanted.
   - Firebase project + `flutterfire configure` to deliver push. Use
     `com.nhtaxi.app` as the Android app id when registering in Firebase.
-  - Supply the GNN LLC report letterhead (address / tax no) for `ReportOrg`
-    (the logo image itself is now wired — ADR 0007).
-  - Clean the `smoke-*` test accounts/drivers from production D1.
-  - Confirm the Android icon/splash/amber theme look right on a real device
-    once convenient — this needs eyes on a phone, not CI.
+  - **GNN LLC report letterhead (address / tax no) for `ReportOrg`** — user
+    will supply this later (the logo image itself is already wired — ADR
+    0007). Tracked, not forgotten.
+  - **Done**: production D1 was reset for launch (see "What changed" above)
+    — every trip/driver/customer/session/document row is gone, only
+    `info@nhtaxi.com` remains. Optional follow-up the user hasn't asked for
+    yet: the actual files in the `gnncab-driver-documents` R2 bucket, from
+    the now-deleted `driver_documents` rows, are still sitting there —
+    `wrangler r2 object` has no bulk delete, so purging those needs a small
+    one-off script (list via the Cloudflare API directly, since `wrangler r2
+    object` only does one key at a time).
+  - **Done**: user confirmed the PWA (web app) runs fine on a real device —
+    the native Android icon/splash/APK install path remains unverified but
+    is no longer blocking anything.
