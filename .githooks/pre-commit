@@ -1,0 +1,86 @@
+#!/bin/sh
+# Blocks a commit that looks like it's about to leak a secret. Added when the
+# repo went public (2026-07-26) — a private-repo mistake was recoverable by
+# just rotating the key quietly; a public one is not.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+#
+# This is a safety net, not a substitute for judgment: it catches the
+# obvious/mechanical cases (private key blocks, known token prefixes,
+# credential-shaped filenames, real-looking secret assignments) and lets
+# everything else through. It does NOT understand context, so a genuine
+# false positive is possible — if you're certain a match is safe (a public
+# test fixture, a documented dummy value), use `git commit --no-verify`
+# deliberately, not as a default habit.
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+found=0
+
+# 1. Filenames that should never be committed regardless of content.
+for f in $staged; do
+  case "$f" in
+    *.env|*.env.*)
+      case "$f" in *.env.example) continue ;; esac
+      echo "BLOCKED: $f looks like a real env file, not a template" >&2
+      found=1
+      ;;
+    *.dev.vars|*.dev.vars.*)
+      case "$f" in *.dev.vars.example) continue ;; esac
+      echo "BLOCKED: $f looks like real local secrets, not a template" >&2
+      found=1
+      ;;
+    *.pem|*.p12|*.pfx|*.jks|*.keystore|id_rsa|id_rsa.*|id_ed25519|id_ed25519.*)
+      echo "BLOCKED: $f is a private key / keystore file" >&2
+      found=1
+      ;;
+  esac
+done
+
+# 2. Content patterns, scanned only in the staged diff (not the whole tree).
+diff_content=$(git diff --cached -U0 -- . ':!*.lock' ':!package-lock.json' ':!pnpm-lock.yaml' 2>/dev/null)
+
+if echo "$diff_content" | grep -qE '^\+.*-----BEGIN (RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----'; then
+  echo "BLOCKED: a private key block is being added" >&2
+  found=1
+fi
+
+if echo "$diff_content" | grep -qE '^\+.*\b(AKIA|ASIA)[0-9A-Z]{16}\b'; then
+  echo "BLOCKED: an AWS-shaped access key ID is being added" >&2
+  found=1
+fi
+
+if echo "$diff_content" | grep -qE '^\+.*\bgh[pousr]_[A-Za-z0-9]{36,}\b'; then
+  echo "BLOCKED: a GitHub-shaped token is being added" >&2
+  found=1
+fi
+
+if echo "$diff_content" | grep -qE '^\+.*\bxox[baprs]-[A-Za-z0-9-]{10,}\b'; then
+  echo "BLOCKED: a Slack-shaped token is being added" >&2
+  found=1
+fi
+
+# Generic "KEY = <long random-looking value>" assignment — the pattern that
+# actually bit this repo once (.dev.vars.example carried a real generated
+# key instead of a placeholder). Skips the project's own established
+# placeholder convention and obvious env/secret-store references so it
+# doesn't fire on legitimate code.
+if echo "$diff_content" | grep -qE '^\+' ; then
+  hits=$(echo "$diff_content" | grep -E '^\+' \
+    | grep -viE 'change-me|your-|replace[_-]?me|example\.com|process\.env|c\.env|\$\{\{ ?secrets\.|wrangler secret put|test-only|placeholder' \
+    | grep -oE '(API[_-]?KEY|SECRET|TOKEN|PASSWORD|PASSWD)[A-Za-z_]*\s*[:=]\s*["'"'"'][A-Za-z0-9+/_=.-]{20,}["'"'"']' 2>/dev/null)
+  if [ -n "$hits" ]; then
+    echo "BLOCKED: a real-looking secret value is being added:" >&2
+    echo "$hits" | sed 's/^/  /' >&2
+    found=1
+  fi
+fi
+
+if [ "$found" -eq 1 ]; then
+  echo "" >&2
+  echo "If this is a false positive and you're sure, re-run with --no-verify." >&2
+  exit 1
+fi
+
+exit 0
