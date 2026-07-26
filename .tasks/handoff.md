@@ -2,16 +2,43 @@
 
 - **Current mode**: Interactive
 - **Current branch**: `main`
-- **Last commit**: `5c735e9` — "Don't let a D1 backup artifact upload
-  failure block the deploy"
+- **Last commit**: `45b8274` — "Fix the last stale em-dash description:
+  web/index.html"
 - **Repo**: renamed on GitHub from `GNNcab-stack` to `gnncab-nhtaxi`
   (`https://github.com/BigDesigner/gnncab-nhtaxi`); local `origin` remote
   updated to match. GitHub auto-redirects the old URL for a while, but use
   the new one going forward.
-- **Worktree status**: clean, committed locally. Push + CI watch is the very
-  next step, not yet done as of this line — check `git log origin/main` /
-  `gh run list` to see whether that already happened by the time you're
-  reading this.
+- **Worktree status**: clean, committed and pushed. Both `Deploy` and
+  `Mobile` CI green as of this commit — check `gh run list` if you want to
+  confirm nothing regressed since.
+- **A full status audit was run on this commit** (user asked: is CI clean,
+  is anything half-done, is anything built server-side but never wired to
+  the app, is anything mid-flight). Findings, so the next session doesn't
+  have to redo this from scratch:
+  - **CI**: clean. Two Deploy runs failed right after the Actions-storage
+    cleanup (`b5a84b5`, `cbddbcb`) — diagnosed and fixed in `5c735e9`
+    (see below); every run since is green.
+  - **One real backend/frontend gap found**: `GET /api/customer/profile`
+    (returns `totalTrips` + `preferredPaymentMethod`) is never called
+    anywhere in `apps/mobile`. The passenger Profile tab shows email/phone/
+    role from `/api/auth/me` only — no lifetime trip count, even though the
+    driver side shows exactly this ("Verified driver · N trips") from the
+    equivalent driver field. Cheap, low-risk addition if wanted: call this
+    endpoint from `_ProfileTab` in `passenger_shell.dart` and add a trip-count
+    line. `preferredPaymentMethod` is currently moot (cash is the only
+    payment method — Stripe deferred), so that field has nothing to show yet.
+  - Every other endpoint in the live OpenAPI spec (55 total) was cross-checked
+    against `apps/mobile/lib` call sites one by one — all wired. `/api/admin/
+    bootstrap` is deliberately curl-only (one-time setup, not an app screen).
+  - **`gnncab.nhtaxi.com` is already live** serving the current Flutter web
+    build (verified: `curl` returns 200, HTML matches the app) — the
+    "Attach gnncab.nhtaxi.com" item further down in "Things only the user
+    can do" was stale from before this was done; left the entry but this
+    confirms it's already handled.
+  - No TODO/FIXME comments anywhere in `apps/`/`packages/`. Bug list
+    (`.memory-bank/bugs/bug-list.md`) is stale (references `4e246d5`) but its
+    "no open bugs" verdict still holds — nothing since has introduced one.
+  - Nothing is mid-commit or half-applied; `git status` is clean throughout.
 - **What changed** (most recent first — full history in
   `.memory-bank/changelog/verified-worklog.md`):
   - **Deploy no longer blocked by an Actions storage hiccup** (`5c735e9`):
@@ -125,16 +152,16 @@
   - `pnpm run typecheck`
   - `cd apps/api && pnpm vitest run`
   - `cd apps/mobile && flutter analyze && flutter test`
-- **Next recommended action**: push `45d2e50`, watch `Deploy` + `Mobile` CI,
-  then get a real logged-in look (any role) at every
-  unscreenshotted item below — the new header bar, plus the still-unverified
-  items from earlier rounds (Sign out buttons, Export reports row, the
-  "Assign a job"/"Request a trip" icon circles) — none of these were
-  screenshotted due to a recurring Browser-pane compositing hiccup. Also
-  worth a real device check of the Android app icon/splash/amber theme.
-  After that, no committed feature is mid-flight — next work is whatever
-  the user surfaces from real-world testing. Present a plan before writing
-  code on anything non-trivial.
+- **Next recommended action**: nothing is queued or mid-flight as of
+  `45b8274` — CI is green, the deploy pipeline is caught up, the repo is
+  audited clean for going public. The two concrete open items are (1) get a
+  real logged-in look at everything in "Not yet proven live" below — the
+  Browser-pane compositing bug has blocked every attempt at this so far,
+  it needs an actual device/browser, not another agent retry — and (2) the
+  `/api/customer/profile` gap above, only if the user wants a trip-count
+  shown on the passenger Profile tab. Otherwise, next work is whatever the
+  user surfaces from real-world testing. Present a plan before writing code
+  on anything non-trivial.
 - **Not yet proven live / on-device**:
   - **The new `BrandHeaderBar`** — centered logo + tab-name subtitle on every
     tab of every shell — needs a real logged-in look at each role.
@@ -162,9 +189,10 @@
   - `wrangler secret put BREVO_API_KEY` and `FCM_SERVICE_ACCOUNT_KEY`
     (email & push no-op silently until set).
   - Move `ROUTING_BASE_URL` off the public OSRM demo before real volume.
-  - Attach `gnncab.nhtaxi.com` to the `gnncab-preview` Pages project now (or
-    swap it for `app.nhtaxi.com` once the legacy Trackcar app is retired —
-    see ADR 0009).
+  - **Done, verified live** (`curl` returns 200, serving the current
+    Flutter web build): `gnncab.nhtaxi.com` is attached to the
+    `gnncab-preview` Pages project. Swap it for `app.nhtaxi.com` once the
+    legacy Trackcar app is retired — see ADR 0009.
   - Convert `info@nhtaxi.com` to `role:"driver", isAdmin:true` (ADR 0008) — a
     deliberate one-off DB change.
   - Firebase project + `flutterfire configure` to deliver push. Use

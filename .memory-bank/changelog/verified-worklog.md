@@ -753,6 +753,32 @@ part if service areas are ever wired to a real geofence/dispatch-radius
 feature, and rebuilding a small admin dialog at that point is cheap. No
 migration, no backend behaviour change; 104/104 Flutter tests still pass.
 
+### Full status audit: CI, dangling work, backend/frontend gaps
+User asked directly: is the workflow fully sorted, is anything half-done, is
+anything built server-side but never wired into the app, is anything mid-
+flight. Answered from measurement, not memory:
+
+- **CI**: every run since the deploy-resilience fix above is green.
+- **Backend/frontend gap, one found**: cross-checked every path in the live
+  OpenAPI spec (55 endpoints) against every API call site in `apps/mobile`.
+  54 are wired. `GET /api/customer/profile` (returns `totalTrips` and
+  `preferredPaymentMethod`) is never called — the passenger Profile tab
+  only reads `/api/auth/me`, which doesn't carry those fields. The driver
+  side shows the equivalent field ("Verified driver · N trips"); the
+  passenger side just never got the same treatment. `/api/admin/bootstrap`
+  is correctly curl-only by design, not a gap.
+- **`gnncab.nhtaxi.com`**: confirmed live via `curl` (200, serving the
+  current Flutter web build) — `.tasks/handoff.md` had this listed as a
+  pending "things only the user can do" item from before it was actually
+  attached; corrected.
+- Also caught and fixed one more instance of the stale-brand/em-dash
+  cleanup from earlier: `apps/mobile/web/index.html`'s `<meta
+  name="description">` is a separate static tag Flutter Web actually
+  serves — it isn't populated from `pubspec.yaml`'s description, so the
+  earlier pass had missed it.
+- No TODO/FIXME anywhere in `apps/`/`packages/`. Working tree clean
+  throughout — nothing mid-commit.
+
 ### A backup-artifact upload failure was quietly blocking every deploy
 Fallout from the storage cleanup above: the next two pushes after deleting
 the 37 stale APK artifacts both failed at `deploy.yml`'s "Upload D1 backup
