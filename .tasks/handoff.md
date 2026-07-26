@@ -2,8 +2,8 @@
 
 - **Current mode**: Interactive
 - **Current branch**: `main`
-- **Last commit**: `45b8274` — "Fix the last stale em-dash description:
-  web/index.html"
+- **Last commit**: `2d65ad6` — "Show a passenger's lifetime trip count on
+  their own Profile tab"
 - **Repo**: renamed on GitHub from `GNNcab-stack` to `gnncab-nhtaxi`
   (`https://github.com/BigDesigner/gnncab-nhtaxi`); local `origin` remote
   updated to match. GitHub auto-redirects the old URL for a while, but use
@@ -18,15 +18,14 @@
   - **CI**: clean. Two Deploy runs failed right after the Actions-storage
     cleanup (`b5a84b5`, `cbddbcb`) — diagnosed and fixed in `5c735e9`
     (see below); every run since is green.
-  - **One real backend/frontend gap found**: `GET /api/customer/profile`
-    (returns `totalTrips` + `preferredPaymentMethod`) is never called
-    anywhere in `apps/mobile`. The passenger Profile tab shows email/phone/
-    role from `/api/auth/me` only — no lifetime trip count, even though the
-    driver side shows exactly this ("Verified driver · N trips") from the
-    equivalent driver field. Cheap, low-risk addition if wanted: call this
-    endpoint from `_ProfileTab` in `passenger_shell.dart` and add a trip-count
-    line. `preferredPaymentMethod` is currently moot (cash is the only
-    payment method — Stripe deferred), so that field has nothing to show yet.
+  - **One real backend/frontend gap found — fixed same session** (`2d65ad6`):
+    `GET /api/customer/profile` (returns `totalTrips` +
+    `preferredPaymentMethod`) was never called anywhere in `apps/mobile`.
+    Added `customerProfileProvider` + a "Trips taken" row on the passenger
+    Profile tab, matching the driver side's existing "Verified driver ·
+    N trips". `preferredPaymentMethod` still has nothing to show — cash is
+    the only payment method (Stripe deferred), so that field stays unused
+    until that changes; not a gap, just not applicable yet.
   - Every other endpoint in the live OpenAPI spec (55 total) was cross-checked
     against `apps/mobile/lib` call sites one by one — all wired. `/api/admin/
     bootstrap` is deliberately curl-only (one-time setup, not an app screen).
@@ -152,17 +151,22 @@
   - `pnpm run typecheck`
   - `cd apps/api && pnpm vitest run`
   - `cd apps/mobile && flutter analyze && flutter test`
-- **Next recommended action**: nothing is queued or mid-flight as of
-  `45b8274` — CI is green, the deploy pipeline is caught up, the repo is
-  audited clean for going public. The two concrete open items are (1) get a
-  real logged-in look at everything in "Not yet proven live" below — the
-  Browser-pane compositing bug has blocked every attempt at this so far,
-  it needs an actual device/browser, not another agent retry — and (2) the
-  `/api/customer/profile` gap above, only if the user wants a trip-count
-  shown on the passenger Profile tab. Otherwise, next work is whatever the
-  user surfaces from real-world testing. Present a plan before writing code
-  on anything non-trivial.
+- **Next recommended action**: **nothing code-side is left.** As of
+  `2d65ad6`, every backend endpoint is wired to the app, the one gap the
+  audit found is closed, CI is green, and the deploy pipeline is caught up.
+  Everything still open is either (1) needs a real device/browser to
+  eyeball — see "Not yet proven live" below, the Browser-pane compositing
+  bug has blocked every agent attempt at this, it won't resolve by retrying
+  — or (2) needs the user directly (secrets, a business decision, or
+  production data) — see "Things only the user can do" below. Outside of
+  those two categories and the iOS/Android app-store + Firebase setup work,
+  there is no known remaining gap. Next work is whatever the user surfaces
+  from real-world testing. Present a plan before writing code on anything
+  non-trivial.
 - **Not yet proven live / on-device**:
+  - **"Trips taken" on the passenger Profile tab** (`2d65ad6`) — needs a
+    real logged-in passenger with completed trips to confirm the count
+    renders and matches reality.
   - **The new `BrandHeaderBar`** — centered logo + tab-name subtitle on every
     tab of every shell — needs a real logged-in look at each role.
   - **Screens from an earlier commit** (`4332b98`) — Sign out buttons, the Money export

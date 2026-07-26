@@ -753,6 +753,18 @@ part if service areas are ever wired to a real geofence/dispatch-radius
 feature, and rebuilding a small admin dialog at that point is cheap. No
 migration, no backend behaviour change; 104/104 Flutter tests still pass.
 
+### Closed the one backend/frontend gap the audit found
+User's call after the audit below: fix it now rather than leave it noted.
+Added `models/customer_profile.dart` + a `customerProfileProvider`
+(`FutureProvider`, same idiom as `citiesProvider`) calling the
+already-existing `GET /api/customer/profile`, and a "Trips taken" row on the
+passenger Profile tab (`passenger_shell.dart`) — same pattern the driver
+side already had ("Verified driver · N trips"), just never built on this
+side. No backend change needed, the endpoint already returned everything
+required. Fails soft: the row simply doesn't render if the fetch is slow or
+errors, same treatment as the optional phone row next to it.
+`flutter analyze` clean, 104/104 tests pass.
+
 ### Full status audit: CI, dangling work, backend/frontend gaps
 User asked directly: is the workflow fully sorted, is anything half-done, is
 anything built server-side but never wired into the app, is anything mid-
