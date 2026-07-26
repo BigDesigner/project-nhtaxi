@@ -946,8 +946,8 @@ so a stub can't masquerade as a finished feature again.
   original project's SRS, which itself marked it "Optional / Admin", and never
   wired to anything here. Dropped once the user confirmed, rather than left as
   a stub that reads as a working feature. The original design is preserved in
-  `.archive/docs-migration/2026-07-19/srs_architecture_doc.md` if a future
-  multi-city build ever wants it back.
+  `.memory-bank/audits/srs-architecture.md` if a future multi-city build ever
+  wants it back.
 - **Per-city columns** (`trips.city_id`, `driver_profiles.city_id`,
   `pricing_config.city_id`): trips are created with a null city, drivers never
   get one, and pricing always reads the global (`city_id IS NULL`) row.

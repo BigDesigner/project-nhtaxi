@@ -20,6 +20,6 @@
     "audits": ".memory-bank/audits/",
     "bugs": ".memory-bank/bugs/",
     "tasks": ".tasks/",
-    "archive": ".archive/docs-migration/"
+    "migration_map": ".memory-bank/migration-map.md"
   }
 }

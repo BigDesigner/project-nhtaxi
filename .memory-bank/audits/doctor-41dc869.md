@@ -10,4 +10,4 @@
 | Archive Consistency | Warning | Archived files are tracked in migration-map.md, but the archive path in the map includes an extra `.spec/` subdirectory that doesn't match the actual file location. |
 
 ## Detailed Findings & Guided Repair Checklist
-- [ ] **Warning:** Update `.memory-bank/migration-map.md` to remove the `.spec/` part from the Archive Path column to exactly match the files in `.archive/docs-migration/2026-07-19/`.
+- [x] **Warning:** Update `.memory-bank/migration-map.md` to remove the `.spec/` part from the Archive Path column to exactly match the files in `.archive/docs-migration/2026-07-19/`. **Resolved 2026-07-26**: `migration-map.md` rewritten and the archive folder itself deleted once every row was confirmed captured elsewhere.

@@ -18,8 +18,7 @@
         ".memory-bank/adr/",
         ".memory-bank/changelog/",
         ".memory-bank/audits/",
-        ".memory-bank/bugs/",
-        ".archive/docs-migration/"
+        ".memory-bank/bugs/"
       ]
     },
     "automation": {

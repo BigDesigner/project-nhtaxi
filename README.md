@@ -10,10 +10,11 @@ ADR 0009).
 
 **Agents / new contributors start here:** read [AGENTS.md](AGENTS.md), then
 [.memory-bank/changelog/verified-worklog.md](.memory-bank/changelog/verified-worklog.md)
-and [.tasks/handoff.md](.tasks/handoff.md). The original rebuild plan and every
-locked decision (L0–L31) are archived at
-[.archive/docs-migration/2026-07-19/rebuild_plan.md](.archive/docs-migration/2026-07-19/rebuild_plan.md).
-This README only covers one-time setup and day-to-day dev commands.
+and [.tasks/handoff.md](.tasks/handoff.md). The original rebuild plan's locked
+decisions (L0–L31) now live in the [ADRs](.memory-bank/adr/) — see
+[.memory-bank/migration-map.md](.memory-bank/migration-map.md) for where each
+one landed. This README only covers one-time setup and day-to-day dev
+commands.
 
 ## Repo layout
 
