@@ -1,8 +1,16 @@
 name: Mobile
 
-# L26 stage 1: CI builds a debug APK, you download the artifact and run it on
-# an emulator. No store signing and no iOS — macOS runners burn the free
-# Actions quota ~10x, so iOS waits until there's a reason to pay for it.
+# L26 stage 1: CI can build a debug APK on request, you download the artifact
+# and run it on an emulator. No store signing and no iOS — macOS runners burn
+# the free Actions quota ~10x, so iOS waits until there's a reason to pay for it.
+#
+# The APK build is workflow_dispatch-only, not on every push. It used to build
+# on every commit under apps/mobile/**, and since this repo never uses PRs
+# (single branch, direct pushes), that meant one ~85MB debug APK per commit,
+# retained 14 days — 37 of them alone accounted for ~3GB against GitHub's
+# 500MB free Actions storage quota, blocking the account entirely. Analyze +
+# test still run on every push/PR as the actual CI gate; the APK itself is
+# opt-in via "Run workflow" whenever someone actually needs to install one.
 on:
   push:
     branches: [main]
@@ -20,15 +28,10 @@ defaults:
     working-directory: apps/mobile
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
 
       - uses: subosito/flutter-action@v2
         with:
@@ -47,25 +50,52 @@ jobs:
       - name: Test
         run: flutter test
 
+  # Produces zero artifacts on the automatic push/PR triggers — only when
+  # someone explicitly runs it (GitHub Actions tab → Mobile → Run workflow).
+  build-apk:
+    needs: test
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.6"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
       # --target-platform includes x86_64 so the APK actually runs on a
       # standard Android emulator, not just physical ARM devices.
       - name: Build debug APK
         run: flutter build apk --debug --target-platform=android-arm,android-arm64,android-x64
 
+      # Short retention on purpose — this is a throwaway for one round of
+      # manual testing, not a release artifact worth keeping around.
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: nhtaxi-debug-apk
           path: apps/mobile/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 3
 
   # L32 — Flutter Web preview on Cloudflare Pages, so the app can be opened
-  # on a real phone browser with no install. Complements the APK above; it
-  # does NOT replace it, since background GPS and FCM push are unreliable on
-  # mobile web (especially iOS Safari).
+  # on a real phone browser with no install. Complements the on-demand APK
+  # above; it does NOT replace it, since background GPS and FCM push are
+  # unreliable on mobile web (especially iOS Safari). Runs on every push to
+  # main, same as before — it deploys to Pages rather than uploading an
+  # Actions artifact, so it was never part of the storage problem.
   deploy-web:
-    needs: build
+    needs: test
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     env:
