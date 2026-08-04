@@ -18,12 +18,19 @@ paid by passengers in **cash** (no in-app payment). The product language is
 **Turkish** (chat with the user) but the **codebase, UI copy, commits and docs
 are English**.
 
-**"GNNcab" was the working name during the rebuild** (still visible in the
-repo folder name, the Cloudflare Worker/D1/R2 resource names, and the Flutter
-web preview subdomain `gnncab.nhtaxi.com` — kept deliberately, purely cosmetic,
-see ADR 0009). Nothing a user sees — app UI, emails, legal terms, the OpenAPI
-title — says "GNNcab" anymore; the Dart package and Android `applicationId`
-are `nhtaxi` / `com.nhtaxi.app`.
+**"GNNcab" was the working name during the rebuild** — still visible in the
+Cloudflare Worker/D1/R2 resource names and the Flutter web preview subdomain
+`gnncab.nhtaxi.com`, kept deliberately, purely cosmetic, see ADR 0009.
+Nothing a user sees — app UI, emails, legal terms, the OpenAPI title — says
+"GNNcab" anymore; the Dart package and Android `applicationId` are `nhtaxi` /
+`com.nhtaxi.app`.
+
+**Repo identity, current as of 2026-07-26**: the GitHub repo is
+**public** at `github.com/BigDesigner/project-nhtaxi` (renamed twice:
+`GNNcab-stack` → `gnncab-nhtaxi` → `project-nhtaxi`; old URLs auto-redirect
+for a while but don't rely on that). The local clone's folder is also named
+`project-nhtaxi` now, matching. Being public changes the stakes on
+secrets — see rule 7 below and `.githooks/pre-commit`.
 
 ## Start here (read these two first)
 
@@ -78,8 +85,14 @@ Live: API `api.nhtaxi.com`, web preview `gnncab-preview.pages.dev`.
 6. **No API path grants `admin` or `isAdmin`.** Escalation is impossible by
    design; new admins/dual-role come from the bootstrap endpoint (once) or a
    deliberate manual DB change. ADR 0008.
-7. **Secrets never touch chat or the repo.** JWT/FCM/Brevo/encryption keys are
-   set by the user with `wrangler secret put`. Never ask for or print a secret.
+7. **Secrets never touch chat or the repo — and the repo is now public.**
+   JWT/FCM/Brevo/encryption keys are set by the user with
+   `wrangler secret put`. Never ask for or print a secret. A
+   `.githooks/pre-commit` hook blocks obviously-secret-shaped commits
+   (credential filenames, private-key blocks, known token prefixes,
+   real-looking `KEY=<value>` assignments) as a backstop, and GitHub's own
+   secret scanning + push protection is enabled on the repo — but don't
+   rely on either as the only line of defense; review your own diff first.
 8. **Plan before code on anything non-trivial.** The user works "önce plan,
    sonra kod" (plan first). For a sizeable change, present the plan and wait.
 9. **Verify before claiming done.** `pnpm run typecheck` + backend vitest +
@@ -138,9 +151,17 @@ cd apps/api && pnpm run db:generate        # after a schema change
 ## Things only the user can do (do not attempt)
 
 - `wrangler secret put` for `FCM_SERVICE_ACCOUNT_KEY`, `BREVO_API_KEY` (push &
-  email no-op silently until set), and rotating others.
+  email no-op silently until set — `BREVO_API_KEY` may already be set; can't
+  be verified from a fresh clone without a real send, see handoff.md), and
+  rotating others.
 - Move `ROUTING_BASE_URL` off the public OSRM demo before real volume.
-- Attach `gnncab.nhtaxi.com` to the `gnncab-preview` Pages project.
-- Convert `info@nhtaxi.com` to the dual role (`role:"driver", isAdmin:true`) —
-  a deliberate one-off DB change (ADR 0008).
+- `info@nhtaxi.com` is **already** the live admin account (`role: "admin"`) —
+  that's not a to-do. The actual optional item is converting it to the dual
+  role (`role:"driver", isAdmin:true`) so the same login could also drive —
+  a deliberate one-off DB change, only relevant if wanted (ADR 0008).
 - Firebase project + `flutterfire configure` to actually deliver push.
+- Local `wrangler` CLI may not be authenticated against the Cloudflare
+  account that owns this project's Worker/D1 — check before assuming a
+  `wrangler d1`/`secret list` command will reach production; see
+  `.tasks/handoff.md` for the workaround (a `workflow_dispatch` GitHub
+  Action reusing the repo's own `CLOUDFLARE_API_TOKEN`).

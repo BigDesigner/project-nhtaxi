@@ -2,7 +2,7 @@
 
 | Issue | Status | Confidence | Details | Suggested Action |
 |---|---|---|---|---|
-| No open bugs | N/A | Verified | Worktree clean; 204/204 backend + 100/100 Flutter tests pass; both CI workflows green on `4e246d5`. | Continue from `.tasks/handoff.md` → "Next recommended action". |
+| No open bugs | N/A | Verified | 204/204 backend + 104/104 Flutter tests pass; both CI workflows green as of the commit `.tasks/handoff.md` names. | Continue from `.tasks/handoff.md` → "Next recommended action". |
 
 ## Watch list (not bugs — known trade-offs / unproven-live)
 - Any signed-in passenger can see every on-duty driver's live position, phone
