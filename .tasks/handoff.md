@@ -2,8 +2,8 @@
 
 - **Current mode**: Interactive
 - **Current branch**: `main`
-- **Last commit**: pending — this memory-bank consistency pass itself isn't
-  committed as of this line. Check `git log -1` to see the real HEAD.
+- **Last commit**: `9156d20` — "Make every .md accurate for a cold-start
+  agent handoff"
 - **Repo identity (single source of truth — ignore anything elsewhere that
   disagrees)**:
   - GitHub: **public**, `https://github.com/BigDesigner/project-nhtaxi`.
@@ -26,8 +26,7 @@
     checklist (full git history scan, `.gitignore` coverage, wrangler.toml,
     Android signing, npmrc) after any change touching config/secrets/CI —
     it's a baseline to re-check, not a one-time pass.
-- **Worktree status**: check `git status` — a memory-bank-only commit may
-  still be pending as of this line.
+- **Worktree status**: clean, committed and pushed as of this commit.
 - **A full status audit was run recently** (user asked: is CI clean, is
   anything half-done, is anything built server-side but never wired to the
   app, is anything mid-flight). Findings, so a fresh agent doesn't have to

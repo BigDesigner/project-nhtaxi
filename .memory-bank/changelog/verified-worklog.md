@@ -753,6 +753,31 @@ part if service areas are ever wired to a real geofence/dispatch-radius
 feature, and rebuilding a small admin dialog at that point is cheap. No
 migration, no backend behaviour change; 104/104 Flutter tests still pass.
 
+### Local folder renamed to match; every .md made accurate for a cold start
+Two follow-ups after the public/rename work below. First, the user renamed
+the local clone folder too (`GNNcab-stack` → `project-nhtaxi`, matching the
+GitHub repo). A plain `Rename-Item` was blocked — Windows had the directory
+locked as this session's active working directory — so the content was
+copied to the new path via `robocopy` instead (50,571 files, 1.586GB, zero
+failures, verified afterward: correct branch, commit, remote). The old
+folder couldn't be deleted from the same locked session either; left for
+the user to remove manually once confirmed safe. The session's own working
+directory was then switched by the user to the new path.
+
+Second: with two renames landed across several commits, the docs had
+drifted — `AGENTS.md` still said "GNNcab" survived in "the repo folder
+name" (it doesn't, post-rename), and `.tasks/handoff.md` had accumulated
+duplicate/contradictory "repo renamed" notes from incremental edits. User
+asked directly for the project to be in a state where a *different* agent
+could pick it up cold, so every `.md` got a consistency pass rather than
+another patch: `AGENTS.md` now states the current repo identity (public,
+`project-nhtaxi`) and the pre-commit secret-scan hook up front, and its
+stale "attach gnncab.nhtaxi.com" to-do (done weeks ago) was removed instead
+of left as noise. `handoff.md` was rewritten top-to-bottom into one
+non-contradictory account. `bug-list.md`'s hardcoded stale commit
+hash/test-count was replaced with a pointer to whatever commit `handoff.md`
+names, so it can't silently drift out of sync the same way again.
+
 ### Repo went public: renamed to project-nhtaxi, secret-scanning precautions
 User made the repo public and asked for every reasonable precaution against
 a secret/token leak going forward, and renamed it again (`gnncab-nhtaxi` →
