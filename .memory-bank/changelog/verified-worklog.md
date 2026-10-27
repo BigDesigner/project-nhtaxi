@@ -1354,3 +1354,5 @@ change-password flow.
   and handoff, updated after deployment verification.
 
 Implementation committed as `d65b1a9`; CI/deployment verification follows.
+
+CI follow-up: replaced the broken pnpm 11.12.0 pin with 11.28.9; frozen install and typecheck passed, audit remains zero. Android multi-architecture debug APK also built successfully.

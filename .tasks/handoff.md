@@ -33,7 +33,9 @@ validation and deliberate version holds; raw npm/Flutter reports are beside it.
 - Full and production npm audits: zero known advisories.
 - Worker dry-run and release web build: passed.
 - Drizzle generation: passed, no schema changes or new migrations.
-- Android, CI and live smoke: final outcomes recorded after completion.
+- Android debug APK (ARM32/ARM64/x86_64): passed.
+- First Deploy failed on the old broken pnpm 11.12.0 pin; fixed to verified 11.28.9.
+- CI and live smoke: final outcomes recorded after completion.
 
 ## Next action
 

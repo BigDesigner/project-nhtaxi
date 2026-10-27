@@ -17,10 +17,16 @@ on:
     paths:
       - "apps/mobile/**"
       - ".github/workflows/mobile.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
   pull_request:
     paths:
       - "apps/mobile/**"
       - ".github/workflows/mobile.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
   workflow_dispatch:
 
 defaults:

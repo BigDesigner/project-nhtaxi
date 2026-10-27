@@ -111,3 +111,6 @@ standalone executable build is missing a binary). The local npm-installed
 copy happened to work, which is why local validation did not expose this.
 Pin pnpm 11.28.9 instead and validate its frozen installation explicitly;
 no global package-manager installation is modified.
+Mobile workflow path filters now include the three root package-manager/lock
+files, because its deployment CLI comes from that workspace. Root tool changes
+must revalidate web deployment even when Flutter source itself is unchanged.
