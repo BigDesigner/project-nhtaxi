@@ -1,12 +1,12 @@
 # Pipeline & Backlog
 
-## Current state (as of `4e246d5`, 2026-07-22)
+## Current state (2026-10-27 maintenance)
 Backend Faz 0–6 and the Flutter app (passenger / driver / admin, Faz 7–9) are
 built, deployed and live. Faz 10–11 (real road-distance pricing, gated terms,
 password rotation, referral commission, live referral trips + breadcrumbs +
 path verification) are done. Since then: driver car marker, names in trip
 history, full money reporting (CSV + PDF), and short trip IDs + admin lookup +
-richer report rows. 204/204 backend tests, 100/100 Flutter, both CI green.
+richer report rows. Maintenance refreshed dependencies and CI, removed public SQL backup artifacts, added request limits and offline PDF fonts. Local checks: 209/209 backend, 105/105 Flutter. Current CI/deploy evidence is in `.tasks/handoff.md`.
 
 No feature is mid-flight. Present a plan before starting anything sizeable.
 
@@ -22,8 +22,9 @@ No feature is mid-flight. Present a plan before starting anything sizeable.
   contract layer (`PAYMENT_METHODS`).
 
 ## Blockers
-- None in code. Several items are user-owned (secrets, routing endpoint, domain
-  attach, dual-role conversion) — see `.tasks/handoff.md`.
+- User-owned setup and on-device verification remain; see `.tasks/handoff.md`.
+- Longer private backup retention and durable HTTP authentication throttling
+  remain follow-up hardening work; see the maintenance report.
 
 ## Suggested validation plan
 - `pnpm run typecheck`

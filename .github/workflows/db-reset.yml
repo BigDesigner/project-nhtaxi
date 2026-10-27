@@ -5,8 +5,9 @@ name: Database Reset
 # so the app comes back up as a blank slate for real customers instead of
 # carrying this project's smoke-test history forward. Never runs
 # automatically; requires typing RESET into the workflow_dispatch input, and
-# always takes a fresh D1 export first (uploaded as an artifact) in case
-# anything needs to be pulled back out afterward. See apps/api/scripts/
+# always takes a fresh D1 export first (kept on the ephemeral runner).
+# D1 Time Travel provides durable recovery; never upload plaintext user data
+# as a public repository artifact. See ADR 0011 and apps/api/scripts/
 # reset-to-launch.sql for exactly what runs.
 on:
   workflow_dispatch:
@@ -31,9 +32,9 @@ jobs:
           echo "Confirmation text did not match 'RESET' exactly — aborting without touching anything."
           exit 1
 
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
           cache: pnpm
@@ -41,30 +42,13 @@ jobs:
 
       - name: Backup before wiping anything
         working-directory: apps/api
-        run: npx wrangler d1 export gnncab --remote --output=pre-reset-backup.sql
-
-      # continue-on-error: same reasoning as deploy.yml — this is a
-      # convenience copy, not the only backup. D1 has its own built-in Time
-      # Travel point-in-time restore on every plan, independent of Actions
-      # entirely, so a storage-quota hiccup here (this repo's Actions
-      # storage counter can take 6-12 hours to catch up after a cleanup,
-      # per GitHub's own message) must not block the reset below. Not
-      # printed to the job log either — it contains password hashes and
-      # real user PII, which a public repo would then expose in a public
-      # log forever.
-      - name: Upload pre-reset backup
-        uses: actions/upload-artifact@v4
-        continue-on-error: true
-        with:
-          name: pre-reset-backup-${{ github.run_id }}
-          path: apps/api/pre-reset-backup.sql
-          retention-days: 30
+        run: pnpm exec wrangler d1 export gnncab --remote --output=pre-reset-backup.sql
 
       - name: Wipe all trip/driver/customer/activity data
         working-directory: apps/api
-        run: npx wrangler d1 execute gnncab --remote --file=./scripts/reset-to-launch.sql
+        run: pnpm exec wrangler d1 execute gnncab --remote --file=./scripts/reset-to-launch.sql
 
       - name: Verify result
         working-directory: apps/api
         run: |
-          npx wrangler d1 execute gnncab --remote --command="SELECT (SELECT COUNT(*) FROM users) users, (SELECT email FROM users) remaining_email, (SELECT COUNT(*) FROM trips) trips, (SELECT COUNT(*) FROM driver_profiles) drivers, (SELECT COUNT(*) FROM customer_profiles) customers, (SELECT COUNT(*) FROM audit_logs) audit_logs;"
+          pnpm exec wrangler d1 execute gnncab --remote --command="SELECT (SELECT COUNT(*) FROM users) users, (SELECT email FROM users) remaining_email, (SELECT COUNT(*) FROM trips) trips, (SELECT COUNT(*) FROM driver_profiles) drivers, (SELECT COUNT(*) FROM customer_profiles) customers, (SELECT COUNT(*) FROM audit_logs) audit_logs;"

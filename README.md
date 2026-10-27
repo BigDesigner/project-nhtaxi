@@ -137,4 +137,11 @@ deploy steps (they don't hard-fail).
   (a `*.workers.dev` URL, posted by wrangler in the Action log).
 - Merge to `main` → `deploy.yml` runs typecheck/test, exports a D1 backup,
   applies migrations, then deploys the Worker to `api.nhtaxi.com`.
+- SQL exports stay on the ephemeral runner. This repository is public, so
+  database exports must never be uploaded as Actions artifacts. Durable
+  recovery uses D1 Time Travel (7 days on Free); see ADR 0011. Longer retention
+  needs a private, encrypted backup destination.
+- CI checks high-severity npm advisories. Dependabot checks npm, Flutter and
+  Actions weekly; Flutter CI enforces `pubspec.lock`, and both deploy paths use
+  the workspace's lockfile-pinned Wrangler.
 - No manual `wrangler deploy` should be needed after the one-time setup.

@@ -113,15 +113,13 @@ describe("auth — web (cookie) flow", () => {
   });
 
   it("rejects a register request with no Content-Type header (regression: must not silently skip validation)", async () => {
-    // @hono/zod-openapi only runs the zod validator when the body is marked
-    // `required` or the Content-Type is recognized as JSON — otherwise it
-    // silently substitutes an unvalidated `{}`. registerRoute sets
-    // `body.required: true` specifically to prevent that; this pins it.
+    // Required bodies now have an upstream media-type gate. Preserve its
+    // 415 status rather than silently skipping validation or returning 500.
     const res = await req("/api/auth/register", {
       method: "POST",
       body: JSON.stringify({ ...BASE_REGISTER_BODY, email: uniqueEmail() }),
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(415);
   });
 
   it("rejects login with the wrong password", async () => {

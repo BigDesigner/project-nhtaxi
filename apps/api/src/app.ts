@@ -1,5 +1,8 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
+import { bodyLimit } from "hono/body-limit";
+import { secureHeaders } from "hono/secure-headers";
+import { HTTPException } from "hono/http-exception";
 import type { AppBindings } from "./env";
 import { requireCsrfForCookieAuth } from "./middlewares/csrf";
 import adminRoutes from "./routes/admin";
@@ -14,6 +17,8 @@ import referralTripRoutes from "./routes/referral_trips";
 import tripRoutes from "./routes/trips";
 
 const app = new OpenAPIHono<AppBindings>();
+
+app.use("*", secureHeaders());
 
 // Cross-subdomain admin (admin.nhtaxi.com → api.nhtaxi.com, L28). Mobile uses
 // Bearer tokens and is unaffected by CORS.
@@ -39,6 +44,20 @@ app.use(
 );
 
 app.use("*", requireCsrfForCookieAuth);
+
+// Bound request memory before JSON validation or binary buffering. Uploads
+// retain their existing 10 MB document / 2 MB photo validation below this cap.
+const requestLimit = (maxSize: number) => bodyLimit({
+  maxSize,
+  onError: (c) => c.json({ error: "PayloadTooLarge", message: "Request body is too large" }, 413),
+});
+const jsonLimit = requestLimit(64 * 1024);
+const uploadLimit = requestLimit(12 * 1024 * 1024);
+app.use("*", (c, next) => {
+  const isUpload = c.req.method === "POST" &&
+    (/^\/api\/driver\/documents\/[^/]+$/.test(c.req.path) || c.req.path === "/api/driver/photo");
+  return (isUpload ? uploadLimit : jsonLimit)(c, next);
+});
 
 app.route("/api", health);
 app.route("/api/auth", authRoutes);
@@ -73,6 +92,11 @@ app.doc("/api/openapi.json", {
 });
 
 app.onError((err, c) => {
+  // Framework validation errors (e.g. unsupported media types) are client
+  // errors. Preserve their status instead of converting them into a 500.
+  if (err instanceof HTTPException) {
+    return c.json({ error: "RequestError", message: err.message }, err.status);
+  }
   // Routing being unavailable means we cannot work out what a journey will
   // actually cost. Handled centrally so every pricing path reports it the
   // same way, including any added later. It is deliberately an error rather

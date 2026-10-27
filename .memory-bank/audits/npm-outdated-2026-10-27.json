@@ -1,0 +1,40 @@
+{
+  "@types/node": {
+    "current": "24.19.2",
+    "latest": "26.6.5",
+    "wanted": "24.19.2",
+    "isDeprecated": false,
+    "dependencyType": "devDependencies",
+    "dependentPackages": [
+      {
+        "name": "@gnncab/api",
+        "location": "C:\\Users\\bigde\\.antigravity\\project-nhtaxi\\apps\\api"
+      }
+    ]
+  },
+  "typescript": {
+    "current": "5.9.3",
+    "latest": "7.0.2",
+    "wanted": "5.9.3",
+    "isDeprecated": false,
+    "dependencyType": "devDependencies",
+    "dependentPackages": [
+      {
+        "name": "project-nhtaxi",
+        "location": "C:\\Users\\bigde\\.antigravity\\project-nhtaxi"
+      },
+      {
+        "name": "@gnncab/api",
+        "location": "C:\\Users\\bigde\\.antigravity\\project-nhtaxi\\apps\\api"
+      },
+      {
+        "name": "@gnncab/contract",
+        "location": "C:\\Users\\bigde\\.antigravity\\project-nhtaxi\\packages\\contract"
+      },
+      {
+        "name": "@gnncab/db",
+        "location": "C:\\Users\\bigde\\.antigravity\\project-nhtaxi\\packages\\db"
+      }
+    ]
+  }
+}

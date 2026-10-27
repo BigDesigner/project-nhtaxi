@@ -7,8 +7,10 @@ import 'package:nhtaxi/core/report_tables.dart';
 import 'package:nhtaxi/core/trip_id.dart';
 import 'package:nhtaxi/models/admin.dart';
 import 'package:nhtaxi/models/driver_billing.dart';
+import 'package:pdf/pdf.dart' show TtfParser;
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('buildReportCsv', () {
     final table = ReportTable(
       title: 'Test report',
@@ -66,7 +68,7 @@ void main() {
         title: 'PDF report',
         columns: const [ReportColumn('A'), ReportColumn('B', numeric: true)],
         rows: const [
-          ['one', '1'],
+          ['Çağrı Şahin – İpek Öztürk', '1'],
           ['two', '2'],
         ],
         totals: const ['TOTAL', '3'],
@@ -77,11 +79,17 @@ void main() {
       expect(String.fromCharCodes(bytes.take(4)), '%PDF');
     });
 
-    // Uses testWidgets rather than test() specifically because rootBundle
-    // needs a real Flutter binding to resolve pubspec assets — the plain
-    // test() above never touches the asset bundle at all (buildReportPdf
-    // swallows a failed load and renders without a logo), so it can't catch
-    // a typo'd path or a missing pubspec entry the way this one does.
+    test('both bundled PDF fonts cover Turkish names and punctuation', () async {
+      for (final weight in ['Regular', 'Bold']) {
+        final data = await rootBundle.load('assets/fonts/Roboto-$weight.ttf');
+        final font = TtfParser(data);
+        for (final rune in 'ÇĞİÖŞÜçğıöşü–—'.runes) {
+          expect(font.charToGlyphIndexMap[rune], greaterThan(0),
+              reason: '$weight must support ${String.fromCharCode(rune)}');
+        }
+      }
+    });
+
     testWidgets('the default PDF logo asset actually resolves', (tester) async {
       final data = await rootBundle.load('assets/branding/logo-pdf.png');
       expect(data.lengthInBytes, greaterThan(0));

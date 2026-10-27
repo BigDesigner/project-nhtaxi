@@ -26,9 +26,7 @@ class ReportOrg {
   static const ReportOrg gnn = ReportOrg();
 }
 
-/// Cached after the first load, same reasoning as [_reportTheme] below — a
-/// report's data is already fetched over the network, so an export always has
-/// connectivity to load this asset once. `null` (fetch failed, or running
+/// Cached after the first load. `null` (asset failed to load, or running
 /// somewhere without the asset bundle, e.g. a bare Dart test) just means the
 /// header renders without a logo rather than failing the export.
 Uint8List? _cachedDefaultLogo;
@@ -163,24 +161,20 @@ String buildReportCsv(ReportTable t) {
 }
 
 // ─── PDF ────────────────────────────────────────────────────────────────────
-/// The PDF's default fonts are Helvetica, which has no Unicode — Turkish names
-/// (ö, ç, ş, ğ, ı) and punctuation like em-dashes come out as boxes. Roboto
-/// covers all of it. It's fetched once and cached; because a report's data is
-/// itself fetched over the network, an export always has connectivity, so this
-/// adds no offline limitation. If the fetch ever fails we fall back to the
-/// built-in fonts rather than failing the export.
+/// Bundle Unicode fonts so exports preserve names even without network access.
+/// A missing asset must fail visibly instead of silently corrupting a report.
 pw.ThemeData? _cachedTheme;
-Future<pw.ThemeData?> _reportTheme() async {
-  if (_cachedTheme != null) return _cachedTheme;
-  try {
-    _cachedTheme = pw.ThemeData.withFont(
-      base: await PdfGoogleFonts.robotoRegular(),
-      bold: await PdfGoogleFonts.robotoBold(),
-    );
-  } catch (_) {
-    return null;
-  }
-  return _cachedTheme;
+Future<pw.ThemeData> _reportTheme() async {
+  final cached = _cachedTheme;
+  if (cached != null) return cached;
+  final regular = await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
+  final bold = await rootBundle.load('assets/fonts/Roboto-Bold.ttf');
+  final theme = pw.ThemeData.withFont(
+    base: pw.Font.ttf(regular),
+    bold: pw.Font.ttf(bold),
+  );
+  _cachedTheme = theme;
+  return theme;
 }
 
 /// Builds a print-ready PDF: an org/title/period header band, the table with a

@@ -24,6 +24,7 @@ apps/mobile/**/build/
 apps/mobile/**/.pub-cache/
 apps/mobile/**/*.iml
 apps/mobile/**/android/.gradle/
+apps/mobile/**/android/.kotlin/
 apps/mobile/**/android/local.properties
 apps/mobile/**/ios/Pods/
 apps/mobile/**/ios/.symlinks/
@@ -43,3 +44,6 @@ apps/api/.wrangler/
 
 # Generated admin bootstrap SQL — contains a real password hash
 apps/api/scripts/seed-admin.sql
+# Database exports contain credentials and personal data.
+apps/api/backup.sql
+apps/api/pre-reset-backup.sql

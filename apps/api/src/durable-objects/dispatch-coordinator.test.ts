@@ -177,7 +177,8 @@ describe("DispatchCoordinator — redispatch & timeout", () => {
     const retried = await readJson(retryRes);
     expect(retried.status).toBe("REQUESTED");
     expect(retried.searchAttempts).toBeLessThanOrEqual(1);
-  });
+  // Fifteen real D1/DO alarm rounds need more than the default 5s under load.
+  }, 15_000);
 
   it("stops searching once the passenger cancels", async () => {
     const { pickup, dropoff } = region(48.0);

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-workers";
+import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
 // Tests run inside a real workerd instance (via the pool), with the same
@@ -38,6 +38,9 @@ export default defineConfig(async () => {
       }),
     ],
     test: {
+      // Each file starts a real workerd + D1 instance. Bound concurrency so
+      // slower developer machines do not starve dispatch alarm tests.
+      maxWorkers: 4,
       // stub-routing must be listed: fares now come from a live routing
       // lookup, and without it every trip test would hit a public community
       // server — slow, flaky, and rude.

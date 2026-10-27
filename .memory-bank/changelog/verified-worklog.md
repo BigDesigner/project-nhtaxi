@@ -1241,6 +1241,8 @@ same pattern is worth applying to the other routers if they're ever touched.
 
 ## Validation Status
 
+Maintenance 2026-10-27: backend **209/209**, Flutter **105/105**; TypeScript and Flutter analysis clean; npm audit zero advisories. Release web and Worker dry-run pass. Final CI/deploy status is recorded in `.tasks/handoff.md` and the maintenance report. Historical validation below describes earlier releases.
+
 As of commit `a1a39c9` (real NH Taxi branding assets),
 everything below is deployed and verified against production.
 
@@ -1319,3 +1321,34 @@ change-password flow.
   package — DB CHECK constraint deliberately left wide for a trivial future
   reversal).
 - Phase 10 (go-live & cutover from legacy Trackcar system) not started.
+
+### 2026-10-27 — Resume-development dependency and security maintenance
+- Refreshed API and Flutter dependency locks after the project pause. Full npm
+  audit fell from 43 advisories to zero; production dependencies also report
+  zero. The raw audit and remaining-version inventories live in
+  `.memory-bank/audits/`, alongside `maintenance-2026-10-27.md`.
+- Replaced the retired Cloudflare test pool package with the official Vitest
+  plugin and Vitest 5. Four concurrent real Workers plus a specific 15s budget
+  for fifteen alarm rounds avoid machine-load timeouts without weakening the
+  dispatch assertions. Backend: 209/209, Flutter: 105/105, both analyzers clean.
+- Added HTTP request size limits and security headers. Updated zod-openapi
+  rejects a missing required JSON media type with 415; preserving framework
+  HTTPException statuses fixes the previous generic error handler's accidental
+  500. Uploads keep their existing file-size validation beneath a 12 MiB cap.
+- Embedded licensed Roboto assets for PDF exports. Tests now run without a
+  font-service request and check both weights cover Turkish names. A missing
+  font must fail visibly, not silently turn a person's name into boxes.
+  ADR 0007 is amended with this change.
+- Found one retained plaintext D1 backup artifact on this public repository.
+  Did not download it. Deleted it only after explicit user approval; verified
+  zero remaining artifacts. Removed both SQL artifact upload steps and ignored
+  local export files. Durable recovery is D1 Time Travel (7 days on Free),
+  **not** the runner-local export. See ADR 0011 for the privacy/retention tradeoff.
+- Updated Actions and added weekly Dependabot plus a high-advisory CI gate.
+  Flutter CI enforces its lockfile, and web deploy uses the API's pinned
+  Wrangler rather than fetching a floating CLI. TypeScript 7 and Flutter
+  router/storage/UI major migrations are deliberately separate device-tested
+  work; version differences are documented, not hidden as vulnerabilities.
+- Worker packaging and release web compilation passed; no schema changes or
+  new migrations. Final Android/CI/live results are in the maintenance report
+  and handoff, updated after deployment verification.
