@@ -2,7 +2,7 @@
 
 - **Updated**: 2026-10-27; interactive; branch `main`.
 - **Maintenance base**: `00bf1e1`; freshly fetched `origin/main` matched 0/0.
-- **Current maintenance commit**: `d65b1a9` — Refresh dependencies and harden request handling and CI.
+- **Implementation**: `d65b1a9`; pnpm fix `56baf1c`; latest CI follow-up `e0ea4b3`.
 - **Repository**: public, `https://github.com/BigDesigner/project-nhtaxi`.
 - **Workspace**: `C:\Users\bigde\.antigravity\project-nhtaxi`; one worktree.
 - **Local pre-existing files**: two untracked old audit reports,
@@ -35,7 +35,13 @@ validation and deliberate version holds; raw npm/Flutter reports are beside it.
 - Drizzle generation: passed, no schema changes or new migrations.
 - Android debug APK (ARM32/ARM64/x86_64): passed.
 - First Deploy failed on the old broken pnpm 11.12.0 pin; fixed to verified 11.28.9.
-- CI and live smoke: final outcomes recorded after completion.
+- CI on `e0ea4b3`: Deploy + Mobile succeeded, API + web deployed.
+- Live API smoke: 200 health/OpenAPI, 401 anonymous driver, 415 unsupported media, 413 oversized request, 204 allowed CORS; security headers verified.
+- Evidence: `.memory-bank/audits/ci-results-2026-10-27.json` and `live-smoke-2026-10-27.json`.
+- Canonical web URL returned 200. The alternate Pages hostname hit a transport
+  reset from this environment; it is not counted as verified.
+- A documentation-only follow-up records results without rerunning unchanged
+  application checks; `active-session.json.last_commit` names validated code.
 
 ## Next action
 

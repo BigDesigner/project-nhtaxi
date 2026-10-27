@@ -1356,3 +1356,7 @@ change-password flow.
 Implementation committed as `d65b1a9`; CI/deployment verification follows.
 
 CI follow-up: replaced the broken pnpm 11.12.0 pin with 11.28.9; frozen install and typecheck passed, audit remains zero. Android multi-architecture debug APK also built successfully.
+
+Mobile workflow now watches root package-manager and lock files too: its pinned deploy CLI depends on them, so root-only tool changes must trigger the web validation/deploy path.
+
+Final code `e0ea4b3`: Deploy and Mobile both green; API and web published. Live API verified health/OpenAPI 200, anonymous driver 401, unsupported media 415, oversized JSON 413, permitted CORS 204, and nosniff headers. CI/live evidence is saved under `.memory-bank/audits/`.

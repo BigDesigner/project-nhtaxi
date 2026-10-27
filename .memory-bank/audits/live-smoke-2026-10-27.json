@@ -1,0 +1,39 @@
+[
+  {
+    "path": "/api/healthz",
+    "status": 200,
+    "nosniff": "nosniff"
+  },
+  {
+    "path": "/api/openapi.json",
+    "status": 200,
+    "nosniff": "nosniff"
+  },
+  {
+    "path": "/api/driver/profile",
+    "status": 401,
+    "nosniff": "nosniff"
+  },
+  {
+    "path": "register unsupported media",
+    "status": 415
+  },
+  {
+    "path": "oversized login body",
+    "status": 413
+  },
+  {
+    "path": "web CORS preflight",
+    "status": 204,
+    "allowOrigin": "https://gnncab.nhtaxi.com"
+  },
+  {
+    "path": "https://gnncab.nhtaxi.com",
+    "status": 200
+  },
+  {
+    "path": "https://gnncab-preview.pages.dev",
+    "status": null,
+    "error": "Transport request failed from this environment"
+  }
+]

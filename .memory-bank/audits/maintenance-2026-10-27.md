@@ -64,7 +64,9 @@ precaution; no secrets were requested, printed or rotated.
 - Worker deployment dry run: passed (240.29 KiB gzip).
 - Drizzle migration generation: passed; no new migrations.
 - Android debug APK (ARM32/ARM64/x86_64): passed, 552s including missing SDK/CMake component installs.
-- CI / production checks: final results recorded below after completion.
+- CI on `e0ea4b3`: Deploy and Mobile succeeded; API and web deployments completed.
+- Live API: health/OpenAPI 200, anonymous driver 401, unsupported media 415, oversized login 413, allowed web CORS preflight 204. Security headers verified.
+- Full CI and live-check evidence: `ci-results-2026-10-27.json` and `live-smoke-2026-10-27.json`.
 
 Windows test startup initially failed on a read-only generated
 `build/unit_test_assets` directory. Removed only that verified workspace-local
@@ -114,3 +116,19 @@ no global package-manager installation is modified.
 Mobile workflow path filters now include the three root package-manager/lock
 files, because its deployment CLI comes from that workspace. Root tool changes
 must revalidate web deployment even when Flutter source itself is unchanged.
+
+## Deployment evidence
+
+- Implementation: `d65b1a9`; pnpm correction: `56baf1c`; final CI trigger fix: `e0ea4b3`.
+- [Deploy succeeded](https://github.com/BigDesigner/project-nhtaxi/actions/runs/40445063265).
+- [Mobile succeeded](https://github.com/BigDesigner/project-nhtaxi/actions/runs/40445063318).
+- Debug APK was built locally for all three Android architectures; the automatic
+  workflow deliberately skips APK artifact creation (manual-only policy retained).
+- Both old SQL artifact upload steps are absent; the artifact inventory was
+  rechecked after deployment. No production smoke accounts or trips were created.
+- Canonical web URL `https://gnncab.nhtaxi.com` returned 200 after deployment.
+  Requests to the alternate `gnncab-preview.pages.dev` hostname were reset by
+  the transport from this environment; do not count that URL as smoke-tested.
+  The web deployment job itself succeeded. Final artifact inventory: zero.
+- A following documentation-only commit records these results with `[skip ci]`;
+  no application, dependency or workflow files change after verified `e0ea4b3`.
