@@ -2,7 +2,7 @@
 
 - **Updated**: 2026-10-27; interactive; branch `main`.
 - **Maintenance base**: `00bf1e1`; freshly fetched `origin/main` matched 0/0.
-- **Current maintenance commit**: recorded after the implementation commit.
+- **Current maintenance commit**: `d65b1a9` — Refresh dependencies and harden request handling and CI.
 - **Repository**: public, `https://github.com/BigDesigner/project-nhtaxi`.
 - **Workspace**: `C:\Users\bigde\.antigravity\project-nhtaxi`; one worktree.
 - **Local pre-existing files**: two untracked old audit reports,

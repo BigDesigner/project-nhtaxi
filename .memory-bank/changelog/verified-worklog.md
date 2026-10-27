@@ -1352,3 +1352,5 @@ change-password flow.
 - Worker packaging and release web compilation passed; no schema changes or
   new migrations. Final Android/CI/live results are in the maintenance report
   and handoff, updated after deployment verification.
+
+Implementation committed as `d65b1a9`; CI/deployment verification follows.

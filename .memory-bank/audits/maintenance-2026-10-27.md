@@ -63,12 +63,13 @@ precaution; no secrets were requested, printed or rotated.
 - Flutter release web build: passed, including Wasm compatibility dry run.
 - Worker deployment dry run: passed (240.29 KiB gzip).
 - Drizzle migration generation: passed; no new migrations.
-- Android APK / CI / production checks: final results recorded below after completion.
+- Android debug APK (ARM32/ARM64/x86_64): passed, 552s including missing SDK/CMake component installs.
+- CI / production checks: final results recorded below after completion.
 
 Windows test startup initially failed on a read-only generated
 `build/unit_test_assets` directory. Removed only that verified workspace-local
 cache with PowerShell; subsequent tests passed. No SDK/global setting changed.
-Gradle subsequently installed missing Android platform components 34/35 using
+Gradle subsequently installed missing Android platform components 34/35 and CMake 3.22.1 using
 the machine's already accepted licenses; Flutter itself was not upgraded.
 
 ## Deliberate version holds and practical limits
@@ -76,7 +77,7 @@ the machine's already accepted licenses; Flutter itself was not upgraded.
 - TypeScript remains 5.9.3 (`~5.9.3`): moving to compiler 7 is a separate
   compatibility migration, not required to fix these advisories.
 - Node types stay on 24 to match Node 24; Node 26 types were previously
-  mismatched. The machine's Node/Flutter/pnpm installations were not upgraded.
+  mismatched. The machine's global Node/Flutter/pnpm installations were not upgraded.
 - Flutter remains pinned at 3.44.6 / Dart 3.12.2. go_router 18 introduces the
   Material/Cupertino UI migration; secure-storage 11 removes legacy encrypted
   storage paths. Keep go_router 17.5.0 and secure-storage 10.3.4 until those
@@ -101,3 +102,12 @@ the machine's already accepted licenses; Flutter itself was not upgraded.
 - [Secure storage migration](https://pub.dev/packages/flutter_secure_storage/changelog)
 - [Router migration](https://pub.dev/packages/go_router/changelog)
 - [D1 retention limits](https://developers.cloudflare.com/d1/platform/limits/)
+
+## CI follow-up: pnpm installation
+
+The first Deploy run for `d65b1a9` failed before tests: pnpm/action-setup 6
+refused the repository's old pnpm 11.12.0 pin as a known broken release (its
+standalone executable build is missing a binary). The local npm-installed
+copy happened to work, which is why local validation did not expose this.
+Pin pnpm 11.28.9 instead and validate its frozen installation explicitly;
+no global package-manager installation is modified.
