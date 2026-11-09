@@ -10,7 +10,7 @@
     "dev:api": "pnpm --filter @gnncab/api run dev"
   },
   "devDependencies": {
-    "typescript": "~5.9.3"
+    "typescript": "~7.0.2"
   },
   "packageManager": "pnpm@11.28.9"
 }
