@@ -18,17 +18,17 @@
     "@gnncab/db": "workspace:*",
     "@hono/zod-openapi": "^1.6.3",
     "drizzle-orm": "^0.45.4",
-    "hono": "^4.13.14",
+    "hono": "^4.13.16",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "^1.4.8",
-    "@cloudflare/workers-types": "^5.20261026.1",
+    "@cloudflare/vitest-plugin": "^1.6.0",
+    "@cloudflare/workers-types": "^5.20261107.1",
     "@types/node": "^24.19.2",
     "drizzle-kit": "^0.31.11",
     "tsx": "^4.23.15",
     "typescript": "~5.9.3",
-    "vitest": "^5.0.5",
-    "wrangler": "^4.153.0"
+    "vitest": "^5.1.0",
+    "wrangler": "^4.158.0"
   }
 }
